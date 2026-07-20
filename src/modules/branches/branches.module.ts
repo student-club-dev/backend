@@ -3,6 +3,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { PrismaModule } from '../../infrastructure/database/prisma.module';
 import { BusinessAccountGuard } from '../business/presentation/guards/business-account.guard';
+import { GeoModule } from '../geo/geo.module';
 import { BranchesService } from './application/branches.service';
 import { BRANCH_REPOSITORY } from './domain/branches.repository';
 import { OWNING_BUSINESS_REPOSITORY } from './domain/owning-business.repository';
@@ -15,7 +16,7 @@ import { BranchesController } from './presentation/branches.controller';
  * gate) and JwtModule for the JwtAuthGuard. Per-aggregate repositories are bound here.
  */
 @Module({
-  imports: [PrismaModule, JwtModule.register({})],
+  imports: [PrismaModule, JwtModule.register({}), GeoModule],
   controllers: [BranchesController],
   providers: [
     BranchesService,

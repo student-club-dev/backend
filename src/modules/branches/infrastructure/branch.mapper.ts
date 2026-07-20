@@ -11,8 +11,8 @@ import { DayOfWeek } from '../domain/enums/day-of-week.enum';
 /**
  * Maps between the Branch Prisma row and the domain entity. The flattened location columns are
  * gathered into {@link BranchLocation}, and the `working_hours` / `delivery_zone` JSONB columns are
- * normalised to typed values both ways. The `geo_point` PostGIS column is written separately (raw
- * SQL) in the repository — Prisma cannot map its Unsupported type.
+ * normalised to typed values both ways. The `geo_point` PostGIS column is kept in sync with lat/lng
+ * by the DB trigger `branches_set_geo_point` — Prisma neither reads nor writes its Unsupported type.
  */
 export class BranchMapper {
   static toDomain(row: BranchRow): Branch {
@@ -63,7 +63,7 @@ export class BranchMapper {
   }
 }
 
-/** Flattens a domain location into its branch columns. `geohash` is server-computed (null for now). */
+/** Flattens a domain location into its branch columns. `geohash` is server-computed in the service. */
 function locationColumns(location: BranchLocation): {
   regionId: string;
   districtId: string;

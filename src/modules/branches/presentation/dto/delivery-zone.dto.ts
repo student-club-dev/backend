@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsInt, IsOptional, Max, Min } from 'class-validator';
+import { IsBoolean, IsInt, IsOptional, Max, Min, ValidateIf } from 'class-validator';
 import { DeliveryZone } from '../../domain/entities/branch.entity';
 
 /**
@@ -11,8 +11,14 @@ export class DeliveryZoneDto {
   @IsBoolean()
   enabled!: boolean;
 
-  @ApiPropertyOptional({ format: 'int32', nullable: true, minimum: 1000, maximum: 30000 })
-  @IsOptional()
+  @ApiPropertyOptional({
+    format: 'int32',
+    nullable: true,
+    minimum: 1000,
+    maximum: 30000,
+    description: 'Required when `enabled` is true (DISCOUNTS_BUSINESS_API §6.6 rule 8).',
+  })
+  @ValidateIf((o: DeliveryZoneDto) => o.enabled === true)
   @IsInt()
   @Min(1000)
   @Max(30000)

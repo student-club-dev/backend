@@ -37,4 +37,15 @@ export interface BranchRepository {
   update(id: string, data: UpdateBranchData): Promise<Branch>;
   /** Hard-delete the branch. */
   delete(id: string): Promise<void>;
+  /**
+   * Whether the business already has a branch within `radiusMeters` of the given point (PostGIS
+   * `ST_DWithin`). `excludeBranchId` skips the branch being updated. Used to reject duplicates.
+   */
+  existsWithinRadius(
+    businessId: string,
+    lat: number,
+    lng: number,
+    radiusMeters: number,
+    excludeBranchId?: string,
+  ): Promise<boolean>;
 }

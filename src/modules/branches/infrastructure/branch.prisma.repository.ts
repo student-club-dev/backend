@@ -14,13 +14,9 @@ import { BranchMapper } from './branch.mapper';
 export class BranchPrismaRepository implements BranchRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  /** Create the branch, then populate the PostGIS `geo_point` column in the same transaction. */
+  /** `geo_point` is populated from lat/lng by the DB trigger `branches_set_geo_point`. */
   async create(data: CreateBranchData): Promise<Branch> {
-    const row = await this.prisma.$transaction(async (tx) => {
-      const created = await tx.branch.create({ data: BranchMapper.toCreateData(data) });
-      await this.writeGeoPoint(tx, created.id, created.lng, created.lat);
-      return created;
-    });
+    const row = await this.prisma.branch.create({ data: BranchMapper.toCreateData(data) });
     return BranchMapper.toDomain(row);
   }
 
@@ -37,15 +33,11 @@ export class BranchPrismaRepository implements BranchRepository {
     return rows.map((row) => BranchMapper.toDomain(row));
   }
 
-  /** Update the branch, then refresh the PostGIS `geo_point` column in the same transaction. */
+  /** `geo_point` is refreshed from lat/lng by the DB trigger `branches_set_geo_point`. */
   async update(id: string, data: UpdateBranchData): Promise<Branch> {
-    const row = await this.prisma.$transaction(async (tx) => {
-      const updated = await tx.branch.update({
-        where: { id },
-        data: BranchMapper.toUpdateData(data),
-      });
-      await this.writeGeoPoint(tx, updated.id, updated.lng, updated.lat);
-      return updated;
+    const row = await this.prisma.branch.update({
+      where: { id },
+      data: BranchMapper.toUpdateData(data),
     });
     return BranchMapper.toDomain(row);
   }
@@ -54,16 +46,27 @@ export class BranchPrismaRepository implements BranchRepository {
     await this.prisma.branch.delete({ where: { id } });
   }
 
-  /**
-   * Populates the PostGIS `geo_point` geography column from lat/lng. Prisma cannot write the
-   * Unsupported type, so it is set via raw SQL (ST_MakePoint takes X=lng, Y=lat).
-   */
-  private writeGeoPoint(
-    tx: Prisma.TransactionClient,
-    id: string,
-    lng: number,
+  async existsWithinRadius(
+    businessId: string,
     lat: number,
-  ): Promise<number> {
-    return tx.$executeRaw`UPDATE branches SET geo_point = ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326) WHERE id = ${id}`;
+    lng: number,
+    radiusMeters: number,
+    excludeBranchId?: string,
+  ): Promise<boolean> {
+    const excludeClause =
+      excludeBranchId === undefined ? Prisma.empty : Prisma.sql`AND id <> ${excludeBranchId}`;
+    const rows = await this.prisma.$queryRaw<Array<{ exists: boolean }>>`
+      SELECT EXISTS(
+        SELECT 1 FROM branches
+        WHERE business_id = ${businessId}
+        ${excludeClause}
+        AND ST_DWithin(
+          geo_point,
+          ST_SetSRID(ST_MakePoint(${lng}, ${lat}), 4326)::geography,
+          ${radiusMeters}
+        )
+      ) AS "exists"
+    `;
+    return rows[0]?.exists === true;
   }
 }
