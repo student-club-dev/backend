@@ -45,6 +45,7 @@ enum BusinessStatus {
   APPROVED
   REJECTED
   BLOCKED
+  ARCHIVED
 }
 
 enum ListingStatus {

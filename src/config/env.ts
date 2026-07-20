@@ -36,6 +36,10 @@ export const envSchema = z.object({
   OTP_DEV_CODE: z.string().optional(),
 
   REDIS_URL: z.string().optional(),
+
+  // Placeholder admin credential for the admin-only endpoints (business-type CRUD). Compared
+  // against the `X-Admin-Key` header by AdminGuard. Unset → every admin request is rejected.
+  ADMIN_API_KEY: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

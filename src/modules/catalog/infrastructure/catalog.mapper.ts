@@ -1,10 +1,14 @@
-import type {
-  AttributeSpec as AttributeSpecRow,
-  BusinessTypeInfo as BusinessTypeInfoRow,
-  Category as CategoryRow,
+import {
+  Gender as PrismaGender,
+  PriceUnit as PrismaPriceUnit,
+  type AttributeSpec as AttributeSpecRow,
+  type BusinessTypeInfo as BusinessTypeInfoRow,
+  type Category as CategoryRow,
+  type Prisma,
 } from '@prisma/client';
 import { BusinessType } from '../domain/entities/business-type.entity';
 import { AttributeField, AttributeOption, Category } from '../domain/entities/category.entity';
+import { BusinessTypeWrite } from '../domain/catalog.repository';
 import { AttributeFieldType } from '../domain/enums/attribute-field-type.enum';
 import { Gender } from '../domain/enums/gender.enum';
 import { PriceUnit } from '../domain/enums/price-unit.enum';
@@ -52,6 +56,56 @@ export class CatalogMapper {
       fields,
       gender: row.gender === null ? null : Gender[row.gender],
     };
+  }
+
+  /** Domain write → Prisma create payload (`type` is the PK). */
+  static toBusinessTypeCreateData(
+    type: string,
+    data: BusinessTypeWrite,
+  ): Prisma.BusinessTypeInfoUncheckedCreateInput {
+    return {
+      type,
+      nameUz: data.nameUz,
+      nameRu: data.nameRu,
+      emoji: data.emoji,
+      accentColor: data.accentColor,
+      iconUrl: data.iconUrl,
+      defaultPriceUnit: PrismaPriceUnit[data.defaultPriceUnit],
+      priceUnits: data.priceUnits.map((unit) => PrismaPriceUnit[unit]),
+      availableForGenders: data.availableForGenders.map((gender) => PrismaGender[gender]),
+    };
+  }
+
+  /** Domain write → Prisma update payload (only the present keys). */
+  static toBusinessTypeUpdateData(
+    data: Partial<BusinessTypeWrite>,
+  ): Prisma.BusinessTypeInfoUpdateInput {
+    const update: Prisma.BusinessTypeInfoUpdateInput = {};
+    if (data.nameUz !== undefined) {
+      update.nameUz = data.nameUz;
+    }
+    if (data.nameRu !== undefined) {
+      update.nameRu = data.nameRu;
+    }
+    if (data.emoji !== undefined) {
+      update.emoji = data.emoji;
+    }
+    if (data.accentColor !== undefined) {
+      update.accentColor = data.accentColor;
+    }
+    if (data.iconUrl !== undefined) {
+      update.iconUrl = data.iconUrl;
+    }
+    if (data.defaultPriceUnit !== undefined) {
+      update.defaultPriceUnit = PrismaPriceUnit[data.defaultPriceUnit];
+    }
+    if (data.priceUnits !== undefined) {
+      update.priceUnits = data.priceUnits.map((unit) => PrismaPriceUnit[unit]);
+    }
+    if (data.availableForGenders !== undefined) {
+      update.availableForGenders = data.availableForGenders.map((gender) => PrismaGender[gender]);
+    }
+    return update;
   }
 
   private static toAttributeField(spec: AttributeSpecRow): AttributeField {

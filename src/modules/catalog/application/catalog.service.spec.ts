@@ -48,6 +48,12 @@ function makeRepository(overrides: Partial<CatalogRepository> = {}): CatalogRepo
   return {
     findBusinessTypes: jest.fn().mockResolvedValue(ALL_TYPES),
     findCategoriesByType: jest.fn().mockResolvedValue([]),
+    typeExists: jest.fn().mockResolvedValue(true),
+    createType: jest.fn(),
+    updateType: jest.fn(),
+    deleteType: jest.fn(),
+    countBusinessesOfType: jest.fn().mockResolvedValue(0),
+    countCategoriesOfType: jest.fn().mockResolvedValue(0),
     ...overrides,
   };
 }
