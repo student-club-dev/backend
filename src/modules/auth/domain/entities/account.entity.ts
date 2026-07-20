@@ -15,3 +15,15 @@ export interface CreateAccountData {
   phoneNumber: string | null;
   passwordHash: string;
 }
+
+/**
+ * Data required to create an account from a verified OAuth identity (D4). No password or phone —
+ * the account is credential-less until a password is set later; `emailVerified` reflects the provider.
+ */
+export interface CreateOAuthAccountData {
+  email: string | null;
+  emailVerified: boolean;
+  firstName: string | null;
+  lastName: string | null;
+  avatarUrl: string | null;
+}

@@ -1,10 +1,17 @@
 import { hash, verify } from '@node-rs/argon2';
 import { AccountType } from '../../../common/enums/account-type.enum';
+import { AuthProvider } from '../../../common/enums/auth-provider.enum';
 import { ERROR_CODE } from '../../../common/errors/error-code';
 import { AppException } from '../../../common/exceptions/app.exception';
 import { AccountRepository } from '../domain/account.repository';
 import { Account } from '../domain/entities/account.entity';
 import { RefreshToken } from '../domain/entities/refresh-token.entity';
+import { OAuthAccountRepository } from '../domain/oauth-account.repository';
+import {
+  OAuthIdentity,
+  OAuthProvider,
+  OAuthProviderRegistry,
+} from '../domain/oauth/oauth-provider';
 import { RefreshTokenRepository } from '../domain/refresh-token.repository';
 import { AuthService } from './auth.service';
 import { TokenService } from './token.service';
@@ -33,6 +40,38 @@ function makeAccountRepository(overrides: Partial<AccountRepository> = {}): Acco
     findByPhone: jest.fn().mockResolvedValue(null),
     findById: jest.fn().mockResolvedValue(null),
     create: jest.fn().mockResolvedValue(makeAccount()),
+    createFromOAuth: jest.fn().mockResolvedValue(makeAccount({ id: 'acc-new' })),
+    ...overrides,
+  };
+}
+
+function makeIdentity(overrides: Partial<OAuthIdentity> = {}): OAuthIdentity {
+  return {
+    provider: AuthProvider.GOOGLE,
+    providerAccountId: 'google-sub-1',
+    email: 'oauth@b.com',
+    emailVerified: true,
+    firstName: 'Ali',
+    lastName: 'Valiev',
+    avatarUrl: null,
+    ...overrides,
+  };
+}
+
+function makeOAuthProvider(identity: OAuthIdentity = makeIdentity()): OAuthProvider {
+  return { verify: jest.fn().mockResolvedValue(identity) };
+}
+
+function makeRegistry(provider: OAuthProvider = makeOAuthProvider()): OAuthProviderRegistry {
+  return new Map<AuthProvider, OAuthProvider>([[AuthProvider.GOOGLE, provider]]);
+}
+
+function makeOAuthAccountRepository(
+  overrides: Partial<OAuthAccountRepository> = {},
+): OAuthAccountRepository {
+  return {
+    findAccountIdByProvider: jest.fn().mockResolvedValue(null),
+    link: jest.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }
@@ -62,8 +101,17 @@ function makeService(
   accounts: AccountRepository,
   refreshTokens: RefreshTokenRepository,
   tokenService: TokenService = makeTokenService(),
+  oauthAccounts: OAuthAccountRepository = makeOAuthAccountRepository(),
+  registry: OAuthProviderRegistry = makeRegistry(),
 ): AuthService {
-  return new AuthService(accounts, refreshTokens, AccountType.STUDENT, tokenService);
+  return new AuthService(
+    accounts,
+    refreshTokens,
+    AccountType.STUDENT,
+    tokenService,
+    oauthAccounts,
+    registry,
+  );
 }
 
 const noDevice = { deviceName: null, platform: null, ipAddress: null } as const;
@@ -235,6 +283,130 @@ describe('AuthService', () => {
 
       await expect(service.logout({ refreshToken: 'plain' })).resolves.toBeUndefined();
       expect(refreshTokens.revoke).toHaveBeenCalledWith('hash:plain');
+    });
+  });
+
+  describe('oauthLogin', () => {
+    it('logs into the linked account when the provider identity is already known (branch a)', async () => {
+      const accounts = makeAccountRepository();
+      const refreshTokens = makeRefreshTokenRepository();
+      const oauthAccounts = makeOAuthAccountRepository({
+        findAccountIdByProvider: jest.fn().mockResolvedValue('acc-linked'),
+      });
+      const provider = makeOAuthProvider();
+      const service = makeService(
+        accounts,
+        refreshTokens,
+        makeTokenService(),
+        oauthAccounts,
+        makeRegistry(provider),
+      );
+
+      const result = await service.oauthLogin(AuthProvider.GOOGLE, 'id-token', noDevice);
+
+      expect(result).toEqual({ accessToken: 'access-token', refreshToken: 'plain-refresh' });
+      expect(provider.verify).toHaveBeenCalledWith('id-token');
+      expect(oauthAccounts.findAccountIdByProvider).toHaveBeenCalledWith(
+        AuthProvider.GOOGLE,
+        'google-sub-1',
+      );
+      expect(oauthAccounts.link).not.toHaveBeenCalled();
+      expect(accounts.createFromOAuth).not.toHaveBeenCalled();
+      expect(refreshTokens.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('links to an existing account by verified email, then logs in (branch b)', async () => {
+      const accounts = makeAccountRepository({
+        findByEmail: jest.fn().mockResolvedValue(makeAccount({ id: 'acc-email' })),
+      });
+      const refreshTokens = makeRefreshTokenRepository();
+      const oauthAccounts = makeOAuthAccountRepository();
+      const service = makeService(
+        accounts,
+        refreshTokens,
+        makeTokenService(),
+        oauthAccounts,
+        makeRegistry(),
+      );
+
+      const result = await service.oauthLogin(AuthProvider.GOOGLE, 'id-token', noDevice);
+
+      expect(result).toEqual({ accessToken: 'access-token', refreshToken: 'plain-refresh' });
+      expect(accounts.findByEmail).toHaveBeenCalledWith('oauth@b.com');
+      expect(oauthAccounts.link).toHaveBeenCalledWith('acc-email', AuthProvider.GOOGLE, 'google-sub-1');
+      expect(accounts.createFromOAuth).not.toHaveBeenCalled();
+      expect(refreshTokens.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not link on an unverified email — creates a new account instead', async () => {
+      const accounts = makeAccountRepository({
+        findByEmail: jest.fn().mockResolvedValue(makeAccount({ id: 'acc-email' })),
+      });
+      const oauthAccounts = makeOAuthAccountRepository();
+      const provider = makeOAuthProvider(makeIdentity({ emailVerified: false }));
+      const service = makeService(
+        accounts,
+        makeRefreshTokenRepository(),
+        makeTokenService(),
+        oauthAccounts,
+        makeRegistry(provider),
+      );
+
+      await service.oauthLogin(AuthProvider.GOOGLE, 'id-token', noDevice);
+
+      expect(accounts.findByEmail).not.toHaveBeenCalled();
+      expect(accounts.createFromOAuth).toHaveBeenCalledTimes(1);
+      expect(oauthAccounts.link).toHaveBeenCalledWith('acc-new', AuthProvider.GOOGLE, 'google-sub-1');
+    });
+
+    it('creates a new account from the identity and links it (branch c)', async () => {
+      const accounts = makeAccountRepository();
+      const refreshTokens = makeRefreshTokenRepository();
+      const oauthAccounts = makeOAuthAccountRepository();
+      const service = makeService(
+        accounts,
+        refreshTokens,
+        makeTokenService(),
+        oauthAccounts,
+        makeRegistry(),
+      );
+
+      const result = await service.oauthLogin(AuthProvider.GOOGLE, 'id-token', noDevice);
+
+      expect(result).toEqual({ accessToken: 'access-token', refreshToken: 'plain-refresh' });
+      expect(accounts.createFromOAuth).toHaveBeenCalledWith({
+        email: 'oauth@b.com',
+        emailVerified: true,
+        firstName: 'Ali',
+        lastName: 'Valiev',
+        avatarUrl: null,
+      });
+      expect(oauthAccounts.link).toHaveBeenCalledWith('acc-new', AuthProvider.GOOGLE, 'google-sub-1');
+      expect(refreshTokens.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('surfaces the provider error (e.g. the Apple stub 501) without touching repositories', async () => {
+      const accounts = makeAccountRepository();
+      const oauthAccounts = makeOAuthAccountRepository();
+      const failing: OAuthProvider = {
+        verify: jest
+          .fn()
+          .mockRejectedValue(new AppException(ERROR_CODE.NOT_IMPLEMENTED, 501, 'nope')),
+      };
+      const registry: OAuthProviderRegistry = new Map([[AuthProvider.APPLE, failing]]);
+      const service = makeService(
+        accounts,
+        makeRefreshTokenRepository(),
+        makeTokenService(),
+        oauthAccounts,
+        registry,
+      );
+
+      await expect(
+        service.oauthLogin(AuthProvider.APPLE, 'id-token', noDevice),
+      ).rejects.toMatchObject({ code: ERROR_CODE.NOT_IMPLEMENTED, status: 501 });
+      expect(oauthAccounts.findAccountIdByProvider).not.toHaveBeenCalled();
+      expect(accounts.createFromOAuth).not.toHaveBeenCalled();
     });
   });
 });

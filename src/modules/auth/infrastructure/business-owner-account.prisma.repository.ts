@@ -1,7 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { AccountRepository } from '../domain/account.repository';
-import { Account, CreateAccountData } from '../domain/entities/account.entity';
+import {
+  Account,
+  CreateAccountData,
+  CreateOAuthAccountData,
+} from '../domain/entities/account.entity';
 import { toAccount } from './account.mapper';
 
 /** Prisma implementation of AccountRepository for the `business_owners` table. */
@@ -30,6 +34,19 @@ export class BusinessOwnerAccountPrismaRepository implements AccountRepository {
         email: data.email,
         phoneNumber: data.phoneNumber,
         passwordHash: data.passwordHash,
+      },
+    });
+    return toAccount(row);
+  }
+
+  async createFromOAuth(data: CreateOAuthAccountData): Promise<Account> {
+    const row = await this.prisma.businessOwner.create({
+      data: {
+        email: data.email,
+        emailVerified: data.emailVerified,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        avatarUrl: data.avatarUrl,
       },
     });
     return toAccount(row);

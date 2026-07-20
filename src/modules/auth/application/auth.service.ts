@@ -3,8 +3,18 @@ import { hash, verify } from '@node-rs/argon2';
 import { AccountType } from '../../../common/enums/account-type.enum';
 import { ERROR_CODE } from '../../../common/errors/error-code';
 import { AppException } from '../../../common/exceptions/app.exception';
+import { AuthProvider } from '../../../common/enums/auth-provider.enum';
 import { ACCOUNT_REPOSITORY, ACCOUNT_TYPE, AccountRepository } from '../domain/account.repository';
 import { Account } from '../domain/entities/account.entity';
+import {
+  OAUTH_ACCOUNT_REPOSITORY,
+  OAuthAccountRepository,
+} from '../domain/oauth-account.repository';
+import {
+  OAUTH_PROVIDER_REGISTRY,
+  OAuthProvider,
+  OAuthProviderRegistry,
+} from '../domain/oauth/oauth-provider';
 import {
   REFRESH_TOKEN_REPOSITORY,
   RefreshTokenRepository,
@@ -31,6 +41,8 @@ export class AuthService {
     @Inject(REFRESH_TOKEN_REPOSITORY) private readonly refreshTokens: RefreshTokenRepository,
     @Inject(ACCOUNT_TYPE) private readonly accountType: AccountType,
     private readonly tokenService: TokenService,
+    @Inject(OAUTH_ACCOUNT_REPOSITORY) private readonly oauthAccounts: OAuthAccountRepository,
+    @Inject(OAUTH_PROVIDER_REGISTRY) private readonly oauthProviders: OAuthProviderRegistry,
   ) {}
 
   async register(input: RegisterInput): Promise<AuthTokens> {
@@ -55,6 +67,47 @@ export class AuthService {
       throw this.invalidCredentials();
     }
     return this.issueSession(account.id, input);
+  }
+
+  /**
+   * OAuth login (D4). Verifies the provider ID token, resolves the account within THIS type's
+   * tables — link by provider id, else link by verified email, else create — and issues a session.
+   */
+  async oauthLogin(
+    provider: AuthProvider,
+    idToken: string,
+    device: DeviceContext,
+  ): Promise<AuthTokens> {
+    const identity = await this.resolveProvider(provider).verify(idToken);
+
+    // (a) Known provider identity → log into the linked account.
+    const linkedId = await this.oauthAccounts.findAccountIdByProvider(
+      provider,
+      identity.providerAccountId,
+    );
+    if (linkedId !== null) {
+      return this.issueSession(linkedId, device);
+    }
+
+    // (b) Verified email matches an existing account → attach this identity and log in.
+    if (identity.email !== null && identity.emailVerified) {
+      const existing = await this.accounts.findByEmail(identity.email);
+      if (existing !== null) {
+        await this.oauthAccounts.link(existing.id, provider, identity.providerAccountId);
+        return this.issueSession(existing.id, device);
+      }
+    }
+
+    // (c) New person → create an account from the identity and link it.
+    const account = await this.accounts.createFromOAuth({
+      email: identity.email,
+      emailVerified: identity.emailVerified,
+      firstName: identity.firstName,
+      lastName: identity.lastName,
+      avatarUrl: identity.avatarUrl,
+    });
+    await this.oauthAccounts.link(account.id, provider, identity.providerAccountId);
+    return this.issueSession(account.id, device);
   }
 
   async refresh(input: RefreshInput): Promise<AuthTokens> {
@@ -129,6 +182,18 @@ export class AuthService {
       return this.accounts.findByPhone(phoneNumber);
     }
     return null;
+  }
+
+  private resolveProvider(provider: AuthProvider): OAuthProvider {
+    const impl = this.oauthProviders.get(provider);
+    if (impl === undefined) {
+      throw new AppException(
+        ERROR_CODE.INTERNAL_ERROR,
+        500,
+        'OAuth provayder sozlanmagan',
+      );
+    }
+    return impl;
   }
 
   private invalidCredentials(): AppException {

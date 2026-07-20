@@ -1,4 +1,4 @@
-import { Account, CreateAccountData } from './entities/account.entity';
+import { Account, CreateAccountData, CreateOAuthAccountData } from './entities/account.entity';
 
 /** Injection token for the per-type account repository (bound to the Prisma impl in the module). */
 export const ACCOUNT_REPOSITORY = Symbol('ACCOUNT_REPOSITORY');
@@ -15,4 +15,7 @@ export interface AccountRepository {
   findByPhone(phoneNumber: string): Promise<Account | null>;
   findById(id: string): Promise<Account | null>;
   create(data: CreateAccountData): Promise<Account>;
+
+  /** Creates a credential-less account from a verified OAuth identity (D4). */
+  createFromOAuth(data: CreateOAuthAccountData): Promise<Account>;
 }
