@@ -1,6 +1,6 @@
 # Auth — design decisions (ElonUz backend)
 
-**Status:** draft — being defined interactively (grill-me). Feeds the **M-auth** implementation.
+**Status:** settled (grill-me complete — D1–D10). Feeds the **M-auth** implementation.
 **Context:** Own auth (no Firebase). Email+password, Google/Apple OAuth, SMS OTP (Eskiz + Redis), JWT access+refresh. See `CLAUDE.md` → "Auth & Ownership" and `docs/architecture/otp-sms-eskiz.md`.
 
 ---
@@ -42,9 +42,23 @@
 - **Supersedes the single `User` model.** The `role` enum becomes redundant (the table *is* the type). D1–D5 flows apply within each account type.
 - **Schema impact:** replace `users` with `students` + `business_owners`; repoint `Business.ownerUserId` → `business_owners`, `Redemption.studentUserId` → `students`; new migration (no data yet → cheap). Catalog module untouched.
 
+### D7 — Login model
+- **Login is always credential-based** (email or phone + password) **or OAuth** (Google/Apple).
+- **OTP is never a login method.** It is a verification step used only at gates: **phone verification** (redeem / business creation, D1) and **password reset** (D5). Keeps SMS volume and cost low.
+
+### D8 — OTP abuse limits
+- 6-digit code, **hashed in Redis**, single-use, 5-min TTL.
+- **Resend cooldown** 60s per phone; **verify max 5 attempts** per code, then invalidate (new request required); **per-phone daily cap** (~5/hr) to protect the SMS budget; **IP throttle** on `/auth/otp/*` via `@nestjs/throttler`.
+- Values in `.env`: `OTP_TTL_SECONDS=300`, `OTP_MAX_ATTEMPTS=5`, `OTP_RESEND_COOLDOWN_SECONDS=60`.
+
+### D9 — Set-password for OAuth accounts
+- An OAuth-only account (no password) can **set a password** from settings **while authenticated via OAuth** (email already verified → no OTP needed). Afterwards the account can also log in with email/phone + password.
+- This is **"set password"** (first-time), distinct from **"reset password"** (D5, which needs a verification channel).
+
+### D10 — Email provider
+- **Resend** for transactional email (email-code password reset, D5; email verification if needed). Low volume — email is only for phone-less accounts. SMTP acceptable for local dev. Env: `RESEND_API_KEY` + a verified `FROM` address.
+
 ---
 
-## Open questions (grilling in progress)
-- **OTP abuse protection** specifics (resend cooldown, attempt caps, per-phone / per-IP rate limits) — partly in `otp-sms-eskiz.md`.
-- **OAuth-only accounts** — do they ever get a password? Set-password flow?
-- **Email provider** for the email-code reset path (D5).
+## Status: all grill questions resolved ✅
+Auth design is settled (D1–D10). Ready to implement **M-auth**.
