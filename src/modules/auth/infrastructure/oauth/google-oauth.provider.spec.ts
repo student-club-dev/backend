@@ -37,7 +37,7 @@ describe('GoogleOAuthProvider', () => {
 
     expect(mockVerifyIdToken).toHaveBeenCalledWith({
       idToken: 'valid-token',
-      audience: 'client-id-123',
+      audience: ['client-id-123'],
     });
     expect(identity).toEqual({
       provider: AuthProvider.GOOGLE,
@@ -47,6 +47,18 @@ describe('GoogleOAuthProvider', () => {
       firstName: 'Ali',
       lastName: 'Valiev',
       avatarUrl: 'https://img/avatar.png',
+    });
+  });
+
+  it('accepts any configured client id — parses the comma-separated list into the audience', async () => {
+    mockVerifyIdToken.mockResolvedValue({ getPayload: () => ({ sub: 's' }) });
+    const provider = new GoogleOAuthProvider(makeConfig('id-a, id-b , id-c'));
+
+    await provider.verify('tok');
+
+    expect(mockVerifyIdToken).toHaveBeenCalledWith({
+      idToken: 'tok',
+      audience: ['id-a', 'id-b', 'id-c'],
     });
   });
 
@@ -70,7 +82,7 @@ describe('GoogleOAuthProvider', () => {
     });
   });
 
-  it('throws a 500 config error when GOOGLE_CLIENT_ID is unset', async () => {
+  it('throws a 500 config error when no client ids are configured', async () => {
     const provider = new GoogleOAuthProvider(makeConfig(undefined));
 
     await expect(provider.verify('tok')).rejects.toMatchObject({

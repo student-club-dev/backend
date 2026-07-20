@@ -17,7 +17,8 @@ export const envSchema = z.object({
   JWT_REFRESH_SECRET: z.string().min(1).default('change-me-refresh'),
   JWT_REFRESH_TTL: z.string().min(1).default('30d'),
 
-  GOOGLE_CLIENT_ID: z.string().optional(),
+  // Comma-separated Google OAuth client ids (Business/Student × Android/iOS/web).
+  GOOGLE_ALLOWED_CLIENT_IDS: z.string().optional(),
   APPLE_OAUTH_CLIENT_ID: z.string().optional(),
 
   SMS_PROVIDER: z.string().default('eskiz'),

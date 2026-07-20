@@ -8,9 +8,10 @@ import type { Env } from '../../../../config/env';
 import { OAuthIdentity, OAuthProvider } from '../../domain/oauth/oauth-provider';
 
 /**
- * Google OAuth provider. Verifies the client's Google ID token — signature AND audience are
- * checked by `verifyIdToken` when `audience` is passed — then extracts the identity. Google is
- * used ONLY to prove identity; the backend stays the source of truth (no Google session).
+ * Google OAuth provider. `verifyIdToken` checks the token's signature, issuer, expiry AND
+ * audience (matched against ANY configured client id) in one call, then we extract the identity.
+ * Google is used ONLY to prove identity; the backend stays the source of truth (no Google session).
+ * More client ids (student apps, web, …) are added via env only — no code change.
  */
 @Injectable()
 export class GoogleOAuthProvider implements OAuthProvider {
@@ -19,16 +20,7 @@ export class GoogleOAuthProvider implements OAuthProvider {
   constructor(private readonly config: ConfigService<Env, true>) {}
 
   async verify(idToken: string): Promise<OAuthIdentity> {
-    const audience = this.config.get('GOOGLE_CLIENT_ID', { infer: true });
-    if (audience === undefined || audience === '') {
-      throw new AppException(
-        ERROR_CODE.INTERNAL_ERROR,
-        500,
-        'GOOGLE_CLIENT_ID sozlanmagan',
-      );
-    }
-
-    const payload = await this.verifyToken(idToken, audience);
+    const payload = await this.verifyToken(idToken, this.allowedClientIds());
     if (payload.sub === undefined || payload.sub === '') {
       throw this.invalidToken();
     }
@@ -44,7 +36,27 @@ export class GoogleOAuthProvider implements OAuthProvider {
     };
   }
 
-  private async verifyToken(idToken: string, audience: string): Promise<TokenPayload> {
+  /**
+   * Accepted Google client ids (Business/Student × Android/iOS/web), comma-separated in
+   * GOOGLE_ALLOWED_CLIENT_IDS. A token is accepted when its `aud` matches any of them.
+   */
+  private allowedClientIds(): string[] {
+    const raw = this.config.get('GOOGLE_ALLOWED_CLIENT_IDS', { infer: true }) ?? '';
+    const ids = raw
+      .split(',')
+      .map((id) => id.trim())
+      .filter((id) => id.length > 0);
+    if (ids.length === 0) {
+      throw new AppException(
+        ERROR_CODE.INTERNAL_ERROR,
+        500,
+        'GOOGLE_ALLOWED_CLIENT_IDS sozlanmagan',
+      );
+    }
+    return ids;
+  }
+
+  private async verifyToken(idToken: string, audience: string[]): Promise<TokenPayload> {
     try {
       const ticket = await this.client.verifyIdToken({ idToken, audience });
       const payload = ticket.getPayload();
