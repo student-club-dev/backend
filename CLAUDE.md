@@ -4,30 +4,71 @@ Instructions for Claude when working in this repository. These rules **override*
 
 ## Project Overview
 
-Backend for a **local services & goods marketplace** (classifieds-style) for the Uzbek market. Providers (businesses, specialists) publish listings across many categories — clothing, barbershops, beauty salons, printing services, and so on. Users search, browse, save favorites, and contact providers via chat.
+Backend for **ElonUz** — a student discounts platform for Uzbekistan (mobile: Kotlin Multiplatform, Android + iOS). Business owners publish their businesses and listings (discounted or regular offers) across many categories (clothing, cafés, barbershops, beauty salons, game clubs, education, entertainment, …). Students discover offers **by proximity** and redeem them via QR / promo code.
 
-Built in **phases** — do not implement a later phase unless explicitly asked:
+**The API contract is the source of truth.** The mobile client is generated from `docs/api/provider/elon-uz.json` (OpenAPI 3.0.3). Paths, DTO names, field names, enums, and the response envelope **must match the spec exactly** — changing them forces a mobile client regeneration. Full specs live in `docs/api/provider/` (`BACKEND_PROMPT.md`, `ENDPOINTS_CHECKLIST.md`, `API_RESPONSE_FORMAT.md`, `DISCOUNTS_BUSINESS_API.md`, `elon-uz.json`, `catalog-seed.json`).
 
-- **Phase 1 (current) — Catalog:** `auth · users · profiles · categories · advertisements · uploads · search · favorites · chat · reports · notifications · admin`
-- **Phase 2 — Booking:** provider schedules, time slots, appointments.
-- **Phase 3 — Orders & Payments:** online payments (Click/Payme), commissions, promoted listings.
+Built in **levels** — do not implement a later level unless explicitly asked:
+
+- **Level 1 (current) — auth + the 22 app endpoints:** auth (register/login, Google/Apple OAuth, SMS OTP, refresh, forgot/reset) · profile · business · branches · catalog (types/categories) · listing create+submit · media upload · geo geocode · discounts feed. See `ENDPOINTS_CHECKLIST.md`.
+- **Level 2 — spec'd but not yet called:** listing edit/pause/activate/duplicate/withdraw, listing stats, redemption (QR/promo verify+confirm), business submit/moderation, attributes-schema, geo regions/districts.
 
 ## Tech Stack
 
-- **Framework:** Node.js + NestJS
+- **Framework:** Node.js 20+ + NestJS
 - **Language:** TypeScript, strict mode — **no `any`**
-- **Database:** PostgreSQL
+- **Database:** PostgreSQL 16 + **PostGIS** (proximity search for the discounts feed)
 - **ORM:** Prisma
-- **Cache / Queues:** Redis (BullMQ for background jobs)
-- **Auth:** JWT access token + refresh token; OTP via SMS
-- **Authorization:** RBAC (Role-Based Access Control)
-- **Validation:** class-validator + class-transformer
-- **API docs:** Swagger / OpenAPI
-- **Real-time:** WebSocket (chat, notifications)
-- **Logging:** Pino (`nestjs-pino`)
+- **Cache / Queues:** Redis (BullMQ) — background jobs & the cron that drives listing status transitions
+- **Auth:** the backend owns authentication — **JWT access + refresh** tokens, email + password (argon2), **Google & Apple OAuth**, forgot/reset password, and **SMS OTP** (phone verification + password reset). No Firebase.
+- **Authorization:** ownership checks (owner user id) + `role` (RBAC where needed)
+- **SMS:** provider adapter (Eskiz / Playmobile) for OTP delivery
+- **Validation:** class-validator + class-transformer (request DTOs mirror the OpenAPI contract 1:1)
+- **API docs:** Swagger / OpenAPI — kept in sync with `elon-uz.json`
+- **Logging:** Pino (`nestjs-pino`) — structured, with a `traceId` per request
 - **Testing:** Jest (unit + e2e)
 - **Lint / Format:** ESLint + Prettier
 - **Git hooks:** Husky + lint-staged
+- **Deploy:** Docker Compose (postgres + app); migrations + catalog seed run on start
+
+> The mobile team's prompt suggests Fastify + Zod + Vitest. We deliberately keep **NestJS + class-validator + Jest** — the HTTP contract is identical either way, and NestJS gives us the structure this repo is built around. Only the contract (below) is non-negotiable.
+
+## API Contract & Response Envelope (non-negotiable)
+
+Everything here is fixed by the generated mobile client — match it exactly.
+
+- **Base URL:** single `/v1` for **all** endpoints (both provider and student). Do not split into `/provider/v1` etc.
+- **Response envelope — `BaseResponse` on EVERY response** (success and error, no exception). Implement once via a global response **interceptor** + global exception **filter** — never wrap manually in controllers.
+  ```jsonc
+  { "success": true,  "status": 200, "code": null, "message": "OK", "result": <payload>, "error": null }
+  { "success": false, "status": 404, "code": null, "message": "E'lon topilmadi",
+    "error": { "code": "LISTING_NOT_FOUND", "message": "E'lon topilmadi", "fields": {} } }
+  ```
+  - HTTP status code **and** the `status` field must be equal.
+  - On error: `result` is always null, `error` always filled. On success: `error` is null.
+  - `message` is always **user-facing Uzbek** text (not a log line).
+  - Validation (422): fill `error.fields` as `{ "<field>": "<uzbek message>" }`.
+- **Pagination:** `result: { items, page, size, total, hasNext }` — exactly these keys (**not** `pageSize`/`hasMore`).
+- **Money:** integer **so'm**, no decimals. `BigInt` in Prisma → serialize to `Number` in JSON. `currency: "UZS"`.
+- **Dates:** **ISO-8601** (`"2026-07-16T10:30:00Z"`) — never epoch-ms.
+- **`finalPrice` is computed server-side** from `discountType` + `discountValue`; ignore any client-sent value.
+- **Error codes** (`error.code`): `UNAUTHORIZED` `TOKEN_EXPIRED` (401) · `FORBIDDEN` (403) · `*_NOT_FOUND` (404) · `VALIDATION_ERROR` (422, with `fields`) · `INVALID_STATUS_TRANSITION` `REDEMPTION_LIMIT_REACHED` (409) · `CATEGORY_NOT_IN_CATALOG` `BUSINESS_TYPE_IMMUTABLE` (422) · `RATE_LIMITED` (429) · `INTERNAL_ERROR` (500).
+
+> ⚠️ `API_RESPONSE_FORMAT.md` is **stale** on two points (it says epoch-ms and `pageSize`/`hasMore`). The OpenAPI (`elon-uz.json`) and `BACKEND_PROMPT.md` win: **ISO-8601** dates and **`size`/`hasNext`** pagination.
+
+## Auth & Ownership
+
+The backend owns auth (no Firebase). This is the one area that **deviates from the OpenAPI spec** (which assumed Firebase) — a deliberate product decision; the mobile clients adapt their auth layer. Everything else in the contract is unchanged.
+
+- **Endpoints** (`/v1/auth/*`): `register`, `login`, `refresh`, `logout`, `forgot-password`, `reset-password`, `oauth/google`, `oauth/apple`, `otp/request`, `otp/verify`.
+- **Tokens:** short-lived **JWT access** + longer **refresh** token; rotate refresh tokens and store them hashed (revocable on logout). Access token carries `sub` (user id) + `role`.
+- **Passwords:** hash with **argon2**; never store or log plaintext.
+- **OAuth:** verify the Google ID token / Apple identity token server-side, then find-or-create the user (link by verified email). OAuth-only accounts have no password.
+- **OTP (SMS):** phone verification on register and password reset. Codes are short-lived and single-use; **rate-limit** requests and cap verify attempts. Deliver via the SMS adapter in `src/infrastructure/sms`.
+- Access token expired → **401** `code: "TOKEN_EXPIRED"` (client refreshes and retries). Missing/invalid → **401** `code: "UNAUTHORIZED"`.
+- **Two account types (separate tables):** `students` and `business_owners` — each with its own auth; the two mobile apps authenticate against their own table. See `docs/architecture/auth.md` (decision D6).
+- **Ownership:** any write to a business/branch/listing requires `business.ownerId === req.user.id`, else **403** `code: "FORBIDDEN"` (return 403, not 404, for someone else's resource).
+- All secrets (JWT keys, OAuth client secrets, SMS + DB credentials) come from env (`config/env.ts`, validated) — never committed.
 
 ## Architecture
 
@@ -49,6 +90,15 @@ src/infrastructure/  # Shared infra clients: database (Prisma), cache, queues, l
 src/config/          # Typed configuration (env schema + config service).
 src/cron/            # Scheduled jobs.
 ```
+
+### Modules (this product)
+
+The generic scaffold under `src/modules/` was speculative. For ElonUz the **active** modules are:
+
+`auth` (register/login, Google/Apple OAuth, SMS OTP, refresh, forgot/reset — two account types: `students` + `business_owners`, see `docs/architecture/auth.md`) · `profiles` (profile/me) · `business` · `branches` · `catalog` (business types, categories, attributes — seeded from `catalog-seed.json`) · `listings` · `discounts` (student proximity feed) · `redemptions` (Level 2) · `geo` · `media` · `admin` (moderation, Level 2).
+
+- `listings` is this product's core "advertisement"; `catalog` replaces the generic `categories`; `media` replaces `uploads`. Account ids are our own cuids (no Firebase uid).
+- **Not used by this product** (leave the scaffold folders empty): `chat`, `favorites`, `payments`, `reports`, `notifications`, `analytics`, `settings`, `search` (the `discounts` feed is the search).
 
 ### Dependency direction (never violate)
 

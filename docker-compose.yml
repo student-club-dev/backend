@@ -1,0 +1,31 @@
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: elonuz-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: elonuz
+      POSTGRES_PASSWORD: elonuz
+      POSTGRES_DB: elonuz
+    ports:
+      - '5432:5432'
+    volumes:
+      - elonuz-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U elonuz -d elonuz']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: elonuz-redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    volumes:
+      - elonuz-redis-data:/data
+
+volumes:
+  elonuz-db-data:
+  elonuz-redis-data:
