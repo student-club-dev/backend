@@ -6,7 +6,7 @@
  *   - Category (base + per-gender)    -> deleteMany + createMany (nullable `gender` in the
  *                                        unique key makes upsert unreliable, so replace wholesale)
  *   - AttributeSpec (type + category) -> deleteMany + createMany (nullable `categoryKey` — same reason)
- *   - Region / District               -> only if present in the JSON (currently absent -> skipped)
+ *   - Region (14) / District (210)    -> upsert by id from prisma/data/uz-*.json (regions first — FK)
  *
  * Idempotent: safe to re-run. Everything runs in a single transaction.
  */
@@ -51,21 +51,19 @@ interface SeedAttribute {
   required?: boolean;
 }
 
-interface SeedRegion {
-  id: string;
-  nameUz: string;
-  nameRu?: string;
-  centerLat?: number;
-  centerLng?: number;
+// Raw shapes of the geo data files (prisma/data/uz-*.json). `name_oz`/`soato_id` are ignored
+// (no columns); `id`/`region_id` are numbers in the source and stringified into the PKs/FKs.
+interface RawRegion {
+  id: number;
+  name_uz: string;
+  name_ru?: string;
 }
 
-interface SeedDistrict {
-  id: string;
-  regionId: string;
-  nameUz: string;
-  nameRu?: string;
-  centerLat?: number;
-  centerLng?: number;
+interface RawDistrict {
+  id: number;
+  region_id: number;
+  name_uz: string;
+  name_ru?: string;
 }
 
 interface CatalogSeed {
@@ -77,8 +75,6 @@ interface CatalogSeed {
   attributes: Record<string, SeedAttribute[]>;
   categoryAttributes: Record<string, Record<string, SeedAttribute[]>>;
   attributeKinds: string[];
-  regions?: SeedRegion[];
-  districts?: SeedDistrict[];
 }
 
 // ---------------------------------------------------------------------------
@@ -112,6 +108,37 @@ function toOptions(options?: string[]): Prisma.InputJsonValue | typeof Prisma.Db
 function loadSeed(): CatalogSeed {
   const seedPath = join(__dirname, '..', 'docs', 'api', 'provider', 'catalog-seed.json');
   return JSON.parse(readFileSync(seedPath, 'utf-8')) as CatalogSeed;
+}
+
+// The geo data files are saved with a UTF-8 BOM; strip a leading BOM (U+FEFF) before JSON.parse.
+function readJsonBom<T>(filePath: string): T {
+  const raw = readFileSync(filePath).toString('utf8').replace(/^﻿/, '');
+  return JSON.parse(raw) as T;
+}
+
+function loadGeo(): {
+  regions: Prisma.RegionCreateManyInput[];
+  districts: Prisma.DistrictCreateManyInput[];
+} {
+  const dataDir = join(__dirname, 'data');
+  const rawRegions = readJsonBom<RawRegion[]>(join(dataDir, 'uz-regions.json'));
+  const rawDistricts = readJsonBom<RawDistrict[]>(join(dataDir, 'uz-districts.json'));
+  const regions = rawRegions.map((r) => ({
+    id: String(r.id),
+    nameUz: r.name_uz,
+    nameRu: r.name_ru ?? null,
+    centerLat: null,
+    centerLng: null,
+  }));
+  const districts = rawDistricts.map((d) => ({
+    id: String(d.id),
+    regionId: String(d.region_id),
+    nameUz: d.name_uz,
+    nameRu: d.name_ru ?? null,
+    centerLat: null,
+    centerLng: null,
+  }));
+  return { regions, districts };
 }
 
 // ---------------------------------------------------------------------------
@@ -181,7 +208,7 @@ async function main(): Promise<void> {
     }
   }
 
-  const hasGeo = Boolean(seed.regions?.length) || Boolean(seed.districts?.length);
+  const geo = loadGeo();
 
   await prisma.$transaction(async (tx) => {
     // 1. Business types — upsert (PK `type` is referenced by Category/AttributeSpec/Business FKs).
@@ -213,31 +240,29 @@ async function main(): Promise<void> {
     await tx.attributeSpec.deleteMany();
     await tx.attributeSpec.createMany({ data: attributeRows });
 
-    // 4. Geo — only if the JSON carries it. Do NOT invent data.
-    if (seed.regions?.length) {
-      for (const r of seed.regions) {
-        const data = {
-          nameUz: r.nameUz,
-          nameRu: r.nameRu ?? null,
-          centerLat: r.centerLat ?? null,
-          centerLng: r.centerLng ?? null,
-        };
-        await tx.region.upsert({ where: { id: r.id }, create: { id: r.id, ...data }, update: data });
-      }
+    // 4. Geo — regions first (District.regionId FK -> Region). Upsert by id: idempotent and
+    //    FK-safe (deleteMany would fail once Branches reference regions/districts).
+    for (const r of geo.regions) {
+      const data = {
+        nameUz: r.nameUz,
+        nameRu: r.nameRu ?? null,
+        centerLat: r.centerLat ?? null,
+        centerLng: r.centerLng ?? null,
+      };
+      await tx.region.upsert({ where: { id: r.id }, create: { id: r.id, ...data }, update: data });
     }
-    if (seed.districts?.length) {
-      for (const d of seed.districts) {
-        const data = {
-          regionId: d.regionId,
-          nameUz: d.nameUz,
-          nameRu: d.nameRu ?? null,
-          centerLat: d.centerLat ?? null,
-          centerLng: d.centerLng ?? null,
-        };
-        await tx.district.upsert({ where: { id: d.id }, create: { id: d.id, ...data }, update: data });
-      }
+    for (const d of geo.districts) {
+      const data = {
+        regionId: d.regionId,
+        nameUz: d.nameUz,
+        nameRu: d.nameRu ?? null,
+        centerLat: d.centerLat ?? null,
+        centerLng: d.centerLng ?? null,
+      };
+      await tx.district.upsert({ where: { id: d.id }, create: { id: d.id, ...data }, update: data });
     }
-  });
+    // Timeout bumped from the 5s default: the geo upserts add 224 sequential statements.
+  }, { timeout: 60_000 });
 
   // Summary
   const baseCategoryCount = categoryRows.filter((c) => c.gender == null).length;
@@ -249,11 +274,8 @@ async function main(): Promise<void> {
   console.log(`  business types:        ${seed.businessTypes.length}`);
   console.log(`  categories:            ${categoryRows.length} (base ${baseCategoryCount}, per-gender ${perGenderCategoryCount})`);
   console.log(`  attribute specs:       ${attributeRows.length} (type-level ${typeLevelAttrCount}, category-level ${categoryLevelAttrCount})`);
-  console.log(`  regions:               ${seed.regions?.length ?? 0}`);
-  console.log(`  districts:             ${seed.districts?.length ?? 0}`);
-  if (!hasGeo) {
-    console.warn('  NOTE: catalog-seed.json has no `regions`/`districts` — geo seed data is absent; skipped. Seed geo separately.');
-  }
+  console.log(`  regions:               ${geo.regions.length}`);
+  console.log(`  districts:             ${geo.districts.length}`);
 }
 
 main()

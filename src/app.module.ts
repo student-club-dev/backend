@@ -9,6 +9,7 @@ import { PrismaModule } from './infrastructure/database/prisma.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { BusinessModule } from './modules/business/business.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
+import { GeoModule } from './modules/geo/geo.module';
 import { HealthModule } from './modules/health/health.module';
 import { ProfileModule } from './modules/profiles/profile.module';
 
@@ -37,6 +38,7 @@ import { ProfileModule } from './modules/profiles/profile.module';
     RedisModule,
     HealthModule,
     CatalogModule,
+    GeoModule,
     AuthModule,
     ProfileModule,
     BusinessModule,
