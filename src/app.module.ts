@@ -7,6 +7,7 @@ import { AppConfigModule } from './config/config.module';
 import { RedisModule } from './infrastructure/cache/redis.module';
 import { PrismaModule } from './infrastructure/database/prisma.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { BranchesModule } from './modules/branches/branches.module';
 import { BusinessModule } from './modules/business/business.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
 import { GeoModule } from './modules/geo/geo.module';
@@ -42,6 +43,7 @@ import { ProfileModule } from './modules/profiles/profile.module';
     AuthModule,
     ProfileModule,
     BusinessModule,
+    BranchesModule,
   ],
 })
 export class AppModule {}
