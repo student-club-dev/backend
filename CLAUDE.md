@@ -203,17 +203,7 @@ When modifying existing code:
 
 ## Subagents
 
-Specialized agents live in `.claude/agents/`. Delegate focused work to them:
-
-| Agent | Use for |
-|-------|---------|
-| `backend-architect` | Module boundaries, architecture decisions, folder/layer design. Designs — does not write feature code. |
-| `backend-developer` | Implementing NestJS features (controllers/services/repositories) per these rules. |
-| `database-architect` | Prisma schema, relations, indexes, migrations. |
-| `security-engineer` | Auth/JWT/RBAC review, input validation, OWASP checks. |
-| `api-designer` | REST endpoint & DTO/contract design, Swagger. |
-| `reviewer` | Clean-code review against this CLAUDE.md. |
-| `testing-engineer` | Jest unit & e2e tests. |
+Specialized agents live in `.claude/agents/` — their names and descriptions load automatically (see the agent list). Delegate focused work to them.
 
 ## Skills
 
@@ -230,10 +220,4 @@ Invoke the matching skill before starting the task:
 
 ### Custom project skills
 
-Live under `.claude/skills/` (draft — refine on first real use once the NestJS project exists):
-
-| Skill | Use for |
-|-------|---------|
-| `nest-new-module` | Scaffolding a new `src/modules/<feature>` with the 4 DDD layers. |
-| `nest-crud-endpoint` | Adding a CRUD operation (controller→service→repository→DTO+Swagger) to an existing module. |
-| `prisma-migration` | Changing `schema.prisma` and generating/applying a migration. |
+Live under `.claude/skills/` — their descriptions load automatically (see the skill list): `nest-new-module`, `nest-crud-endpoint`, `prisma-migration`.
