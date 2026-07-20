@@ -51,4 +51,11 @@ export class StudentAccountPrismaRepository implements AccountRepository {
     });
     return toAccount(row);
   }
+
+  async markPhoneVerified(accountId: string, phoneNumber: string): Promise<void> {
+    await this.prisma.student.update({
+      where: { id: accountId },
+      data: { phoneNumber, phoneVerified: true },
+    });
+  }
 }

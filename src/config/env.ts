@@ -21,12 +21,19 @@ export const envSchema = z.object({
   GOOGLE_ALLOWED_CLIENT_IDS: z.string().optional(),
   APPLE_OAUTH_CLIENT_ID: z.string().optional(),
 
-  SMS_PROVIDER: z.string().default('eskiz'),
-  SMS_ESKIZ_EMAIL: z.string().optional(),
-  SMS_ESKIZ_PASSWORD: z.string().optional(),
-  SMS_ESKIZ_FROM: z.string().default('4546'),
-  OTP_TTL_SECONDS: z.coerce.number().int().positive().default(120),
+  // SMS provider: `dev` logs the code (never in prod), `eskiz` sends real SMS. Env-only switch.
+  SMS_PROVIDER: z.enum(['dev', 'eskiz']).default('dev'),
+  ESKIZ_EMAIL: z.string().optional(),
+  ESKIZ_PASSWORD: z.string().optional(),
+  ESKIZ_FROM: z.string().default('4546'),
+  ESKIZ_BASE_URL: z.string().url().default('https://notify.eskiz.uz'),
+
+  OTP_TTL_SECONDS: z.coerce.number().int().positive().default(300),
   OTP_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
+  OTP_RESEND_COOLDOWN_SECONDS: z.coerce.number().int().positive().default(60),
+  OTP_MAX_RESEND: z.coerce.number().int().positive().default(5),
+  // Fixed dev OTP code — honoured only when NODE_ENV !== 'production' (defaults to 111111 in code).
+  OTP_DEV_CODE: z.string().optional(),
 
   REDIS_URL: z.string().optional(),
 });

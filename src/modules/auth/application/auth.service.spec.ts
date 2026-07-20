@@ -41,6 +41,7 @@ function makeAccountRepository(overrides: Partial<AccountRepository> = {}): Acco
     findById: jest.fn().mockResolvedValue(null),
     create: jest.fn().mockResolvedValue(makeAccount()),
     createFromOAuth: jest.fn().mockResolvedValue(makeAccount({ id: 'acc-new' })),
+    markPhoneVerified: jest.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }

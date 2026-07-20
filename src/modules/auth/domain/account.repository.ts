@@ -18,4 +18,7 @@ export interface AccountRepository {
 
   /** Creates a credential-less account from a verified OAuth identity (D4). */
   createFromOAuth(data: CreateOAuthAccountData): Promise<Account>;
+
+  /** Marks the account's phone as verified and sets it to the just-verified number (D1 gate). */
+  markPhoneVerified(accountId: string, phoneNumber: string): Promise<void>;
 }

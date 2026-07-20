@@ -51,4 +51,11 @@ export class BusinessOwnerAccountPrismaRepository implements AccountRepository {
     });
     return toAccount(row);
   }
+
+  async markPhoneVerified(accountId: string, phoneNumber: string): Promise<void> {
+    await this.prisma.businessOwner.update({
+      where: { id: accountId },
+      data: { phoneNumber, phoneVerified: true },
+    });
+  }
 }
