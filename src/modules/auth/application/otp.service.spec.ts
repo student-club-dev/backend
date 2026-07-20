@@ -9,9 +9,11 @@ import { SmsProvider } from '../domain/sms/sms-provider';
 import { OtpService } from './otp.service';
 
 const PHONE = '+998901234567';
-const OTP_KEY = 'otp:student:+998901234567';
-const COOLDOWN_KEY = 'otp:cooldown:student:+998901234567';
-const RESEND_KEY = 'otp:resend:student:+998901234567';
+const OTP_KEY = 'otp:student:phone_verify:+998901234567';
+const COOLDOWN_KEY = 'otp:cooldown:student:phone_verify:+998901234567';
+const RESEND_KEY = 'otp:resend:student:phone_verify:+998901234567';
+const RESET_OTP_KEY = 'otp:student:password_reset:+998901234567';
+const RESET_COOLDOWN_KEY = 'otp:cooldown:student:password_reset:+998901234567';
 
 const sha256 = (value: string): string => createHash('sha256').update(value).digest('hex');
 
@@ -54,6 +56,7 @@ function makeAccounts(overrides: Partial<AccountRepository> = {}): AccountReposi
     create: jest.fn(),
     createFromOAuth: jest.fn(),
     markPhoneVerified: jest.fn().mockResolvedValue(undefined),
+    setPassword: jest.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }
@@ -72,7 +75,7 @@ describe('OtpService', () => {
     it('stores the hashed code (attempts=0, TTL), sends the SMS, sets the cooldown, returns the result', async () => {
       const redis = makeRedis();
       const sms = makeSms();
-      const result = await makeService(redis, sms).request(PHONE);
+      const result = await makeService(redis, sms).request(PHONE, 'phone_verify');
 
       expect(result).toEqual({ sent: true, expiresInSeconds: 300, resendCooldownSeconds: 60 });
       expect(redis.hset).toHaveBeenCalledWith(OTP_KEY, { hash: sha256('111111'), attempts: 0 });
@@ -84,7 +87,7 @@ describe('OtpService', () => {
     it('normalises a 9-digit national number to E.164', async () => {
       const redis = makeRedis();
       const sms = makeSms();
-      await makeService(redis, sms).request('901234567');
+      await makeService(redis, sms).request('901234567', 'phone_verify');
 
       expect(sms.send).toHaveBeenCalledWith(PHONE, expect.any(String));
       expect(redis.hset).toHaveBeenCalledWith(OTP_KEY, expect.any(Object));
@@ -94,7 +97,7 @@ describe('OtpService', () => {
       const redis = makeRedis({ exists: jest.fn().mockResolvedValue(true) });
       const sms = makeSms();
 
-      await expect(makeService(redis, sms).request(PHONE)).rejects.toMatchObject({
+      await expect(makeService(redis, sms).request(PHONE, 'phone_verify')).rejects.toMatchObject({
         code: ERROR_CODE.OTP_COOLDOWN,
         status: 429,
       });
@@ -106,7 +109,7 @@ describe('OtpService', () => {
       const redis = makeRedis({ incr: jest.fn().mockResolvedValue(6) });
       const sms = makeSms();
 
-      await expect(makeService(redis, sms).request(PHONE)).rejects.toMatchObject({
+      await expect(makeService(redis, sms).request(PHONE, 'phone_verify')).rejects.toMatchObject({
         code: ERROR_CODE.OTP_RESEND_LIMIT,
         status: 429,
       });
@@ -115,7 +118,7 @@ describe('OtpService', () => {
 
     it('sets the resend-window TTL on the first resend of the window', async () => {
       const redis = makeRedis({ incr: jest.fn().mockResolvedValue(1) });
-      await makeService(redis).request(PHONE);
+      await makeService(redis).request(PHONE, 'phone_verify');
 
       expect(redis.expire).toHaveBeenCalledWith(RESEND_KEY, 3_600);
     });
@@ -125,6 +128,7 @@ describe('OtpService', () => {
       const sms = makeSms();
       await makeService(redis, sms, makeAccounts(), makeConfig({ OTP_DEV_CODE: '222222' })).request(
         PHONE,
+        'phone_verify',
       );
 
       expect(sms.send).toHaveBeenCalledWith(PHONE, 'ElonUz tasdiqlash kodi: 222222');
@@ -133,9 +137,12 @@ describe('OtpService', () => {
 
     it('defaults to the fixed 111111 dev code when OTP_DEV_CODE is unset outside production', async () => {
       const sms = makeSms();
-      await makeService(makeRedis(), sms, makeAccounts(), makeConfig({ OTP_DEV_CODE: undefined })).request(
-        PHONE,
-      );
+      await makeService(
+        makeRedis(),
+        sms,
+        makeAccounts(),
+        makeConfig({ OTP_DEV_CODE: undefined }),
+      ).request(PHONE, 'phone_verify');
 
       expect(sms.send).toHaveBeenCalledWith(PHONE, 'ElonUz tasdiqlash kodi: 111111');
     });
@@ -145,12 +152,26 @@ describe('OtpService', () => {
       const sms = makeSms();
       await makeService(redis, sms, makeAccounts(), makeConfig({ NODE_ENV: 'production' })).request(
         PHONE,
+        'phone_verify',
       );
 
       const sentText = (sms.send as jest.Mock).mock.calls[0][1] as string;
       const code = sentText.replace('ElonUz tasdiqlash kodi: ', '');
       expect(code).toMatch(/^\d{6}$/);
       expect(redis.hset).toHaveBeenCalledWith(OTP_KEY, { hash: sha256(code), attempts: 0 });
+    });
+
+    it('namespaces the Redis keys by purpose (password_reset ≠ phone_verify)', async () => {
+      const redis = makeRedis();
+      await makeService(redis).request(PHONE, 'password_reset');
+
+      expect(redis.hset).toHaveBeenCalledWith(RESET_OTP_KEY, {
+        hash: sha256('111111'),
+        attempts: 0,
+      });
+      expect(redis.set).toHaveBeenCalledWith(RESET_COOLDOWN_KEY, '1', 60);
+      // The phone_verify keys are untouched.
+      expect(redis.hset).not.toHaveBeenCalledWith(OTP_KEY, expect.any(Object));
     });
   });
 
@@ -202,6 +223,44 @@ describe('OtpService', () => {
       ).rejects.toMatchObject({ code: ERROR_CODE.OTP_TOO_MANY_ATTEMPTS, status: 429 });
       expect(redis.hincrby).not.toHaveBeenCalled();
       expect(redis.del).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('verifyPasswordReset', () => {
+    it('consumes the password_reset code, returns the normalised phone, and never marks the phone verified', async () => {
+      const redis = makeRedis({
+        hgetall: jest.fn().mockResolvedValue({ hash: sha256('111111'), attempts: '0' }),
+      });
+      const accounts = makeAccounts();
+
+      const result = await makeService(redis, makeSms(), accounts).verifyPasswordReset(
+        PHONE,
+        '111111',
+      );
+
+      expect(result).toBe(PHONE);
+      expect(redis.del).toHaveBeenCalledWith(RESET_OTP_KEY);
+      expect(accounts.markPhoneVerified).not.toHaveBeenCalled();
+    });
+
+    it('throws OTP_INVALID on a wrong password_reset code', async () => {
+      const redis = makeRedis({
+        hgetall: jest.fn().mockResolvedValue({ hash: sha256('999999'), attempts: '0' }),
+      });
+
+      await expect(makeService(redis).verifyPasswordReset(PHONE, '111111')).rejects.toMatchObject({
+        code: ERROR_CODE.OTP_INVALID,
+        status: 422,
+      });
+      expect(redis.hincrby).toHaveBeenCalledWith(RESET_OTP_KEY, 'attempts', 1);
+    });
+
+    it('throws OTP_EXPIRED when no password_reset code is stored', async () => {
+      const redis = makeRedis({ hgetall: jest.fn().mockResolvedValue({}) });
+
+      await expect(
+        makeService(redis).verifyPasswordReset(PHONE, '111111'),
+      ).rejects.toMatchObject({ code: ERROR_CODE.OTP_EXPIRED, status: 410 });
     });
   });
 });

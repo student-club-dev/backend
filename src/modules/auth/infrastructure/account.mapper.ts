@@ -5,6 +5,7 @@ interface AccountRow {
   id: string;
   email: string | null;
   phoneNumber: string | null;
+  phoneVerified: boolean;
   passwordHash: string | null;
 }
 
@@ -14,6 +15,7 @@ export function toAccount(row: AccountRow): Account {
     id: row.id,
     email: row.email,
     phoneNumber: row.phoneNumber,
+    phoneVerified: row.phoneVerified,
     passwordHash: row.passwordHash,
   };
 }

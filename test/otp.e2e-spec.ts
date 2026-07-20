@@ -21,9 +21,9 @@ const DEV_CODE = '111111';
 
 function otpKeys(phone: string): string[] {
   return [
-    `otp:student:${phone}`,
-    `otp:cooldown:student:${phone}`,
-    `otp:resend:student:${phone}`,
+    `otp:student:phone_verify:${phone}`,
+    `otp:cooldown:student:phone_verify:${phone}`,
+    `otp:resend:student:phone_verify:${phone}`,
   ];
 }
 

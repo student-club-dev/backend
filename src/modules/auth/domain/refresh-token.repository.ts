@@ -1,4 +1,8 @@
-import { CreateRefreshTokenData, RefreshToken } from './entities/refresh-token.entity';
+import {
+  CreateRefreshTokenData,
+  RefreshToken,
+  RefreshTokenSession,
+} from './entities/refresh-token.entity';
 
 /** Injection token for the per-type refresh-token repository. */
 export const REFRESH_TOKEN_REPOSITORY = Symbol('REFRESH_TOKEN_REPOSITORY');
@@ -18,4 +22,16 @@ export interface RefreshTokenRepository {
 
   /** Revokes the current session and creates its replacement in one transaction. */
   rotate(currentTokenId: string, next: CreateRefreshTokenData): Promise<void>;
+
+  /** Active (non-revoked, non-expired) sessions for the account — the device list (D3). */
+  listActiveByAccount(accountId: string): Promise<RefreshTokenSession[]>;
+
+  /**
+   * Revokes a single active session by id, but only when it belongs to `accountId` (ownership).
+   * Returns whether a matching active session existed (false → not the caller's / already gone).
+   */
+  revokeById(id: string, accountId: string): Promise<boolean>;
+
+  /** Revokes all of the account's active sessions ("logout all" / password change — D3). */
+  revokeAllByAccount(accountId: string): Promise<void>;
 }

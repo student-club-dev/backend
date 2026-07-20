@@ -27,7 +27,7 @@ export class StudentOtpController {
   @ApiOperation({ summary: 'Send an OTP to the phone number to verify' })
   @ApiOkResponse({ type: OtpRequestResultDto })
   async request(@Body() dto: OtpRequestDto): Promise<OtpRequestResultDto> {
-    const result = await this.otpService.request(dto.phoneNumber);
+    const result = await this.otpService.request(dto.phoneNumber, 'phone_verify');
     return OtpRequestResultDto.fromDomain(result);
   }
 

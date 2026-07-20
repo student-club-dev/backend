@@ -6,6 +6,7 @@ export interface Account {
   id: string;
   email: string | null;
   phoneNumber: string | null;
+  phoneVerified: boolean;
   passwordHash: string | null;
 }
 

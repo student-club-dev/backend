@@ -58,4 +58,11 @@ export class BusinessOwnerAccountPrismaRepository implements AccountRepository {
       data: { phoneNumber, phoneVerified: true },
     });
   }
+
+  async setPassword(accountId: string, passwordHash: string): Promise<void> {
+    await this.prisma.businessOwner.update({
+      where: { id: accountId },
+      data: { passwordHash },
+    });
+  }
 }

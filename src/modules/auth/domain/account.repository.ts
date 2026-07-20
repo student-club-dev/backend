@@ -21,4 +21,7 @@ export interface AccountRepository {
 
   /** Marks the account's phone as verified and sets it to the just-verified number (D1 gate). */
   markPhoneVerified(accountId: string, phoneNumber: string): Promise<void>;
+
+  /** Sets (or replaces) the account's password hash (set-password D9 / reset D5). */
+  setPassword(accountId: string, passwordHash: string): Promise<void>;
 }

@@ -6,6 +6,7 @@ import { AppException } from '../../../common/exceptions/app.exception';
 import { AuthProvider } from '../../../common/enums/auth-provider.enum';
 import { ACCOUNT_REPOSITORY, ACCOUNT_TYPE, AccountRepository } from '../domain/account.repository';
 import { Account } from '../domain/entities/account.entity';
+import { RefreshTokenSession } from '../domain/entities/refresh-token.entity';
 import {
   OAUTH_ACCOUNT_REPOSITORY,
   OAuthAccountRepository,
@@ -27,6 +28,7 @@ import {
   RefreshInput,
   RegisterInput,
 } from './auth.io';
+import { OtpService } from './otp.service';
 import { TokenService } from './token.service';
 
 /**
@@ -43,6 +45,7 @@ export class AuthService {
     private readonly tokenService: TokenService,
     @Inject(OAUTH_ACCOUNT_REPOSITORY) private readonly oauthAccounts: OAuthAccountRepository,
     @Inject(OAUTH_PROVIDER_REGISTRY) private readonly oauthProviders: OAuthProviderRegistry,
+    private readonly otpService: OtpService,
   ) {}
 
   async register(input: RegisterInput): Promise<AuthTokens> {
@@ -139,6 +142,89 @@ export class AuthService {
   async logout(input: LogoutInput): Promise<void> {
     const tokenHash = this.tokenService.hashRefreshToken(input.refreshToken);
     await this.refreshTokens.revoke(tokenHash);
+  }
+
+  /** The account's active device sessions (D3). Never exposes the token hash. */
+  listSessions(accountId: string): Promise<RefreshTokenSession[]> {
+    return this.refreshTokens.listActiveByAccount(accountId);
+  }
+
+  /**
+   * Revokes one of the account's own device sessions (D3). Enforces ownership — a session that is
+   * not the caller's (or already gone) yields SESSION_NOT_FOUND rather than revoking anything.
+   */
+  async revokeSession(accountId: string, sessionId: string): Promise<void> {
+    const existed = await this.refreshTokens.revokeById(sessionId, accountId);
+    if (!existed) {
+      throw AppException.notFound(ERROR_CODE.SESSION_NOT_FOUND, 'Sessiya topilmadi');
+    }
+  }
+
+  /** Revokes all of the account's device sessions ("logout all devices" — D3). */
+  logoutAll(accountId: string): Promise<void> {
+    return this.refreshTokens.revokeAllByAccount(accountId);
+  }
+
+  /**
+   * Sets or changes the account password (D9). First-time set (OAuth-only account with no password)
+   * needs no current password and does NOT revoke sessions. Changing an existing password requires
+   * the correct current password and revokes all refresh tokens (D3 — re-login everywhere).
+   */
+  async setPassword(
+    accountId: string,
+    currentPassword: string | null,
+    newPassword: string,
+  ): Promise<void> {
+    const account = await this.accounts.findById(accountId);
+    if (account === null) {
+      throw AppException.unauthorized();
+    }
+
+    const existingHash = account.passwordHash;
+    const isChange = existingHash !== null;
+    if (existingHash !== null) {
+      if (currentPassword === null) {
+        throw this.invalidCredentials();
+      }
+      const matches = await verify(existingHash, currentPassword);
+      if (!matches) {
+        throw this.invalidCredentials();
+      }
+    }
+
+    const passwordHash = await hash(newPassword);
+    await this.accounts.setPassword(accountId, passwordHash);
+
+    if (isChange) {
+      await this.refreshTokens.revokeAllByAccount(accountId);
+    }
+  }
+
+  /**
+   * Password-reset request (D5). Sends a password-reset OTP only when an account with this phone
+   * exists AND its phone is verified. Always resolves the same way — it never reveals whether the
+   * account exists or whether the phone is verified (anti-enumeration).
+   */
+  async forgotPassword(phoneNumber: string): Promise<void> {
+    const account = await this.accounts.findByPhone(phoneNumber);
+    if (account !== null && account.phoneVerified) {
+      await this.otpService.request(phoneNumber, 'password_reset');
+    }
+  }
+
+  /**
+   * Password reset (D5). Verifies the password-reset OTP (throws OTP_* on failure), then sets the
+   * new password and revokes all refresh tokens (D3 — force re-login everywhere).
+   */
+  async resetPassword(phoneNumber: string, code: string, newPassword: string): Promise<void> {
+    const e164 = await this.otpService.verifyPasswordReset(phoneNumber, code);
+    const account = await this.accounts.findByPhone(e164);
+    if (account === null) {
+      throw this.invalidCredentials();
+    }
+    const passwordHash = await hash(newPassword);
+    await this.accounts.setPassword(account.id, passwordHash);
+    await this.refreshTokens.revokeAllByAccount(account.id);
   }
 
   private async issueSession(accountId: string, device: DeviceContext): Promise<AuthTokens> {

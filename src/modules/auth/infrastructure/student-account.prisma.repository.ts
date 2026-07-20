@@ -58,4 +58,11 @@ export class StudentAccountPrismaRepository implements AccountRepository {
       data: { phoneNumber, phoneVerified: true },
     });
   }
+
+  async setPassword(accountId: string, passwordHash: string): Promise<void> {
+    await this.prisma.student.update({
+      where: { id: accountId },
+      data: { passwordHash },
+    });
+  }
 }

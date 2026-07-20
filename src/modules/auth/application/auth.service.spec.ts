@@ -14,6 +14,7 @@ import {
 } from '../domain/oauth/oauth-provider';
 import { RefreshTokenRepository } from '../domain/refresh-token.repository';
 import { AuthService } from './auth.service';
+import { OtpService } from './otp.service';
 import { TokenService } from './token.service';
 
 jest.mock('@node-rs/argon2', () => ({
@@ -29,6 +30,7 @@ function makeAccount(overrides: Partial<Account> = {}): Account {
     id: 'acc-1',
     email: 'a@b.com',
     phoneNumber: null,
+    phoneVerified: false,
     passwordHash: 'stored-hash',
     ...overrides,
   };
@@ -42,6 +44,7 @@ function makeAccountRepository(overrides: Partial<AccountRepository> = {}): Acco
     create: jest.fn().mockResolvedValue(makeAccount()),
     createFromOAuth: jest.fn().mockResolvedValue(makeAccount({ id: 'acc-new' })),
     markPhoneVerified: jest.fn().mockResolvedValue(undefined),
+    setPassword: jest.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }
@@ -85,8 +88,22 @@ function makeRefreshTokenRepository(
     findActiveByHash: jest.fn().mockResolvedValue(null),
     revoke: jest.fn().mockResolvedValue(undefined),
     rotate: jest.fn().mockResolvedValue(undefined),
+    listActiveByAccount: jest.fn().mockResolvedValue([]),
+    revokeById: jest.fn().mockResolvedValue(true),
+    revokeAllByAccount: jest.fn().mockResolvedValue(undefined),
     ...overrides,
   };
+}
+
+function makeOtpService(overrides: Partial<OtpService> = {}): OtpService {
+  return {
+    request: jest
+      .fn()
+      .mockResolvedValue({ sent: true, expiresInSeconds: 300, resendCooldownSeconds: 60 }),
+    verify: jest.fn().mockResolvedValue(undefined),
+    verifyPasswordReset: jest.fn().mockResolvedValue('+998901234567'),
+    ...overrides,
+  } as unknown as OtpService;
 }
 
 function makeTokenService(): TokenService {
@@ -104,6 +121,7 @@ function makeService(
   tokenService: TokenService = makeTokenService(),
   oauthAccounts: OAuthAccountRepository = makeOAuthAccountRepository(),
   registry: OAuthProviderRegistry = makeRegistry(),
+  otpService: OtpService = makeOtpService(),
 ): AuthService {
   return new AuthService(
     accounts,
@@ -112,6 +130,7 @@ function makeService(
     tokenService,
     oauthAccounts,
     registry,
+    otpService,
   );
 }
 
@@ -408,6 +427,227 @@ describe('AuthService', () => {
       ).rejects.toMatchObject({ code: ERROR_CODE.NOT_IMPLEMENTED, status: 501 });
       expect(oauthAccounts.findAccountIdByProvider).not.toHaveBeenCalled();
       expect(accounts.createFromOAuth).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('listSessions', () => {
+    it('returns the account’s active sessions from the repository', async () => {
+      const sessions = [
+        {
+          id: 's1',
+          deviceName: 'iPhone 15',
+          platform: 'iOS',
+          ipAddress: null,
+          lastUsedAt: null,
+          createdAt: new Date(),
+        },
+      ];
+      const refreshTokens = makeRefreshTokenRepository({
+        listActiveByAccount: jest.fn().mockResolvedValue(sessions),
+      });
+      const service = makeService(makeAccountRepository(), refreshTokens);
+
+      await expect(service.listSessions('acc-1')).resolves.toBe(sessions);
+      expect(refreshTokens.listActiveByAccount).toHaveBeenCalledWith('acc-1');
+    });
+  });
+
+  describe('revokeSession', () => {
+    it('revokes the caller’s own session', async () => {
+      const refreshTokens = makeRefreshTokenRepository({
+        revokeById: jest.fn().mockResolvedValue(true),
+      });
+      const service = makeService(makeAccountRepository(), refreshTokens);
+
+      await expect(service.revokeSession('acc-1', 'sess-1')).resolves.toBeUndefined();
+      expect(refreshTokens.revokeById).toHaveBeenCalledWith('sess-1', 'acc-1');
+    });
+
+    it('throws SESSION_NOT_FOUND (404) when the session is not the caller’s', async () => {
+      const refreshTokens = makeRefreshTokenRepository({
+        revokeById: jest.fn().mockResolvedValue(false),
+      });
+      const service = makeService(makeAccountRepository(), refreshTokens);
+
+      await expect(service.revokeSession('acc-1', 'other-session')).rejects.toMatchObject({
+        code: ERROR_CODE.SESSION_NOT_FOUND,
+        status: 404,
+      });
+    });
+  });
+
+  describe('logoutAll', () => {
+    it('revokes all of the account’s sessions', async () => {
+      const refreshTokens = makeRefreshTokenRepository();
+      const service = makeService(makeAccountRepository(), refreshTokens);
+
+      await expect(service.logoutAll('acc-1')).resolves.toBeUndefined();
+      expect(refreshTokens.revokeAllByAccount).toHaveBeenCalledWith('acc-1');
+    });
+  });
+
+  describe('setPassword', () => {
+    it('first-time set (OAuth-only account): no current password, no session revoke', async () => {
+      const accounts = makeAccountRepository({
+        findById: jest.fn().mockResolvedValue(makeAccount({ passwordHash: null })),
+      });
+      const refreshTokens = makeRefreshTokenRepository();
+      const service = makeService(accounts, refreshTokens);
+
+      await service.setPassword('acc-1', null, 'newpassword123');
+
+      expect(verifyMock).not.toHaveBeenCalled();
+      expect(hashMock).toHaveBeenCalledWith('newpassword123');
+      expect(accounts.setPassword).toHaveBeenCalledWith('acc-1', 'argon2-hash');
+      expect(refreshTokens.revokeAllByAccount).not.toHaveBeenCalled();
+    });
+
+    it('change: verifies the current password, sets the new one, revokes all sessions', async () => {
+      const accounts = makeAccountRepository({
+        findById: jest.fn().mockResolvedValue(makeAccount({ passwordHash: 'stored' })),
+      });
+      const refreshTokens = makeRefreshTokenRepository();
+      const service = makeService(accounts, refreshTokens);
+
+      await service.setPassword('acc-1', 'current-pass', 'newpassword123');
+
+      expect(verifyMock).toHaveBeenCalledWith('stored', 'current-pass');
+      expect(accounts.setPassword).toHaveBeenCalledWith('acc-1', 'argon2-hash');
+      expect(refreshTokens.revokeAllByAccount).toHaveBeenCalledWith('acc-1');
+    });
+
+    it('throws INVALID_CREDENTIALS (401) when the current password is wrong', async () => {
+      const accounts = makeAccountRepository({
+        findById: jest.fn().mockResolvedValue(makeAccount({ passwordHash: 'stored' })),
+      });
+      const refreshTokens = makeRefreshTokenRepository();
+      const service = makeService(accounts, refreshTokens);
+      verifyMock.mockResolvedValue(false);
+
+      await expect(service.setPassword('acc-1', 'wrong', 'newpassword123')).rejects.toMatchObject({
+        code: ERROR_CODE.INVALID_CREDENTIALS,
+        status: 401,
+      });
+      expect(accounts.setPassword).not.toHaveBeenCalled();
+      expect(refreshTokens.revokeAllByAccount).not.toHaveBeenCalled();
+    });
+
+    it('throws INVALID_CREDENTIALS when changing but no current password is provided', async () => {
+      const accounts = makeAccountRepository({
+        findById: jest.fn().mockResolvedValue(makeAccount({ passwordHash: 'stored' })),
+      });
+      const service = makeService(accounts, makeRefreshTokenRepository());
+
+      await expect(service.setPassword('acc-1', null, 'newpassword123')).rejects.toMatchObject({
+        code: ERROR_CODE.INVALID_CREDENTIALS,
+      });
+      expect(verifyMock).not.toHaveBeenCalled();
+      expect(accounts.setPassword).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('forgotPassword', () => {
+    it('sends a password_reset OTP when the account exists and the phone is verified', async () => {
+      const accounts = makeAccountRepository({
+        findByPhone: jest.fn().mockResolvedValue(makeAccount({ phoneVerified: true })),
+      });
+      const otpService = makeOtpService();
+      const service = makeService(
+        accounts,
+        makeRefreshTokenRepository(),
+        makeTokenService(),
+        makeOAuthAccountRepository(),
+        makeRegistry(),
+        otpService,
+      );
+
+      await expect(service.forgotPassword('+998901234567')).resolves.toBeUndefined();
+      expect(otpService.request).toHaveBeenCalledWith('+998901234567', 'password_reset');
+    });
+
+    it('does NOT send when the phone is unverified but still resolves (anti-enumeration)', async () => {
+      const accounts = makeAccountRepository({
+        findByPhone: jest.fn().mockResolvedValue(makeAccount({ phoneVerified: false })),
+      });
+      const otpService = makeOtpService();
+      const service = makeService(
+        accounts,
+        makeRefreshTokenRepository(),
+        makeTokenService(),
+        makeOAuthAccountRepository(),
+        makeRegistry(),
+        otpService,
+      );
+
+      await expect(service.forgotPassword('+998901234567')).resolves.toBeUndefined();
+      expect(otpService.request).not.toHaveBeenCalled();
+    });
+
+    it('does NOT send and still resolves when no account exists (anti-enumeration)', async () => {
+      const accounts = makeAccountRepository();
+      const otpService = makeOtpService();
+      const service = makeService(
+        accounts,
+        makeRefreshTokenRepository(),
+        makeTokenService(),
+        makeOAuthAccountRepository(),
+        makeRegistry(),
+        otpService,
+      );
+
+      await expect(service.forgotPassword('+998901234567')).resolves.toBeUndefined();
+      expect(otpService.request).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('resetPassword', () => {
+    it('valid OTP → sets the new password and revokes all sessions', async () => {
+      const accounts = makeAccountRepository({
+        findByPhone: jest.fn().mockResolvedValue(makeAccount({ id: 'acc-7', phoneVerified: true })),
+      });
+      const refreshTokens = makeRefreshTokenRepository();
+      const otpService = makeOtpService({
+        verifyPasswordReset: jest.fn().mockResolvedValue('+998901234567'),
+      });
+      const service = makeService(
+        accounts,
+        refreshTokens,
+        makeTokenService(),
+        makeOAuthAccountRepository(),
+        makeRegistry(),
+        otpService,
+      );
+
+      await service.resetPassword('+998901234567', '111111', 'newpassword123');
+
+      expect(otpService.verifyPasswordReset).toHaveBeenCalledWith('+998901234567', '111111');
+      expect(hashMock).toHaveBeenCalledWith('newpassword123');
+      expect(accounts.setPassword).toHaveBeenCalledWith('acc-7', 'argon2-hash');
+      expect(refreshTokens.revokeAllByAccount).toHaveBeenCalledWith('acc-7');
+    });
+
+    it('invalid OTP → surfaces the OTP error and never touches the password', async () => {
+      const accounts = makeAccountRepository();
+      const refreshTokens = makeRefreshTokenRepository();
+      const otpService = makeOtpService({
+        verifyPasswordReset: jest
+          .fn()
+          .mockRejectedValue(new AppException(ERROR_CODE.OTP_INVALID, 422, 'Kod noto‘g‘ri')),
+      });
+      const service = makeService(
+        accounts,
+        refreshTokens,
+        makeTokenService(),
+        makeOAuthAccountRepository(),
+        makeRegistry(),
+        otpService,
+      );
+
+      await expect(
+        service.resetPassword('+998901234567', '000000', 'newpassword123'),
+      ).rejects.toMatchObject({ code: ERROR_CODE.OTP_INVALID, status: 422 });
+      expect(accounts.setPassword).not.toHaveBeenCalled();
+      expect(refreshTokens.revokeAllByAccount).not.toHaveBeenCalled();
     });
   });
 });
