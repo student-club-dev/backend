@@ -13,8 +13,8 @@
 //      "1".."4" are named YEAR_1..YEAR_4 and @map'd back to "1".."4". "MASTER" is unchanged.
 //   2. PostGIS: lat/lng are stored as Float (Prisma-managed, used by the REST API and the
 //      app-side haversine). A geography(Point,4326) column `geo_point` is declared as an
-//      Unsupported type so Prisma keeps it in the schema; its GiST index and auto-population
-//      from lat/lng are added via RAW SQL in the migration (see the note at the bottom).
+//      Unsupported type so Prisma keeps it in the schema. The GiST index is modelled via
+//      `@@index(type: Gist)` below; only geo_point auto-population from lat/lng is raw SQL (a trigger).
 //   3. AttributeKind includes MULTI_SELECT to match the source-of-truth OpenAPI
 //      (AttributeFieldTypeDto) and catalog-seed.json `attributeKinds` — this is a superset of
 //      BACKEND_PROMPT §5 (which omits it). Flagged for the orchestrator.
@@ -436,8 +436,8 @@ model Branch {
   metroStation String? @map("metro_station")
 
   // PostGIS geography column for proximity search (GET /discounts). Modelled as an
-  // Unsupported type so Prisma keeps the column; the GiST index and auto-population from
-  // lat/lng are added via RAW SQL in the migration (see the migration note at the bottom).
+  // Unsupported type so Prisma keeps the column. The GiST index is modelled via the
+  // @@index([geoPoint], type: Gist) below; auto-population from lat/lng stays a raw-SQL trigger.
   geoPoint Unsupported("geography(Point, 4326)")? @map("geo_point")
 
   workingHours Json  @map("working_hours") // [{ day, open, close, isClosed }]
@@ -462,6 +462,7 @@ model Branch {
   @@index([businessId])
   @@index([regionId, districtId, isActive])
   @@index([tradeCenterId])
+  @@index([geoPoint], type: Gist, map: "branches_geo_point_gist") // PostGIS proximity index; keep modelled so migrate dev doesn't DROP it
   @@map("branches")
 }
 
@@ -493,7 +494,7 @@ model Listing {
   totalLimit       Int?              @map("total_limit")
   usedCount        Int               @default(0) @map("used_count")
 
-  attributes Json? // Map<string,string> (JSONB; GIN index added via raw SQL — see note)
+  attributes Json? // Map<string,string> (JSONB; GIN index modelled via @@index below)
 
   validFrom       DateTime      @map("valid_from")
   validTo         DateTime      @map("valid_to")
@@ -515,6 +516,7 @@ model Listing {
   @@index([categoryKey, status])
   @@index([status, validTo])
   @@index([validFrom, validTo])
+  @@index([attributes(ops: JsonbPathOps)], type: Gin, map: "listings_attributes_gin") // JSONB attribute-filter index; keep modelled
   @@map("listings")
 }
 
