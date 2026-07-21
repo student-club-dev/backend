@@ -37,6 +37,12 @@ export const envSchema = z.object({
 
   REDIS_URL: z.string().optional(),
 
+  // Media storage (local disk). Prod overrides via .env, e.g. UPLOADS_DIR=/var/www/studentclub/uploads
+  // and PUBLIC_MEDIA_BASE_URL=https://api.studentclub.uz/uploads. Switching to S3/R2 is a storage
+  // adapter swap, not a config-shape change.
+  UPLOADS_DIR: z.string().min(1).default('./uploads'),
+  PUBLIC_MEDIA_BASE_URL: z.string().min(1).default('http://localhost:3000/uploads'),
+
   // Placeholder admin credential for the admin-only endpoints (business-type CRUD). Compared
   // against the `X-Admin-Key` header by AdminGuard. Unset → every admin request is rejected.
   ADMIN_API_KEY: z.string().optional(),

@@ -65,6 +65,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
         return ERROR_CODE.NOT_FOUND;
       case 409:
         return ERROR_CODE.INVALID_STATUS_TRANSITION;
+      case 413:
+        // Multer's LIMIT_FILE_SIZE surfaces as a bare PayloadTooLargeException — render it as
+        // FILE_TOO_LARGE so the /media/upload contract holds even when the interceptor limit fires.
+        return ERROR_CODE.FILE_TOO_LARGE;
       case 422:
         return ERROR_CODE.VALIDATION_ERROR;
       case 429:

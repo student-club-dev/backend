@@ -6,12 +6,14 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import { AppConfigModule } from './config/config.module';
 import { RedisModule } from './infrastructure/cache/redis.module';
 import { PrismaModule } from './infrastructure/database/prisma.module';
+import { StorageModule } from './infrastructure/storage/storage.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { BranchesModule } from './modules/branches/branches.module';
 import { BusinessModule } from './modules/business/business.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
 import { GeoModule } from './modules/geo/geo.module';
 import { HealthModule } from './modules/health/health.module';
+import { MediaModule } from './modules/media/media.module';
 import { ProfileModule } from './modules/profiles/profile.module';
 
 @Module({
@@ -37,6 +39,7 @@ import { ProfileModule } from './modules/profiles/profile.module';
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 10 }]),
     PrismaModule,
     RedisModule,
+    StorageModule,
     HealthModule,
     CatalogModule,
     GeoModule,
@@ -44,6 +47,7 @@ import { ProfileModule } from './modules/profiles/profile.module';
     ProfileModule,
     BusinessModule,
     BranchesModule,
+    MediaModule,
   ],
 })
 export class AppModule {}

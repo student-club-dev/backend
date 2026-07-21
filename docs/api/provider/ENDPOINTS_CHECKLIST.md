@@ -83,7 +83,7 @@
 
 ## 6. Media (`MediaApi`)
 
-- [ ] **`POST /media/upload`** — `multipart/form-data` (rasm + `purpose` query, masalan `LISTING`)
+- [ ] **`POST /media/upload`** — `multipart/form-data` (rasm `file` + `purpose` — ikkalasi ham body maydoni, masalan `LISTING`)
       → `200 MediaUploadResponseDto { url*, thumbUrl, cardUrl }`
 
 ## 7. Geo (`GeoApi`)

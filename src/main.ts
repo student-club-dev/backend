@@ -1,7 +1,10 @@
 import 'reflect-metadata';
+import { mkdir } from 'fs/promises';
+import { resolve } from 'path';
 import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { ValidationError } from 'class-validator';
 import { Logger } from 'nestjs-pino';
@@ -33,12 +36,18 @@ function validationExceptionFactory(errors: ValidationError[]): AppException {
 }
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true });
   app.useLogger(app.get(Logger));
 
   const config = app.get<ConfigService<Env, true>>(ConfigService);
   const prefix = config.get('API_PREFIX', { infer: true });
   const port = config.get('PORT', { infer: true });
+
+  // Serve uploaded media from disk in dev (prod serves the same /uploads path via Nginx). Kept
+  // OUTSIDE the global `/v1` prefix — useStaticAssets is not affected by setGlobalPrefix.
+  const uploadsDir = resolve(config.get('UPLOADS_DIR', { infer: true }));
+  await mkdir(uploadsDir, { recursive: true });
+  app.useStaticAssets(uploadsDir, { prefix: '/uploads' });
 
   app.setGlobalPrefix(prefix);
   app.useGlobalPipes(
