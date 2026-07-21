@@ -37,6 +37,12 @@ export const envSchema = z.object({
 
   REDIS_URL: z.string().optional(),
 
+  // Geocoding provider: `dev` makes no external call (returns no results), `yandex` proxies Yandex
+  // Geocoder (key never reaches the client). Env-only switch, mirrors SMS_PROVIDER.
+  GEOCODER_PROVIDER: z.enum(['dev', 'yandex']).default('dev'),
+  YANDEX_GEOCODER_API_KEY: z.string().optional(),
+  YANDEX_GEOCODER_BASE_URL: z.string().url().default('https://geocode-maps.yandex.ru/1.x'),
+
   // Media storage (local disk). Prod overrides via .env, e.g. UPLOADS_DIR=/var/www/studentclub/uploads
   // and PUBLIC_MEDIA_BASE_URL=https://api.studentclub.uz/uploads. Switching to S3/R2 is a storage
   // adapter swap, not a config-shape change.

@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { ERROR_CODE } from '../../../common/errors/error-code';
 import { AppException } from '../../../common/exceptions/app.exception';
 import type { AuthenticatedUser } from '../../../common/types/authenticated-user';
+import { isWithinUzbekistan } from '../../../common/geo/uzbekistan-bounds';
 import { haversineMeters } from '../../../common/utils/geo-distance.util';
 import { encodeGeohash } from '../../../common/utils/geohash.util';
 import {
@@ -22,11 +23,6 @@ import {
 } from '../domain/entities/branch.entity';
 import { BranchInput } from './branches.io';
 
-/** Uzbekistan bounding box for branch coordinates (DISCOUNTS_BUSINESS_API §6.6, §3.9). */
-const LAT_MIN = 37;
-const LAT_MAX = 46;
-const LNG_MIN = 55;
-const LNG_MAX = 74;
 /** A branch point may sit at most this far from its district centre. */
 const DISTRICT_MAX_DISTANCE_METERS = 10_000;
 /** Two branches of the same business may not be closer than this. */
@@ -124,7 +120,7 @@ export class BranchesService {
     const { lat, lng, regionId, districtId } = location;
 
     // 1. Coordinate within Uzbekistan's bounds.
-    if (lat < LAT_MIN || lat > LAT_MAX || lng < LNG_MIN || lng > LNG_MAX) {
+    if (!isWithinUzbekistan(lat, lng)) {
       throw new AppException(
         ERROR_CODE.LOCATION_OUT_OF_BOUNDS,
         422,

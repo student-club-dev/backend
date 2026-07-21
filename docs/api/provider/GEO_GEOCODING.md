@@ -48,8 +48,9 @@ Two responsibilities, deliberately separated so the paid/slow part is isolated a
 
 **Provider selection (mirrors `SMS_PROVIDER`):** a `geocoderFactory` picks the adapter from
 `GEOCODER_PROVIDER` (`dev` | `yandex`). `dev` returns empty matches / null address so the app boots
-and tests run **without a key**; `yandex` requires `YANDEX_GEOCODER_API_KEY` (throws at construction
-if missing, like the Eskiz SMS provider). Adapter uses **Node 20 native `fetch`** — no new dependency.
+and tests run **without a key**; `yandex` requires `YANDEX_GEOCODER_API_KEY` (a request fails with
+`GEOCODER_UNAVAILABLE` if it is missing, the way the Eskiz SMS provider checks its credentials at
+send-time). Adapter uses **Node 20 native `fetch`** — no new dependency.
 
 ## 4. Cache-readiness (design now, implement later)
 
@@ -163,10 +164,11 @@ Reuse: `LOCATION_OUT_OF_BOUNDS`, `VALIDATION_ERROR`.
 
 ## 14. Phased plan (verify build/tests green + commit after each)
 
-1. **Foundation** — port + 4 DTOs + config + `DevGeocoderAdapter` + factory + shared bounds util
-   (refactor branches onto it) → wire the module. App boots, typecheck clean.
-2. **Provider + service** — `YandexGeocoderAdapter` (native fetch) + `GeocodingService` (bounds,
-   resolution, region filter, error mapping) + unit tests (mock the port).
+1. **Foundation (provider plumbing)** — port + 4 DTOs + config + `DevGeocoderAdapter` +
+   `YandexGeocoderAdapter` (native fetch) + factory + shared bounds util (refactor branches onto it)
+   → bind `GEOCODER` in the module. Build + typecheck clean, suite green.
+2. **Service** — `GeocodingService` (bounds, region/district resolution, region filter, error
+   mapping) + unit tests (mock the port); wire into the module.
 3. **Presentation** — `GeocodeController` (JwtAuthGuard) + Swagger + wiring; suite green.
 
 ## 15. Out of scope / follow-ups
