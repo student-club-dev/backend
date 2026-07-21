@@ -10,6 +10,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { BranchInput } from '../../application/branches.io';
+import { BranchTradeCenterFieldInputDto } from './branch-trade-center-field-input.dto';
 import { DeliveryZoneDto } from './delivery-zone.dto';
 import { LocationDto } from './location.dto';
 import { WorkingHoursDto } from './working-hours.dto';
@@ -49,6 +50,25 @@ export class BranchRequestDto {
   @IsBoolean()
   isActive?: boolean;
 
+  @ApiPropertyOptional({
+    nullable: true,
+    example: 'tc_abusaxiy',
+    description: 'Trade center this branch sits in. Omit when it is not in a trade center.',
+  })
+  @IsOptional()
+  @IsString()
+  tradeCenterId?: string;
+
+  @ApiPropertyOptional({
+    type: [BranchTradeCenterFieldInputDto],
+    description: 'Values for the trade center fields. Ignored when `tradeCenterId` is omitted.',
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => BranchTradeCenterFieldInputDto)
+  tradeCenterFields?: BranchTradeCenterFieldInputDto[];
+
   toInput(): BranchInput {
     return {
       name: this.name,
@@ -57,6 +77,8 @@ export class BranchRequestDto {
       workingHours: this.workingHours.map((hours) => hours.toDomain()),
       deliveryZone: this.deliveryZone ? this.deliveryZone.toDomain() : null,
       isActive: this.isActive ?? true,
+      tradeCenterId: this.tradeCenterId ?? null,
+      tradeCenterFields: (this.tradeCenterFields ?? []).map((field) => field.toDomain()),
     };
   }
 }

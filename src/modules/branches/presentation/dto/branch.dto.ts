@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Branch } from '../../domain/entities/branch.entity';
+import { BranchTradeCenterDto, BranchTradeCenterFieldDto } from './branch-trade-center.dto';
 import { DeliveryZoneDto } from './delivery-zone.dto';
 import { LocationDto } from './location.dto';
 import { WorkingHoursDto } from './working-hours.dto';
@@ -30,6 +31,19 @@ export class BranchDto {
   @ApiProperty()
   isActive!: boolean;
 
+  @ApiPropertyOptional({
+    type: BranchTradeCenterDto,
+    nullable: true,
+    description: 'The trade center this branch sits in, or null.',
+  })
+  tradeCenter!: BranchTradeCenterDto | null;
+
+  @ApiProperty({
+    type: [BranchTradeCenterFieldDto],
+    description: 'Trade-center field values (empty when the branch is not in a center).',
+  })
+  tradeCenterFields!: BranchTradeCenterFieldDto[];
+
   static fromDomain(branch: Branch): BranchDto {
     const dto = new BranchDto();
     dto.id = branch.id;
@@ -41,6 +55,9 @@ export class BranchDto {
     dto.deliveryZone =
       branch.deliveryZone === null ? null : DeliveryZoneDto.fromDomain(branch.deliveryZone);
     dto.isActive = branch.isActive;
+    dto.tradeCenter =
+      branch.tradeCenter === null ? null : BranchTradeCenterDto.fromDomain(branch.tradeCenter);
+    dto.tradeCenterFields = branch.tradeCenterFields.map(BranchTradeCenterFieldDto.fromDomain);
     return dto;
   }
 }

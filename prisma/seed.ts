@@ -7,10 +7,20 @@
  *                                        unique key makes upsert unreliable, so replace wholesale)
  *   - AttributeSpec (type + category) -> deleteMany + createMany (nullable `categoryKey` — same reason)
  *   - Region (14) / District (210)    -> upsert by id from prisma/data/uz-*.json (regions first — FK)
+ *   - TradeCenter (5) + fields        -> upsert center by `slug`; replace its fields wholesale
+ *                                        (deleteMany + createMany) so re-running never duplicates
  *
  * Idempotent: safe to re-run. Everything runs in a single transaction.
  */
-import { PrismaClient, Prisma, PriceUnit, Gender, AttributeKind } from '@prisma/client';
+import {
+  PrismaClient,
+  Prisma,
+  PriceUnit,
+  Gender,
+  AttributeKind,
+  TradeCenterStatus,
+  TradeCenterFieldType,
+} from '@prisma/client';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
@@ -50,6 +60,67 @@ interface SeedAttribute {
   suffix?: string;
   required?: boolean;
 }
+
+// Trade centers (savdo markazlari) — inline data from docs/api/provider/TRADE_CENTERS.md §6.
+// Array order defines TradeCenter.sortOrder (0..4); field array order defines field sortOrder.
+interface SeedTradeCenterField {
+  label: string;
+  type: TradeCenterFieldType;
+  required: boolean;
+}
+
+interface SeedTradeCenter {
+  slug: string;
+  name: string;
+  fields: SeedTradeCenterField[];
+}
+
+const TRADE_CENTERS: SeedTradeCenter[] = [
+  {
+    slug: 'abu-saxiy',
+    name: 'Abu Saxiy',
+    fields: [
+      { label: 'Qator', type: TradeCenterFieldType.TEXT, required: true },
+      { label: 'Pavilon', type: TradeCenterFieldType.TEXT, required: true },
+      { label: "Do'kon", type: TradeCenterFieldType.TEXT, required: true },
+      { label: 'Qavat', type: TradeCenterFieldType.NUMBER, required: false },
+    ],
+  },
+  {
+    slug: 'bek-baraka',
+    name: 'Bek Baraka',
+    fields: [
+      { label: 'Blok', type: TradeCenterFieldType.TEXT, required: true },
+      { label: 'Qator', type: TradeCenterFieldType.TEXT, required: true },
+      { label: "Do'kon", type: TradeCenterFieldType.TEXT, required: true },
+    ],
+  },
+  {
+    slug: 'chorsu',
+    name: 'Chorsu',
+    fields: [
+      { label: 'Sektor', type: TradeCenterFieldType.TEXT, required: true },
+      { label: 'Rastasi', type: TradeCenterFieldType.TEXT, required: true },
+      { label: "Do'kon", type: TradeCenterFieldType.TEXT, required: true },
+    ],
+  },
+  {
+    slug: 'ipodrom',
+    name: 'Ipodrom',
+    fields: [
+      { label: 'Qator', type: TradeCenterFieldType.TEXT, required: true },
+      { label: "Do'kon", type: TradeCenterFieldType.TEXT, required: true },
+    ],
+  },
+  {
+    slug: 'malika',
+    name: 'Malika',
+    fields: [
+      { label: 'Qator', type: TradeCenterFieldType.TEXT, required: true },
+      { label: "Do'kon", type: TradeCenterFieldType.TEXT, required: true },
+    ],
+  },
+];
 
 // Raw shapes of the geo data files (prisma/data/uz-*.json). `name_oz`/`soato_id` are ignored
 // (no columns); `id`/`region_id` are numbers in the source and stringified into the PKs/FKs.
@@ -261,6 +332,27 @@ async function main(): Promise<void> {
       };
       await tx.district.upsert({ where: { id: d.id }, create: { id: d.id, ...data }, update: data });
     }
+    // 5. Trade centers — upsert center by slug (array index = sortOrder), then replace its
+    //    fields wholesale so re-running never duplicates (field array index = sortOrder).
+    for (const [i, tc] of TRADE_CENTERS.entries()) {
+      const centerData = { name: tc.name, status: TradeCenterStatus.ACTIVE, sortOrder: i };
+      const center = await tx.tradeCenter.upsert({
+        where: { slug: tc.slug },
+        create: { slug: tc.slug, ...centerData },
+        update: centerData,
+      });
+      await tx.tradeCenterField.deleteMany({ where: { tradeCenterId: center.id } });
+      await tx.tradeCenterField.createMany({
+        data: tc.fields.map((f, idx) => ({
+          tradeCenterId: center.id,
+          label: f.label,
+          type: f.type,
+          required: f.required,
+          sortOrder: idx,
+        })),
+      });
+    }
+
     // Timeout bumped from the 5s default: the geo upserts add 224 sequential statements.
   }, { timeout: 60_000 });
 
@@ -276,6 +368,8 @@ async function main(): Promise<void> {
   console.log(`  attribute specs:       ${attributeRows.length} (type-level ${typeLevelAttrCount}, category-level ${categoryLevelAttrCount})`);
   console.log(`  regions:               ${geo.regions.length}`);
   console.log(`  districts:             ${geo.districts.length}`);
+  const tradeCenterFieldCount = TRADE_CENTERS.reduce((n, tc) => n + tc.fields.length, 0);
+  console.log(`  trade centers:         ${TRADE_CENTERS.length} (fields ${tradeCenterFieldCount})`);
 }
 
 main()

@@ -1,4 +1,9 @@
-import { BranchLocation, DeliveryZone, WorkingHours } from '../domain/entities/branch.entity';
+import {
+  BranchLocation,
+  BranchTradeCenterFieldInput,
+  DeliveryZone,
+  WorkingHours,
+} from '../domain/entities/branch.entity';
 
 /**
  * Normalised branch payload (from BranchRequestDto). Used for both create and update — the spec
@@ -11,4 +16,8 @@ export interface BranchInput {
   workingHours: WorkingHours[];
   deliveryZone: DeliveryZone | null;
   isActive: boolean;
+  /** Null when the branch is not in a trade center; `tradeCenterFields` is then ignored. */
+  tradeCenterId: string | null;
+  /** Submitted trade-center field values (validated in the service). */
+  tradeCenterFields: BranchTradeCenterFieldInput[];
 }

@@ -15,6 +15,7 @@ import { GeoModule } from './modules/geo/geo.module';
 import { HealthModule } from './modules/health/health.module';
 import { MediaModule } from './modules/media/media.module';
 import { ProfileModule } from './modules/profiles/profile.module';
+import { TradeCentersModule } from './modules/trade-centers/trade-centers.module';
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { ProfileModule } from './modules/profiles/profile.module';
     ProfileModule,
     BusinessModule,
     BranchesModule,
+    TradeCentersModule,
     MediaModule,
   ],
 })

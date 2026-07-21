@@ -1,4 +1,10 @@
-import { Branch, BranchLocation, DeliveryZone, WorkingHours } from './entities/branch.entity';
+import {
+  Branch,
+  BranchLocation,
+  BranchTradeCenterFieldInput,
+  DeliveryZone,
+  WorkingHours,
+} from './entities/branch.entity';
 
 /** Injection token for the branch repository port (bound to the Prisma impl in the module). */
 export const BRANCH_REPOSITORY = Symbol('BRANCH_REPOSITORY');
@@ -12,6 +18,10 @@ export interface CreateBranchData {
   workingHours: WorkingHours[];
   deliveryZone: DeliveryZone | null;
   isActive: boolean;
+  /** Null when the branch is not in a trade center. */
+  tradeCenterId: string | null;
+  /** Field values to persist (replace-all). Empty when there is no trade center. */
+  tradeCenterFields: BranchTradeCenterFieldInput[];
 }
 
 /** Full replace of a branch (PUT semantics — BranchRequestDto has no partial variant). */
@@ -22,6 +32,10 @@ export interface UpdateBranchData {
   workingHours: WorkingHours[];
   deliveryZone: DeliveryZone | null;
   isActive: boolean;
+  /** Null clears the trade center and removes the branch's field values. */
+  tradeCenterId: string | null;
+  /** Field values to persist (replace-all). Empty when there is no trade center. */
+  tradeCenterFields: BranchTradeCenterFieldInput[];
 }
 
 /**

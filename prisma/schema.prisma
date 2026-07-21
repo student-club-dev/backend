@@ -134,6 +134,17 @@ enum AuthProvider {
   APPLE
 }
 
+// Trade centers (savdo markazlari) — per-center dynamic location fields.
+enum TradeCenterStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum TradeCenterFieldType {
+  TEXT
+  NUMBER
+}
+
 // NOTE: OTP is NOT stored in Postgres — it lives in Redis (see docs/architecture/otp-sms-eskiz.md).
 // The former OtpCode model / OtpPurpose enum were removed before the first migration.
 
@@ -432,6 +443,10 @@ model Branch {
   workingHours Json  @map("working_hours") // [{ day, open, close, isClosed }]
   deliveryZone Json? @map("delivery_zone") // { enabled, radiusMeters, minOrderAmount, ... }
 
+  // Optional trade-center location metadata (savdo markazi). Detached, not deleted,
+  // if the center is removed — hence SetNull.
+  tradeCenterId String? @map("trade_center_id")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -441,8 +456,12 @@ model Branch {
   listingBranches ListingBranch[]
   redemptions     Redemption[]
 
+  tradeCenter            TradeCenter?                  @relation(fields: [tradeCenterId], references: [id], onDelete: SetNull)
+  tradeCenterFieldValues BranchTradeCenterFieldValue[]
+
   @@index([businessId])
   @@index([regionId, districtId, isActive])
+  @@index([tradeCenterId])
   @@map("branches")
 }
 
@@ -570,6 +589,56 @@ model Redemption {
   @@index([studentId])
   @@index([branchId])
   @@map("redemptions")
+}
+
+// ============================================================================
+// TRADE CENTERS (savdo markazlari) — dynamic per-center location fields (EAV)
+// ============================================================================
+
+model TradeCenter {
+  id        String            @id @default(cuid())
+  name      String
+  slug      String            @unique
+  status    TradeCenterStatus @default(ACTIVE)
+  sortOrder Int               @default(0) @map("sort_order")
+  createdAt DateTime          @default(now()) @map("created_at")
+  updatedAt DateTime          @updatedAt @map("updated_at")
+
+  fields   TradeCenterField[]
+  branches Branch[]
+
+  @@index([status, sortOrder])
+  @@map("trade_centers")
+}
+
+model TradeCenterField {
+  id            String               @id @default(cuid())
+  tradeCenterId String               @map("trade_center_id")
+  label         String // "Qator", "Pavilon", ...
+  type          TradeCenterFieldType @default(TEXT)
+  required      Boolean              @default(false)
+  sortOrder     Int                  @default(0) @map("sort_order")
+
+  tradeCenter TradeCenter                   @relation(fields: [tradeCenterId], references: [id], onDelete: Cascade)
+  values      BranchTradeCenterFieldValue[]
+
+  @@index([tradeCenterId, sortOrder])
+  @@map("trade_center_fields")
+}
+
+// EAV: one row per (branch, field) — the branch's value for a trade-center field.
+model BranchTradeCenterFieldValue {
+  id       String @id @default(cuid())
+  branchId String @map("branch_id")
+  fieldId  String @map("field_id")
+  value    String
+
+  branch Branch           @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  field  TradeCenterField @relation(fields: [fieldId], references: [id], onDelete: Cascade)
+
+  @@unique([branchId, fieldId])
+  @@index([fieldId])
+  @@map("branch_trade_center_field_values")
 }
 
 // ============================================================================

@@ -4,6 +4,9 @@ import type { AuthenticatedUser } from '../../../common/types/authenticated-user
 import { encodeGeohash } from '../../../common/utils/geohash.util';
 import { District } from '../../geo/domain/entities/district.entity';
 import { GeoRepository } from '../../geo/domain/geo.repository';
+import { TradeCenterWithFields } from '../../trade-centers/domain/entities/trade-center.entity';
+import { TradeCenterFieldType } from '../../trade-centers/domain/enums/trade-center-field-type.enum';
+import { TradeCenterRepository } from '../../trade-centers/domain/trade-center.repository';
 import { BranchRepository } from '../domain/branches.repository';
 import { Branch } from '../domain/entities/branch.entity';
 import { DayOfWeek } from '../domain/enums/day-of-week.enum';
@@ -34,6 +37,8 @@ function branch(overrides: Partial<Branch> = {}): Branch {
     workingHours: [{ day: DayOfWeek.MON, open: '09:00', close: '23:00', isClosed: false }],
     deliveryZone: null,
     isActive: true,
+    tradeCenter: null,
+    tradeCenterFields: [],
     ...overrides,
   };
 }
@@ -46,6 +51,8 @@ function createInput(overrides: Partial<BranchInput> = {}): BranchInput {
     workingHours: branch().workingHours,
     deliveryZone: null,
     isActive: true,
+    tradeCenterId: null,
+    tradeCenterFields: [],
     ...overrides,
   };
 }
@@ -88,12 +95,48 @@ function makeGeo(districts: District[] = [district()]): GeoRepository {
   };
 }
 
+/** Abu Saxiy: one required TEXT field (Qator) and one optional NUMBER field (Qavat). */
+function tradeCenter(overrides: Partial<TradeCenterWithFields> = {}): TradeCenterWithFields {
+  return {
+    id: 'tc_abusaxiy',
+    name: 'Abu Saxiy',
+    slug: 'abu-saxiy',
+    fields: [
+      {
+        id: 'f_qator',
+        label: 'Qator',
+        type: TradeCenterFieldType.TEXT,
+        required: true,
+        sortOrder: 0,
+      },
+      {
+        id: 'f_qavat',
+        label: 'Qavat',
+        type: TradeCenterFieldType.NUMBER,
+        required: false,
+        sortOrder: 1,
+      },
+    ],
+    ...overrides,
+  };
+}
+
+function makeTradeCenters(
+  center: TradeCenterWithFields | null = tradeCenter(),
+): TradeCenterRepository {
+  return {
+    findActive: jest.fn().mockResolvedValue([]),
+    findActiveByIdWithFields: jest.fn().mockResolvedValue(center),
+  };
+}
+
 function makeService(
   branches: BranchRepository,
   businesses: OwningBusinessRepository,
   geo: GeoRepository = makeGeo(),
+  tradeCenters: TradeCenterRepository = makeTradeCenters(),
 ): BranchesService {
-  return new BranchesService(branches, businesses, geo);
+  return new BranchesService(branches, businesses, geo, tradeCenters);
 }
 
 describe('BranchesService', () => {
@@ -315,6 +358,140 @@ describe('BranchesService', () => {
         expect.objectContaining({
           location: expect.objectContaining({ geohash: encodeGeohash(41.2856, 69.2034, 7) }),
         }),
+      );
+    });
+  });
+
+  describe('trade-center rules (§5)', () => {
+    it('persists a valid center and its fields on create', async () => {
+      const branches = makeBranches();
+      const service = makeService(branches, makeBusinesses('owner-1'));
+      const input = createInput({
+        tradeCenterId: 'tc_abusaxiy',
+        tradeCenterFields: [
+          { fieldId: 'f_qator', value: 'A' },
+          { fieldId: 'f_qavat', value: '3' },
+        ],
+      });
+
+      await service.create(owner, 'biz-1', input);
+
+      expect(branches.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tradeCenterId: 'tc_abusaxiy',
+          tradeCenterFields: [
+            { fieldId: 'f_qator', value: 'A' },
+            { fieldId: 'f_qavat', value: '3' },
+          ],
+        }),
+      );
+    });
+
+    it('rejects an unknown/inactive center with 422 TRADE_CENTER_NOT_FOUND', async () => {
+      const branches = makeBranches();
+      const service = makeService(
+        branches,
+        makeBusinesses('owner-1'),
+        makeGeo(),
+        makeTradeCenters(null),
+      );
+      const input = createInput({
+        tradeCenterId: 'tc_missing',
+        tradeCenterFields: [{ fieldId: 'f_qator', value: 'A' }],
+      });
+
+      await expect(service.create(owner, 'biz-1', input)).rejects.toMatchObject({
+        code: ERROR_CODE.TRADE_CENTER_NOT_FOUND,
+        status: 422,
+      });
+      expect(branches.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects a field that does not belong to the center with 422 TRADE_CENTER_FIELD_INVALID', async () => {
+      const branches = makeBranches();
+      const service = makeService(branches, makeBusinesses('owner-1'));
+      const input = createInput({
+        tradeCenterId: 'tc_abusaxiy',
+        tradeCenterFields: [
+          { fieldId: 'f_qator', value: 'A' },
+          { fieldId: 'f_foreign', value: 'X' },
+        ],
+      });
+
+      await expect(service.create(owner, 'biz-1', input)).rejects.toMatchObject({
+        code: ERROR_CODE.TRADE_CENTER_FIELD_INVALID,
+        status: 422,
+      });
+      expect(branches.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects a duplicate fieldId with 422 TRADE_CENTER_FIELD_INVALID', async () => {
+      const branches = makeBranches();
+      const service = makeService(branches, makeBusinesses('owner-1'));
+      const input = createInput({
+        tradeCenterId: 'tc_abusaxiy',
+        tradeCenterFields: [
+          { fieldId: 'f_qator', value: 'A' },
+          { fieldId: 'f_qator', value: 'B' },
+        ],
+      });
+
+      await expect(service.create(owner, 'biz-1', input)).rejects.toMatchObject({
+        code: ERROR_CODE.TRADE_CENTER_FIELD_INVALID,
+        status: 422,
+      });
+      expect(branches.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects a missing required field with 422 TRADE_CENTER_FIELD_INVALID (field-level)', async () => {
+      const branches = makeBranches();
+      const service = makeService(branches, makeBusinesses('owner-1'));
+      const input = createInput({
+        tradeCenterId: 'tc_abusaxiy',
+        tradeCenterFields: [{ fieldId: 'f_qavat', value: '3' }],
+      });
+
+      await expect(service.create(owner, 'biz-1', input)).rejects.toMatchObject({
+        code: ERROR_CODE.TRADE_CENTER_FIELD_INVALID,
+        status: 422,
+        fields: { f_qator: expect.any(String) },
+      });
+      expect(branches.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects a non-numeric NUMBER value with 422 TRADE_CENTER_FIELD_INVALID', async () => {
+      const branches = makeBranches();
+      const service = makeService(branches, makeBusinesses('owner-1'));
+      const input = createInput({
+        tradeCenterId: 'tc_abusaxiy',
+        tradeCenterFields: [
+          { fieldId: 'f_qator', value: 'A' },
+          { fieldId: 'f_qavat', value: 'abc' },
+        ],
+      });
+
+      await expect(service.create(owner, 'biz-1', input)).rejects.toMatchObject({
+        code: ERROR_CODE.TRADE_CENTER_FIELD_INVALID,
+        status: 422,
+      });
+      expect(branches.create).not.toHaveBeenCalled();
+    });
+
+    it('ignores submitted fields and clears values when tradeCenterId is null on update', async () => {
+      const branches = makeBranches({ findById: jest.fn().mockResolvedValue(branch()) });
+      const tradeCenters = makeTradeCenters();
+      const service = makeService(branches, makeBusinesses('owner-1'), makeGeo(), tradeCenters);
+      const input = createInput({
+        tradeCenterId: null,
+        tradeCenterFields: [{ fieldId: 'f_qator', value: 'A' }],
+      });
+
+      await service.update(owner, 'biz-1', 'br-1', input);
+
+      expect(tradeCenters.findActiveByIdWithFields).not.toHaveBeenCalled();
+      expect(branches.update).toHaveBeenCalledWith(
+        'br-1',
+        expect.objectContaining({ tradeCenterId: null, tradeCenterFields: [] }),
       );
     });
   });

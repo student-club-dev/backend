@@ -1,3 +1,4 @@
+import { TradeCenterFieldType } from '../../../trade-centers/domain/enums/trade-center-field-type.enum';
 import { DayOfWeek } from '../enums/day-of-week.enum';
 
 /**
@@ -34,6 +35,25 @@ export interface DeliveryZone {
   freeDeliveryFrom: number | null;
 }
 
+/** A submitted trade-center field value (fieldId + raw value) to persist for a branch. */
+export interface BranchTradeCenterFieldInput {
+  fieldId: string;
+  value: string;
+}
+
+/** The trade center a branch sits in (id + name, for display). */
+export interface BranchTradeCenter {
+  id: string;
+  name: string;
+}
+
+/** A trade-center field value on a branch: label and type from the field, value from the branch. */
+export interface BranchTradeCenterFieldValue {
+  label: string;
+  type: TradeCenterFieldType;
+  value: string;
+}
+
 /**
  * A branch of a business. Pure domain type — the presentation layer projects it to BranchDto and
  * the infrastructure layer maps it from the Prisma row.
@@ -47,4 +67,6 @@ export interface Branch {
   workingHours: WorkingHours[];
   deliveryZone: DeliveryZone | null;
   isActive: boolean;
+  tradeCenter: BranchTradeCenter | null;
+  tradeCenterFields: BranchTradeCenterFieldValue[];
 }

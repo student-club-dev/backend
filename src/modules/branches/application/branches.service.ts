@@ -5,8 +5,17 @@ import type { AuthenticatedUser } from '../../../common/types/authenticated-user
 import { haversineMeters } from '../../../common/utils/geo-distance.util';
 import { encodeGeohash } from '../../../common/utils/geohash.util';
 import { GEO_REPOSITORY, GeoRepository } from '../../geo/domain/geo.repository';
+import { TradeCenterFieldType } from '../../trade-centers/domain/enums/trade-center-field-type.enum';
+import {
+  TRADE_CENTER_REPOSITORY,
+  TradeCenterRepository,
+} from '../../trade-centers/domain/trade-center.repository';
 import { BRANCH_REPOSITORY, BranchRepository } from '../domain/branches.repository';
-import { Branch, BranchLocation } from '../domain/entities/branch.entity';
+import {
+  Branch,
+  BranchLocation,
+  BranchTradeCenterFieldInput,
+} from '../domain/entities/branch.entity';
 import {
   OWNING_BUSINESS_REPOSITORY,
   OwningBusinessRepository,
@@ -36,6 +45,7 @@ export class BranchesService {
     @Inject(BRANCH_REPOSITORY) private readonly branches: BranchRepository,
     @Inject(OWNING_BUSINESS_REPOSITORY) private readonly businesses: OwningBusinessRepository,
     @Inject(GEO_REPOSITORY) private readonly geo: GeoRepository,
+    @Inject(TRADE_CENTER_REPOSITORY) private readonly tradeCenters: TradeCenterRepository,
   ) {}
 
   /** All branches of a business the caller owns. */
@@ -48,6 +58,7 @@ export class BranchesService {
   async create(user: AuthenticatedUser, businessId: string, input: BranchInput): Promise<Branch> {
     await this.assertBusinessOwned(user, businessId);
     const location = await this.validateLocation(businessId, input.location);
+    const tradeCenter = await this.validateTradeCenter(input);
     return this.branches.create({
       businessId,
       name: input.name,
@@ -56,6 +67,8 @@ export class BranchesService {
       workingHours: input.workingHours,
       deliveryZone: input.deliveryZone,
       isActive: input.isActive,
+      tradeCenterId: tradeCenter.tradeCenterId,
+      tradeCenterFields: tradeCenter.tradeCenterFields,
     });
   }
 
@@ -68,6 +81,7 @@ export class BranchesService {
   ): Promise<Branch> {
     await this.loadOwnedBranch(user, businessId, branchId);
     const location = await this.validateLocation(businessId, input.location, branchId);
+    const tradeCenter = await this.validateTradeCenter(input);
     return this.branches.update(branchId, {
       name: input.name,
       phone: input.phone,
@@ -75,6 +89,8 @@ export class BranchesService {
       workingHours: input.workingHours,
       deliveryZone: input.deliveryZone,
       isActive: input.isActive,
+      tradeCenterId: tradeCenter.tradeCenterId,
+      tradeCenterFields: tradeCenter.tradeCenterFields,
     });
   }
 
@@ -158,6 +174,91 @@ export class BranchesService {
 
     // 5. Server-computed geohash (client-sent value is ignored).
     return { ...location, geohash: encodeGeohash(lat, lng, GEOHASH_PRECISION) };
+  }
+
+  /**
+   * Validates the branch's trade-center selection (docs/api/provider/TRADE_CENTERS.md §5) and
+   * returns the values to persist. Runs after location validation. When no center is selected the
+   * submitted fields are ignored so persistence clears any previous values.
+   */
+  private async validateTradeCenter(
+    input: BranchInput,
+  ): Promise<{ tradeCenterId: string | null; tradeCenterFields: BranchTradeCenterFieldInput[] }> {
+    // 1. No trade center → ignore any submitted fields.
+    if (input.tradeCenterId === null) {
+      return { tradeCenterId: null, tradeCenterFields: [] };
+    }
+
+    // 2. The center must exist and be ACTIVE.
+    const center = await this.tradeCenters.findActiveByIdWithFields(input.tradeCenterId);
+    if (center === null) {
+      throw new AppException(
+        ERROR_CODE.TRADE_CENTER_NOT_FOUND,
+        422,
+        'Savdo markazi topilmadi yoki faol emas',
+      );
+    }
+
+    const fieldsById = new Map(center.fields.map((field) => [field.id, field]));
+    const submitted = input.tradeCenterFields;
+
+    // 3. Every submitted field must belong to this center, with no duplicates
+    //    (a duplicate fieldId would otherwise hit the branch/field unique constraint).
+    const seen = new Set<string>();
+    for (const item of submitted) {
+      if (!fieldsById.has(item.fieldId)) {
+        throw new AppException(
+          ERROR_CODE.TRADE_CENTER_FIELD_INVALID,
+          422,
+          'Maydon ushbu savdo markaziga tegishli emas',
+          { [item.fieldId]: 'Noma’lum maydon' },
+        );
+      }
+      if (seen.has(item.fieldId)) {
+        throw new AppException(
+          ERROR_CODE.TRADE_CENTER_FIELD_INVALID,
+          422,
+          'Maydon ikki marta yuborilgan',
+          { [item.fieldId]: 'Takroriy maydon' },
+        );
+      }
+      seen.add(item.fieldId);
+    }
+
+    const valueByFieldId = new Map(submitted.map((item) => [item.fieldId, item.value]));
+
+    // 4. Every required field must be present and non-empty.
+    for (const field of center.fields) {
+      const value = valueByFieldId.get(field.id);
+      if (field.required && (value === undefined || value.trim() === '')) {
+        throw new AppException(
+          ERROR_CODE.TRADE_CENTER_FIELD_INVALID,
+          422,
+          'Majburiy maydon to‘ldirilmagan',
+          { [field.id]: `${field.label} majburiy` },
+        );
+      }
+    }
+
+    // 5. Every NUMBER-typed value must be numeric (empty optional values are left as-is).
+    for (const item of submitted) {
+      const field = fieldsById.get(item.fieldId);
+      if (
+        field !== undefined &&
+        field.type === TradeCenterFieldType.NUMBER &&
+        item.value.trim() !== '' &&
+        Number.isNaN(Number(item.value.trim()))
+      ) {
+        throw new AppException(
+          ERROR_CODE.TRADE_CENTER_FIELD_INVALID,
+          422,
+          'Qiymat raqamli bo‘lishi kerak',
+          { [item.fieldId]: `${field.label} raqamli bo‘lishi kerak` },
+        );
+      }
+    }
+
+    return { tradeCenterId: center.id, tradeCenterFields: submitted };
   }
 
   /** Loads a branch after ownership is checked, enforcing existence within the business (404). */

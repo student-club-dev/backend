@@ -1,4 +1,5 @@
-import { Prisma, type Branch as BranchRow } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import { TradeCenterFieldType } from '../../trade-centers/domain/enums/trade-center-field-type.enum';
 import { CreateBranchData, UpdateBranchData } from '../domain/branches.repository';
 import {
   Branch,
@@ -9,13 +10,24 @@ import {
 import { DayOfWeek } from '../domain/enums/day-of-week.enum';
 
 /**
+ * The relations a branch is read with: its trade center and its field values (each with the field
+ * definition, for label/type). Reused by every read query so the mapper always has what it needs.
+ */
+export const BRANCH_INCLUDE = {
+  tradeCenter: true,
+  tradeCenterFieldValues: { include: { field: true } },
+} satisfies Prisma.BranchInclude;
+
+type BranchRowWithRelations = Prisma.BranchGetPayload<{ include: typeof BRANCH_INCLUDE }>;
+
+/**
  * Maps between the Branch Prisma row and the domain entity. The flattened location columns are
  * gathered into {@link BranchLocation}, and the `working_hours` / `delivery_zone` JSONB columns are
  * normalised to typed values both ways. The `geo_point` PostGIS column is kept in sync with lat/lng
  * by the DB trigger `branches_set_geo_point` — Prisma neither reads nor writes its Unsupported type.
  */
 export class BranchMapper {
-  static toDomain(row: BranchRow): Branch {
+  static toDomain(row: BranchRowWithRelations): Branch {
     return {
       id: row.id,
       businessId: row.businessId,
@@ -36,6 +48,15 @@ export class BranchMapper {
       workingHours: toWorkingHours(row.workingHours),
       deliveryZone: toDeliveryZone(row.deliveryZone),
       isActive: row.isActive,
+      tradeCenter:
+        row.tradeCenter === null ? null : { id: row.tradeCenter.id, name: row.tradeCenter.name },
+      tradeCenterFields: [...row.tradeCenterFieldValues]
+        .sort((a, b) => a.field.sortOrder - b.field.sortOrder)
+        .map((value) => ({
+          label: value.field.label,
+          type: TradeCenterFieldType[value.field.type],
+          value: value.value,
+        })),
     };
   }
 
@@ -48,6 +69,7 @@ export class BranchMapper {
       workingHours: workingHoursToJson(data.workingHours),
       deliveryZone: deliveryZoneToJson(data.deliveryZone),
       isActive: data.isActive,
+      tradeCenterId: data.tradeCenterId,
     };
   }
 
@@ -59,6 +81,7 @@ export class BranchMapper {
       workingHours: workingHoursToJson(data.workingHours),
       deliveryZone: deliveryZoneToJson(data.deliveryZone),
       isActive: data.isActive,
+      tradeCenterId: data.tradeCenterId,
     };
   }
 }
