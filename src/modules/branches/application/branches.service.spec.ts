@@ -2,6 +2,8 @@ import { AccountType } from '../../../common/enums/account-type.enum';
 import { ERROR_CODE } from '../../../common/errors/error-code';
 import type { AuthenticatedUser } from '../../../common/types/authenticated-user';
 import { encodeGeohash } from '../../../common/utils/geohash.util';
+import { BusinessReadRepository } from '../../business/domain/business-read.repository';
+import { BusinessStatus } from '../../business/domain/enums/business-status.enum';
 import { District } from '../../geo/domain/entities/district.entity';
 import { GeoRepository } from '../../geo/domain/geo.repository';
 import { TradeCenterWithFields } from '../../trade-centers/domain/entities/trade-center.entity';
@@ -10,7 +12,6 @@ import { TradeCenterRepository } from '../../trade-centers/domain/trade-center.r
 import { BranchRepository } from '../domain/branches.repository';
 import { Branch } from '../domain/entities/branch.entity';
 import { DayOfWeek } from '../domain/enums/day-of-week.enum';
-import { OwningBusinessRepository } from '../domain/owning-business.repository';
 import { BranchInput } from './branches.io';
 import { BranchesService } from './branches.service';
 
@@ -69,8 +70,20 @@ function makeBranches(overrides: Partial<BranchRepository> = {}): BranchReposito
   };
 }
 
-function makeBusinesses(ownerId: string | null): OwningBusinessRepository {
-  return { findOwnerId: jest.fn().mockResolvedValue(ownerId) };
+function makeBusinesses(ownerId: string | null): BusinessReadRepository {
+  return {
+    findSummaryById: jest.fn().mockResolvedValue(
+      ownerId === null
+        ? null
+        : {
+            id: 'biz-1',
+            ownerId,
+            type: 'CLOTHING',
+            status: BusinessStatus.APPROVED,
+            isOnlineOnly: false,
+          },
+    ),
+  };
 }
 
 /** District matching the default branch location, centred on its point (passes §6.6 rules 2-3). */
@@ -132,7 +145,7 @@ function makeTradeCenters(
 
 function makeService(
   branches: BranchRepository,
-  businesses: OwningBusinessRepository,
+  businesses: BusinessReadRepository,
   geo: GeoRepository = makeGeo(),
   tradeCenters: TradeCenterRepository = makeTradeCenters(),
 ): BranchesService {

@@ -1,3 +1,4 @@
+import { AttributeSpec } from './entities/attribute-spec.entity';
 import { BusinessType } from './entities/business-type.entity';
 import { Category } from './entities/category.entity';
 import { Gender } from './enums/gender.enum';
@@ -31,6 +32,13 @@ export interface CatalogRepository {
    * Returns `null` when the business type does not exist.
    */
   findCategoriesByType(type: string): Promise<Category[] | null>;
+
+  /**
+   * The attribute specs applicable to a listing of `businessType` in `categoryKey` — the type-level
+   * specs (`categoryKey IS NULL`) merged with the category-level ones, ordered by `sortOrder`
+   * (LISTINGS.md §6).
+   */
+  findAttributeSpecs(businessType: string, categoryKey: string): Promise<AttributeSpec[]>;
 
   /** Whether a business type with this `type` key exists. */
   typeExists(type: string): Promise<boolean>;

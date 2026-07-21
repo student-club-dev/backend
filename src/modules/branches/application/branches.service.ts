@@ -4,6 +4,10 @@ import { AppException } from '../../../common/exceptions/app.exception';
 import type { AuthenticatedUser } from '../../../common/types/authenticated-user';
 import { haversineMeters } from '../../../common/utils/geo-distance.util';
 import { encodeGeohash } from '../../../common/utils/geohash.util';
+import {
+  BUSINESS_READ,
+  BusinessReadRepository,
+} from '../../business/domain/business-read.repository';
 import { GEO_REPOSITORY, GeoRepository } from '../../geo/domain/geo.repository';
 import { TradeCenterFieldType } from '../../trade-centers/domain/enums/trade-center-field-type.enum';
 import {
@@ -16,10 +20,6 @@ import {
   BranchLocation,
   BranchTradeCenterFieldInput,
 } from '../domain/entities/branch.entity';
-import {
-  OWNING_BUSINESS_REPOSITORY,
-  OwningBusinessRepository,
-} from '../domain/owning-business.repository';
 import { BranchInput } from './branches.io';
 
 /** Uzbekistan bounding box for branch coordinates (DISCOUNTS_BUSINESS_API §6.6, §3.9). */
@@ -43,7 +43,7 @@ const GEOHASH_PRECISION = 7;
 export class BranchesService {
   constructor(
     @Inject(BRANCH_REPOSITORY) private readonly branches: BranchRepository,
-    @Inject(OWNING_BUSINESS_REPOSITORY) private readonly businesses: OwningBusinessRepository,
+    @Inject(BUSINESS_READ) private readonly businesses: BusinessReadRepository,
     @Inject(GEO_REPOSITORY) private readonly geo: GeoRepository,
     @Inject(TRADE_CENTER_REPOSITORY) private readonly tradeCenters: TradeCenterRepository,
   ) {}
@@ -102,11 +102,11 @@ export class BranchesService {
 
   /** Enforces that the business exists (404) and the caller owns it (403). */
   private async assertBusinessOwned(user: AuthenticatedUser, businessId: string): Promise<void> {
-    const ownerId = await this.businesses.findOwnerId(businessId);
-    if (ownerId === null) {
+    const summary = await this.businesses.findSummaryById(businessId);
+    if (summary === null) {
       throw AppException.notFound(ERROR_CODE.BUSINESS_NOT_FOUND, 'Biznes topilmadi');
     }
-    if (ownerId !== user.id) {
+    if (summary.ownerId !== user.id) {
       throw AppException.forbidden();
     }
   }

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { BusinessTypeWrite, CatalogRepository } from '../domain/catalog.repository';
+import { AttributeSpec } from '../domain/entities/attribute-spec.entity';
 import { BusinessType } from '../domain/entities/business-type.entity';
 import { Category } from '../domain/entities/category.entity';
 import { CatalogMapper } from './catalog.mapper';
@@ -36,6 +37,14 @@ export class CatalogPrismaRepository implements CatalogRepository {
     ]);
 
     return categories.map((category) => CatalogMapper.toCategory(category, specs));
+  }
+
+  async findAttributeSpecs(businessType: string, categoryKey: string): Promise<AttributeSpec[]> {
+    const rows = await this.prisma.attributeSpec.findMany({
+      where: { businessType, OR: [{ categoryKey: null }, { categoryKey }] },
+      orderBy: { sortOrder: 'asc' },
+    });
+    return rows.map((row) => CatalogMapper.toAttributeSpec(row));
   }
 
   async typeExists(type: string): Promise<boolean> {

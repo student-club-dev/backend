@@ -36,6 +36,7 @@ function makeCatalog(overrides: Partial<CatalogRepository> = {}): CatalogReposit
   return {
     findBusinessTypes: jest.fn(),
     findCategoriesByType: jest.fn(),
+    findAttributeSpecs: jest.fn(),
     typeExists: jest.fn().mockResolvedValue(false),
     createType: jest.fn(async (type: string) => businessType(type)),
     updateType: jest.fn(async (type: string) => businessType(type)),

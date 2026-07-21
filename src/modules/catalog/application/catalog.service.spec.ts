@@ -48,6 +48,7 @@ function makeRepository(overrides: Partial<CatalogRepository> = {}): CatalogRepo
   return {
     findBusinessTypes: jest.fn().mockResolvedValue(ALL_TYPES),
     findCategoriesByType: jest.fn().mockResolvedValue([]),
+    findAttributeSpecs: jest.fn().mockResolvedValue([]),
     typeExists: jest.fn().mockResolvedValue(true),
     createType: jest.fn(),
     updateType: jest.fn(),

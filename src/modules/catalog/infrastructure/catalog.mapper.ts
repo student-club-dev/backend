@@ -6,6 +6,7 @@ import {
   type Category as CategoryRow,
   type Prisma,
 } from '@prisma/client';
+import { AttributeSpec } from '../domain/entities/attribute-spec.entity';
 import { BusinessType } from '../domain/entities/business-type.entity';
 import { AttributeField, AttributeOption, Category } from '../domain/entities/category.entity';
 import { BusinessTypeWrite } from '../domain/catalog.repository';
@@ -108,6 +109,17 @@ export class CatalogMapper {
     return update;
   }
 
+  /** Prisma row → validation spec (LISTINGS.md §6); `options` normalised to a plain `string[]`. */
+  static toAttributeSpec(spec: AttributeSpecRow): AttributeSpec {
+    return {
+      key: spec.key,
+      label: spec.label,
+      kind: AttributeFieldType[spec.kind],
+      required: spec.required,
+      options: toAttributeSpecOptions(spec.options),
+    };
+  }
+
   private static toAttributeField(spec: AttributeSpecRow): AttributeField {
     return {
       key: spec.key,
@@ -127,6 +139,25 @@ function compareSpecsForCategory(a: AttributeSpecRow, b: AttributeSpecRow): numb
   const aRank = a.categoryKey === null ? 0 : 1;
   const bRank = b.categoryKey === null ? 0 : 1;
   return aRank !== bRank ? aRank - bRank : a.sortOrder - b.sortOrder;
+}
+
+/** Normalises the stored JSON (`string[]` or `{ value, label }[]`) to the allowed-value `string[]`. */
+function toAttributeSpecOptions(value: unknown): string[] | null {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+  const options: string[] = [];
+  for (const item of value) {
+    if (typeof item === 'string') {
+      options.push(item);
+    } else if (item !== null && typeof item === 'object' && 'value' in item) {
+      const option = item as { value: unknown };
+      if (typeof option.value === 'string') {
+        options.push(option.value);
+      }
+    }
+  }
+  return options.length > 0 ? options : null;
 }
 
 /** Normalises the stored JSON (`string[]` or `{ value, label }[]`) to `{ value, label }[]`. */
