@@ -29,8 +29,9 @@ Business (biznes)          — kafe / game club / do'kon ...
 - **Category** — biznes turiga bog'liq bo'lim. Tizim tayyor kategoriyalar ro'yxatini beradi
   (`GET /business/types/{type}/categories`), biznes egasi shundan tanlaydi yoki
   o'zining maxsus bo'limini qo'shadi (`customCategoryName`).
-- **Listing** — e'lonning o'zi. **Har doim student chegirmasi bilan** (chegirmasiz e'lon bo'lmaydi —
-  bu bo'limning butun mazmuni shu).
+- **Listing** — e'lonning o'zi. Odatda **student chegirmasi bilan**, lekin `attributes._regular = "1"`
+  bo'lsa — **oddiy e'lon** (chegirmasiz, bitta narx: `finalPrice = originalPrice`). Ikkala holat ham
+  qo'llab-quvvatlanadi; qarang `BACKEND_PROMPT.md` (maxsus atribut kalitlari) va `catalog-seed.json` → `REGULAR_KEY`.
 - **Option** — qo'shimcha tanlovlar (Yandex Eda'dagi "hajm: kichik/o'rta/katta" kabi).
 
 ---

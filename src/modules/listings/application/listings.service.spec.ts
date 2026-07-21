@@ -362,12 +362,12 @@ describe('ListingsService', () => {
   });
 
   describe('create — category', () => {
-    it('throws 422 CATEGORY_NOT_IN_CATALOG when the category is not in the business type', async () => {
+    it('throws 422 INVALID_CATEGORY_FOR_TYPE when the category is not in the business type', async () => {
       const service = makeService({ catalog: makeCatalog([category('PIZZA')]) });
 
       await expect(
         service.create(owner, BUSINESS_ID, createInput({ categoryKey: 'SUSHI' })),
-      ).rejects.toMatchObject({ code: ERROR_CODE.CATEGORY_NOT_IN_CATALOG, status: 422 });
+      ).rejects.toMatchObject({ code: ERROR_CODE.INVALID_CATEGORY_FOR_TYPE, status: 422 });
     });
 
     it('requires customCategoryName when categoryKey is OTHER', async () => {
@@ -808,7 +808,7 @@ describe('ListingsService', () => {
       });
     });
 
-    it('throws 422 CATEGORY_NOT_IN_CATALOG when the category was removed from the catalog', async () => {
+    it('throws 422 INVALID_CATEGORY_FOR_TYPE when the category was removed from the catalog', async () => {
       const service = makeService({
         listings: makeSubmitListings(draftListing({ branchIds: ['br-1'], categoryKey: 'PIZZA' })),
         businesses: makeSubmitBusiness(),
@@ -817,7 +817,7 @@ describe('ListingsService', () => {
       });
 
       await expect(service.submit(owner, 'lst-1')).rejects.toMatchObject({
-        code: ERROR_CODE.CATEGORY_NOT_IN_CATALOG,
+        code: ERROR_CODE.INVALID_CATEGORY_FOR_TYPE,
         status: 422,
       });
     });

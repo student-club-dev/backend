@@ -52,7 +52,7 @@ Everything here is fixed by the generated mobile client — match it exactly.
 - **Money:** integer **so'm**, no decimals. `BigInt` in Prisma → serialize to `Number` in JSON. `currency: "UZS"`.
 - **Dates:** **ISO-8601** (`"2026-07-16T10:30:00Z"`) — never epoch-ms.
 - **`finalPrice` is computed server-side** from `discountType` + `discountValue`; ignore any client-sent value.
-- **Error codes** (`error.code`): `UNAUTHORIZED` `TOKEN_EXPIRED` (401) · `FORBIDDEN` (403) · `*_NOT_FOUND` (404) · `VALIDATION_ERROR` (422, with `fields`) · `INVALID_STATUS_TRANSITION` `REDEMPTION_LIMIT_REACHED` (409) · `CATEGORY_NOT_IN_CATALOG` `BUSINESS_TYPE_IMMUTABLE` (422) · `RATE_LIMITED` (429) · `INTERNAL_ERROR` (500).
+- **Error codes** (`error.code`): `UNAUTHORIZED` `TOKEN_EXPIRED` (401) · `FORBIDDEN` (403) · `*_NOT_FOUND` (404) · `VALIDATION_ERROR` (422, with `fields`) · `INVALID_STATUS_TRANSITION` `REDEMPTION_LIMIT_REACHED` (409) · `INVALID_CATEGORY_FOR_TYPE` `BUSINESS_TYPE_IMMUTABLE` (422) · `RATE_LIMITED` (429) · `INTERNAL_ERROR` (500).
 
 > ✅ Dates (**ISO-8601**) and pagination (**`size`/`hasNext`**) are authoritative per the OpenAPI (`elon-uz.json`) + `BACKEND_PROMPT.md`; the other spec docs have been reconciled to them.
 

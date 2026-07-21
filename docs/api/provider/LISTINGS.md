@@ -74,10 +74,6 @@ single-price item (no student discount). When `_regular == "1"`:
 
 The business meaning lives in `_regular`, never in contradictory pricing columns.
 
-> Doc-contradiction to fix after implementation: `DISCOUNTS_BUSINESS_API.md §32` says non-discount
-> listings don't exist — it loses to `BACKEND_PROMPT.md` + `catalog-seed.json`; update it so there's
-> one definition of a regular listing.
-
 ## 6. Attributes validation (full strict, against the catalog)
 
 The catalog stays the single source of truth for attribute structure (`AttributeSpec`). Validation:
@@ -116,7 +112,7 @@ The catalog stays the single source of truth for attribute structure (`Attribute
 ## 10. Validation split — CREATE (correctness) vs SUBMIT (publish-readiness)
 
 **CREATE (→ DRAFT): the stored draft is internally consistent, not necessarily publish-ready.**
-Ownership; `categoryKey` ∈ catalog for the business type (`422 CATEGORY_NOT_IN_CATALOG`);
+Ownership; `categoryKey` ∈ catalog for the business type (`422 INVALID_CATEGORY_FOR_TYPE`);
 `customCategoryName` required iff `categoryKey == "OTHER"`; `title` 3–120; `originalPrice > 0`;
 `validTo > validFrom` (≤ +1 year); `images ≤ 10`; pricing (§4/§5); attributes (§6); redemption (§7);
 option groups (§8); `branchIds` ownership (§9). **The business need NOT be `APPROVED`; `images` may
@@ -170,14 +166,13 @@ and reused by future edit/duplicate flows.
 
 ## 13. Error codes
 
-Existing (reuse): `CATEGORY_NOT_IN_CATALOG`, `INVALID_STATUS_TRANSITION`, `VALIDATION_ERROR`,
+Existing (reuse): `INVALID_CATEGORY_FOR_TYPE`, `INVALID_STATUS_TRANSITION`, `VALIDATION_ERROR`,
 `LISTING_NOT_FOUND`, `BUSINESS_NOT_FOUND`, `FORBIDDEN`.
 **Add** to `src/common/errors/error-code.ts`: `DISCOUNT_TOO_HIGH`, `FINAL_PRICE_INVALID`,
 `ATTRIBUTES_SCHEMA_MISMATCH`, `NO_ACTIVE_BRANCH`, `BUSINESS_NOT_APPROVED`.
 
-> Note: `DISCOUNTS_BUSINESS_API.md §7` also lists `INVALID_CATEGORY_FOR_TYPE`. We use the
-> contract/CLAUDE.md code `CATEGORY_NOT_IN_CATALOG` for "category not valid for this business type";
-> reconcile the doc term when fixing §32.
+> `INVALID_CATEGORY_FOR_TYPE` is the canonical code for "category not valid for this business type",
+> matching the `elon-uz.json` contract, `BACKEND_PROMPT.md`, and `DISCOUNTS_BUSINESS_API.md`.
 
 ## 14. Testing
 
@@ -193,5 +188,4 @@ Existing (reuse): `CATEGORY_NOT_IN_CATALOG`, `INVALID_STATUS_TRANSITION`, `VALID
 ## 15. Out of scope / follow-ups
 
 Level-2: read/list/detail, edit, pause/activate/withdraw, duplicate, stats, moderation, cron
-lifecycle, redemption lifecycle, count-limits. Doc fix: `DISCOUNTS_BUSINESS_API.md §32` (regular
-listings) + the `INVALID_CATEGORY_FOR_TYPE` term.
+lifecycle, redemption lifecycle, count-limits.

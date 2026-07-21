@@ -242,7 +242,7 @@ export class ListingsService {
     const keys = categories?.map((category) => category.key) ?? [];
     if (!keys.includes(categoryKey)) {
       throw new AppException(
-        ERROR_CODE.CATEGORY_NOT_IN_CATALOG,
+        ERROR_CODE.INVALID_CATEGORY_FOR_TYPE,
         422,
         'Kategoriya ushbu biznes turida mavjud emas',
         { categoryKey: 'Kategoriya katalogda topilmadi' },
