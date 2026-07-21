@@ -11,6 +11,7 @@ import { DevGeocoderAdapter } from './infrastructure/geocoding/dev-geocoder.adap
 import { createGeocoder } from './infrastructure/geocoding/geocoder.factory';
 import { YandexGeocoderAdapter } from './infrastructure/geocoding/yandex-geocoder.adapter';
 import { DistrictsController } from './presentation/districts.controller';
+import { GeocodeController } from './presentation/geocode.controller';
 import { RegionsController } from './presentation/regions.controller';
 
 /**
@@ -20,7 +21,7 @@ import { RegionsController } from './presentation/regions.controller';
  */
 @Module({
   imports: [PrismaModule],
-  controllers: [RegionsController, DistrictsController],
+  controllers: [RegionsController, DistrictsController, GeocodeController],
   providers: [
     GeoService,
     GeocodingService,
