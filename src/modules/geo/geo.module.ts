@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Env } from '../../config/env';
 import { PrismaModule } from '../../infrastructure/database/prisma.module';
+import { GeocodingService } from './application/geocoding.service';
 import { GeoService } from './application/geo.service';
 import { GEO_REPOSITORY } from './domain/geo.repository';
 import { GEOCODER, GeocoderPort } from './domain/geocoder.port';
@@ -22,6 +23,7 @@ import { RegionsController } from './presentation/regions.controller';
   controllers: [RegionsController, DistrictsController],
   providers: [
     GeoService,
+    GeocodingService,
     { provide: GEO_REPOSITORY, useClass: GeoPrismaRepository },
     DevGeocoderAdapter,
     YandexGeocoderAdapter,
