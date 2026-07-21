@@ -54,7 +54,7 @@ Everything here is fixed by the generated mobile client — match it exactly.
 - **`finalPrice` is computed server-side** from `discountType` + `discountValue`; ignore any client-sent value.
 - **Error codes** (`error.code`): `UNAUTHORIZED` `TOKEN_EXPIRED` (401) · `FORBIDDEN` (403) · `*_NOT_FOUND` (404) · `VALIDATION_ERROR` (422, with `fields`) · `INVALID_STATUS_TRANSITION` `REDEMPTION_LIMIT_REACHED` (409) · `CATEGORY_NOT_IN_CATALOG` `BUSINESS_TYPE_IMMUTABLE` (422) · `RATE_LIMITED` (429) · `INTERNAL_ERROR` (500).
 
-> ⚠️ `API_RESPONSE_FORMAT.md` is **stale** on two points (it says epoch-ms and `pageSize`/`hasMore`). The OpenAPI (`elon-uz.json`) and `BACKEND_PROMPT.md` win: **ISO-8601** dates and **`size`/`hasNext`** pagination.
+> ✅ Dates (**ISO-8601**) and pagination (**`size`/`hasNext`**) are authoritative per the OpenAPI (`elon-uz.json`) + `BACKEND_PROMPT.md`; the other spec docs have been reconciled to them.
 
 ## Auth & Ownership
 

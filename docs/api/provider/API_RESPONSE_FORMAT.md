@@ -198,15 +198,15 @@ Ro'yxatlar uchun `result` ichида meta bilan qaytaring:
   "status": 200,
   "result": {
     "items": [ /* ... */ ],
-    "page": 1,
-    "pageSize": 20,
+    "page": 0,
+    "size": 20,
     "total": 137,
-    "hasMore": true
+    "hasNext": true
   }
 }
 ```
 
-So'rov: `GET /listings?page=1&pageSize=20`.
+So'rov: `GET /listings?page=0&size=20`.
 
 ---
 
@@ -236,7 +236,7 @@ Oqim: **so'rov → internet tekshiruvi → `BaseResponse` → Checker (`status`/
 4. HTTP status kodi **va** `status` maydoni bir xil bo'lsin.
 5. Validatsiya xatolari `error.fields` да (maydon nomi → xato matni).
 6. `message` — doim **foydalanuvchi ko'radigan**, tushunarli matn (log matni emas).
-7. Sana/vaqt — **epoch millisekund** (klient shunday kutadi).
+7. Sana/vaqt — **ISO-8601** (`"2026-07-16T10:30:00Z"`) — epoch-ms EMAS.
 8. Pul — **butun son, tiyinsiz** (so'mда), `currency: "UZS"`.
 
 ---

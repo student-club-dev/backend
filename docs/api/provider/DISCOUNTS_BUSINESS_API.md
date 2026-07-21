@@ -760,7 +760,7 @@ Joylashuvga ruxsat berilmasa masofa ko'rsatilmaydi, lekin ro'yxat baribir ishlay
 | Nima | Limit |
 |---|---|
 | Bir foydalanuvchidagi biznes | 5 |
-| Bir biznesdagi filial | 50 |
+| Bir biznesdagi filial | cheklovsiz (keyinchalik obuna tarifiga qarab) |
 | Bir biznesdagi faol e'lon | 100 (`ACTIVE` + `PENDING_REVIEW`) |
 | Bir e'londagi rasm | 10 |
 | Bir e'londagi OptionGroup | 10, har birida 30 variant |

@@ -256,7 +256,7 @@ Business: DRAFT → (submit) PENDING_REVIEW → APPROVED | REJECTED; BLOCKED —
 
 **Validatsiya (klientdagi `ListingValidator` bilan bir xil):**
 ```
-MAX_IMAGES = 5              MAX_PERCENT = 90            MAX_BRANCHES = 20
+MAX_IMAGES = 10             MAX_PERCENT = 90            MAX_BRANCHES = cheklovsiz*
 MAX_OPTION_GROUPS = 10      MAX_OPTIONS_PER_GROUP = 30  MIN_BRANCH_DISTANCE_METERS = 100
 title: 3..120 belgi         originalPrice > 0           validTo > validFrom
 koordinata: lat 37.0..46.0, lng 55.0..74.0  (O'zbekiston chegarasi — tashqarisi 422)
@@ -267,6 +267,8 @@ customCategoryName: categoryKey == "OTHER" bo'lsa MAJBURIY
 categoryKey: shu businessType katalogида mavjud bo'lishi shart (aks holda 422)
 attributes: kalitlar shu turning attributes-schema'sида bo'lsin; required=true bo'lganlar majburiy
 ```
+
+> \* `MAX_BRANCHES` hozircha cheklanmagan — filial soni keyinchalik obuna (subscription) tarifiga qarab belgilanadi.
 
 **Maxsus atribut kalitlari** (`catalog-seed.json` → `constants`):
 - `_regular = "1"` → **oddiy e'lon** (chegirmasiz, bitta narx). Yo'q bo'lsa — chegirma e'loni.
