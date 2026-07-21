@@ -13,6 +13,7 @@ import { BusinessModule } from './modules/business/business.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
 import { GeoModule } from './modules/geo/geo.module';
 import { HealthModule } from './modules/health/health.module';
+import { ListingsModule } from './modules/listings/listings.module';
 import { MediaModule } from './modules/media/media.module';
 import { ProfileModule } from './modules/profiles/profile.module';
 import { TradeCentersModule } from './modules/trade-centers/trade-centers.module';
@@ -49,6 +50,7 @@ import { TradeCentersModule } from './modules/trade-centers/trade-centers.module
     BusinessModule,
     BranchesModule,
     TradeCentersModule,
+    ListingsModule,
     MediaModule,
   ],
 })
