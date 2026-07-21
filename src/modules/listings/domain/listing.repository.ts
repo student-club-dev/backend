@@ -51,11 +51,29 @@ export interface CreateListingData {
 }
 
 /**
+ * Fields to change when a draft is submitted (LISTINGS.md §9/§10). `branchIds` is the resolved
+ * active-branch snapshot for the empty-branchIds case — when present, the ListingBranch rows are
+ * replaced with it; when absent, the existing associations are left untouched. The status is always
+ * set to PENDING_REVIEW by the transition.
+ */
+export interface SubmitTransitionData {
+  branchIds?: string[];
+}
+
+/**
  * Listing data-access port. The application layer depends on this interface only; the Prisma
- * implementation lives in infrastructure. Phase 2 needs only the atomic aggregate create; `findById`
- * arrives with the submit flow.
+ * implementation lives in infrastructure.
  */
 export interface ListingRepository {
   /** Persists the whole aggregate (listing + branches + option groups + options) atomically. */
   create(data: CreateListingData): Promise<Listing>;
+
+  /** Loads the full aggregate by id, or `null` when it does not exist. */
+  findById(id: string): Promise<Listing | null>;
+
+  /**
+   * Transitions a draft to PENDING_REVIEW atomically, optionally replacing the ListingBranch rows
+   * with the resolved snapshot (`branchIds`). Returns the updated aggregate.
+   */
+  submitTransition(id: string, data: SubmitTransitionData): Promise<Listing>;
 }

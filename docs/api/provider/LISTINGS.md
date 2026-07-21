@@ -128,7 +128,7 @@ deactivated, the business un-approved):
 1. Business `status == APPROVED` → else `403 BUSINESS_NOT_APPROVED`.
 2. ≥ 1 active branch with complete location, **or** `isOnlineOnly` → else `422 NO_ACTIVE_BRANCH` (§9).
 3. `images ≥ 1`.
-4. `finalPrice < originalPrice` — **skipped for regular listings**.
+4. `finalPrice < originalPrice` — **skipped for regular listings and `FREE_ITEM`** (mirrors CREATE §4; both legitimately have `finalPrice == originalPrice`).
 5. `validTo` in the future.
 6. `categoryKey` ∈ business type (re-check).
 7. `attributes` match the schema (re-check, §6).

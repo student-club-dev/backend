@@ -6,7 +6,9 @@ import { BRANCH_REPOSITORY, BranchRepository } from '../../branches/domain/branc
 import {
   BUSINESS_READ,
   BusinessReadRepository,
+  BusinessSummary,
 } from '../../business/domain/business-read.repository';
+import { BusinessStatus } from '../../business/domain/enums/business-status.enum';
 import { CATALOG_REPOSITORY, CatalogRepository } from '../../catalog/domain/catalog.repository';
 import { Listing, ListingDiscount } from '../domain/entities/listing.entity';
 import { DiscountType } from '../domain/enums/discount-type.enum';
@@ -31,10 +33,10 @@ const MAX_PERCENT = 90;
 const OTHER_CATEGORY_KEY = 'OTHER';
 
 /**
- * Listing use-cases, nested under a business. The BUSINESS-account gate lives in
- * BusinessAccountGuard; here we enforce ownership (the business must exist and belong to the caller)
- * and the CREATE-time validation split from LISTINGS.md §10 — the stored draft is internally
- * consistent, not necessarily publish-ready (publish gates belong to SUBMIT, Phase 3). Depends on
+ * Listing use-cases. The BUSINESS-account gate lives in BusinessAccountGuard; here we enforce
+ * ownership (the business must exist and belong to the caller) and the validation split from
+ * LISTINGS.md §10 — CREATE keeps the stored draft internally consistent, SUBMIT re-validates the
+ * publish gates from scratch (a draft may be weeks old, so it never trusts CREATE). Depends on
  * repository interfaces only.
  */
 @Injectable()
@@ -107,11 +109,138 @@ export class ListingsService {
     });
   }
 
-  /** §10: `categoryKey` must be in the catalog for the type; OTHER requires `customCategoryName`. */
-  private async assertCategory(type: string, input: CreateListingInput): Promise<void> {
+  /**
+   * Submits a DRAFT listing for review (LISTINGS.md §10 SUBMIT half). Re-validates every publish
+   * gate independently — the draft is never trusted, since the category could have been removed, a
+   * branch deactivated or the business un-approved since it was created. On success the listing
+   * transitions DRAFT → PENDING_REVIEW (and, for the empty-branchIds case, the resolved active
+   * branches are snapshotted onto it).
+   */
+  async submit(user: AuthenticatedUser, listingId: string): Promise<Listing> {
+    // 1. The listing must exist.
+    const listing = await this.listings.findById(listingId);
+    if (listing === null) {
+      throw AppException.notFound(ERROR_CODE.LISTING_NOT_FOUND, 'E’lon topilmadi');
+    }
+
+    // 2. Ownership — the business must exist (404) and belong to the caller (403).
+    const summary = await this.businesses.findSummaryById(listing.businessId);
+    if (summary === null) {
+      throw AppException.notFound(ERROR_CODE.BUSINESS_NOT_FOUND, 'Biznes topilmadi');
+    }
+    if (summary.ownerId !== user.id) {
+      throw AppException.forbidden();
+    }
+
+    // 3. Status guard — only a DRAFT may be submitted.
+    if (listing.status !== ListingStatus.DRAFT) {
+      throw AppException.conflict(
+        ERROR_CODE.INVALID_STATUS_TRANSITION,
+        'Faqat qoralama e’lonni ko‘rib chiqishga yuborish mumkin',
+      );
+    }
+
+    // 4. Publish gates (§10 SUBMIT), each re-validated from scratch.
+    // 4.1 Business must be APPROVED.
+    if (summary.status !== BusinessStatus.APPROVED) {
+      throw new AppException(ERROR_CODE.BUSINESS_NOT_APPROVED, 403, 'Biznes hali tasdiqlanmagan');
+    }
+    // 4.2 Branches (§9 submit) — resolve the active-branch snapshot for the empty-branchIds case.
+    const branchSnapshot = await this.resolveSubmitBranches(summary, listing.branchIds);
+    // 4.3 At least one image.
+    if (listing.images.length < 1) {
+      throw AppException.validation({ images: 'Kamida bitta rasm kerak' });
+    }
+    // 4.4 finalPrice < originalPrice — recomputed from the stored discount; skipped for regulars.
+    this.assertPublishablePrice(listing);
+    // 4.5 validTo must be in the future.
+    if (listing.validTo <= new Date()) {
+      throw AppException.validation({ validTo: 'validTo kelajakda bo‘lishi kerak' });
+    }
+    // 4.6 categoryKey must still be in the catalog for the business type.
+    await this.assertCategoryInCatalog(summary.type, listing.categoryKey);
+    // 4.7 attributes must still match the catalog schema.
+    const specs = await this.catalog.findAttributeSpecs(summary.type, listing.categoryKey);
+    validateAttributes(listing.attributes, specs);
+
+    // 5. Transition to PENDING_REVIEW (persisting the branch snapshot when one was resolved).
+    return this.listings.submitTransition(listingId, { branchIds: branchSnapshot });
+  }
+
+  /**
+   * §9 (submit half): resolves the branch gate. `isOnlineOnly` businesses need no branch. With
+   * explicit `branchIds`, ≥ 1 must still be an active branch of the business. With none specified,
+   * the business's current active branches are snapshotted and ≥ 1 is required. Returns the snapshot
+   * to persist (only for the empty case), or `undefined` to leave the associations untouched.
+   */
+  private async resolveSubmitBranches(
+    summary: BusinessSummary,
+    branchIds: string[],
+  ): Promise<string[] | undefined> {
+    // Online-only businesses may publish without any branch — nothing to snapshot.
+    if (summary.isOnlineOnly) {
+      return undefined;
+    }
+
+    const branches = await this.branches.findManyByBusiness(summary.id);
+    const activeIds = new Set(
+      branches.filter((branch) => branch.isActive).map((branch) => branch.id),
+    );
+
+    if (branchIds.length > 0) {
+      // Explicit associations — keep them, but require ≥ 1 to still be active.
+      if (!branchIds.some((id) => activeIds.has(id))) {
+        throw this.noActiveBranch();
+      }
+      return undefined;
+    }
+
+    // Not specified yet — snapshot the current active branches; require ≥ 1.
+    const snapshot = [...activeIds];
+    if (snapshot.length === 0) {
+      throw this.noActiveBranch();
+    }
+    return snapshot;
+  }
+
+  private noActiveBranch(): AppException {
+    return new AppException(ERROR_CODE.NO_ACTIVE_BRANCH, 422, 'Faol filial topilmadi');
+  }
+
+  /**
+   * §10 gate 4 (submit): recomputes `finalPrice` from the stored discount and requires it to be
+   * below `originalPrice`. Exempt — mirroring CREATE (§4) — for regular listings (`_regular == "1"`)
+   * and FREE_ITEM (1+1); both legitimately have finalPrice == originalPrice.
+   */
+  private assertPublishablePrice(listing: Listing): void {
+    if (
+      listing.attributes?.[REGULAR_KEY] === REGULAR_VALUE ||
+      listing.discount.type === DiscountType.FREE_ITEM
+    ) {
+      return;
+    }
+    const finalPrice = Number(
+      computeFinalPrice(
+        listing.discount.type,
+        BigInt(listing.discount.value),
+        BigInt(listing.originalPrice),
+      ),
+    );
+    if (finalPrice >= listing.originalPrice) {
+      throw new AppException(
+        ERROR_CODE.FINAL_PRICE_INVALID,
+        422,
+        'Yakuniy narx asl narxdan kichik bo‘lishi kerak',
+        { finalPrice: 'Chegirma yakuniy narxni kamaytirmaydi' },
+      );
+    }
+  }
+
+  /** §10 gate 6 (submit): the category must still exist in the catalog for the business type. */
+  private async assertCategoryInCatalog(type: string, categoryKey: string): Promise<void> {
     const categories = await this.catalog.findCategoriesByType(type);
     const keys = categories?.map((category) => category.key) ?? [];
-    if (!keys.includes(input.categoryKey)) {
+    if (!keys.includes(categoryKey)) {
       throw new AppException(
         ERROR_CODE.CATEGORY_NOT_IN_CATALOG,
         422,
@@ -119,6 +248,11 @@ export class ListingsService {
         { categoryKey: 'Kategoriya katalogda topilmadi' },
       );
     }
+  }
+
+  /** §10: `categoryKey` must be in the catalog for the type; OTHER requires `customCategoryName`. */
+  private async assertCategory(type: string, input: CreateListingInput): Promise<void> {
+    await this.assertCategoryInCatalog(type, input.categoryKey);
     if (
       input.categoryKey === OTHER_CATEGORY_KEY &&
       (input.customCategoryName === null || input.customCategoryName.trim() === '')

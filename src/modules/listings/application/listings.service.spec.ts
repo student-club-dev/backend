@@ -2,7 +2,10 @@ import { AccountType } from '../../../common/enums/account-type.enum';
 import { ERROR_CODE } from '../../../common/errors/error-code';
 import type { AuthenticatedUser } from '../../../common/types/authenticated-user';
 import { BranchRepository } from '../../branches/domain/branches.repository';
-import { BusinessReadRepository } from '../../business/domain/business-read.repository';
+import {
+  BusinessReadRepository,
+  BusinessSummary,
+} from '../../business/domain/business-read.repository';
 import { BusinessStatus } from '../../business/domain/enums/business-status.enum';
 import { CatalogRepository } from '../../catalog/domain/catalog.repository';
 import { AttributeSpec } from '../../catalog/domain/entities/attribute-spec.entity';
@@ -14,7 +17,11 @@ import { DiscountType } from '../domain/enums/discount-type.enum';
 import { ListingStatus } from '../domain/enums/listing-status.enum';
 import { RedemptionMethod } from '../domain/enums/redemption-method.enum';
 import { SelectionType } from '../domain/enums/selection-type.enum';
-import { CreateListingData, ListingRepository } from '../domain/listing.repository';
+import {
+  CreateListingData,
+  ListingRepository,
+  SubmitTransitionData,
+} from '../domain/listing.repository';
 import { CreateListingInput } from './listings.io';
 import { ListingsService } from './listings.service';
 
@@ -106,7 +113,93 @@ function listingFromData(data: CreateListingData): Listing {
 }
 
 function makeListings(): ListingRepository {
-  return { create: jest.fn(async (data: CreateListingData) => listingFromData(data)) };
+  return {
+    create: jest.fn(async (data: CreateListingData) => listingFromData(data)),
+    findById: jest.fn().mockResolvedValue(null),
+    submitTransition: jest.fn(),
+  };
+}
+
+/** A stored DRAFT listing, as `findById` would return it for the submit flow. */
+function draftListing(overrides: Partial<Listing> = {}): Listing {
+  return {
+    id: 'lst-1',
+    businessId: BUSINESS_ID,
+    branchIds: [],
+    categoryKey: 'PIZZA',
+    customCategoryName: null,
+    title: 'Katta pizza chegirma',
+    description: null,
+    images: ['cover.jpg'],
+    priceUnit: PriceUnit.PER_ITEM,
+    originalPrice: 55_000,
+    currency: 'UZS',
+    discount: {
+      type: DiscountType.PERCENT,
+      value: 20,
+      finalPrice: 44_000,
+      conditions: null,
+      appliesToOptions: false,
+    },
+    redemption: {
+      method: RedemptionMethod.QR,
+      promoCode: null,
+      url: null,
+      perUserLimit: null,
+      perUserPeriod: null,
+      totalLimit: null,
+      usedCount: 0,
+    },
+    validFrom: new Date('2026-08-01T00:00:00Z'),
+    validTo: new Date('2030-01-01T00:00:00Z'),
+    attributes: null,
+    optionGroups: [],
+    status: ListingStatus.DRAFT,
+    rejectionReason: null,
+    viewsCount: 0,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    ...overrides,
+  };
+}
+
+/** Listings repo for submit: `findById` returns the given listing; `submitTransition` applies it. */
+function makeSubmitListings(listing: Listing | null): ListingRepository {
+  return {
+    create: jest.fn(),
+    findById: jest.fn().mockResolvedValue(listing),
+    submitTransition: jest.fn(async (_id: string, data: SubmitTransitionData) => ({
+      ...(listing as Listing),
+      status: ListingStatus.PENDING_REVIEW,
+      branchIds: data.branchIds ?? (listing as Listing).branchIds,
+    })),
+  };
+}
+
+/** Business read port for submit — APPROVED and non-online by default; override per gate. */
+function makeSubmitBusiness(overrides: Partial<BusinessSummary> = {}): BusinessReadRepository {
+  return {
+    findSummaryById: jest.fn().mockResolvedValue({
+      id: BUSINESS_ID,
+      ownerId: 'owner-1',
+      type: 'CAFE_RESTAURANT',
+      status: BusinessStatus.APPROVED,
+      isOnlineOnly: false,
+      ...overrides,
+    }),
+  };
+}
+
+/** Branch repo whose `findManyByBusiness` returns branches with an explicit `isActive` flag. */
+function makeActiveBranches(branches: Array<{ id: string; isActive: boolean }>): BranchRepository {
+  return {
+    create: jest.fn(),
+    findById: jest.fn().mockResolvedValue(null),
+    findManyByBusiness: jest.fn().mockResolvedValue(branches),
+    update: jest.fn(),
+    delete: jest.fn().mockResolvedValue(undefined),
+    existsWithinRadius: jest.fn().mockResolvedValue(false),
+  };
 }
 
 function makeBusinesses(ownerId: string | null): BusinessReadRepository {
@@ -476,6 +569,270 @@ describe('ListingsService', () => {
         code: ERROR_CODE.VALIDATION_ERROR,
         status: 422,
         fields: { branchIds: expect.any(String) },
+      });
+    });
+  });
+
+  describe('submit — happy path', () => {
+    it('transitions an approved business’s valid DRAFT to PENDING_REVIEW', async () => {
+      const listings = makeSubmitListings(draftListing({ branchIds: ['br-1'] }));
+      const service = makeService({
+        listings,
+        businesses: makeSubmitBusiness(),
+        branches: makeActiveBranches([{ id: 'br-1', isActive: true }]),
+      });
+
+      const result = await service.submit(owner, 'lst-1');
+
+      expect(listings.submitTransition).toHaveBeenCalledWith('lst-1', { branchIds: undefined });
+      expect(result.status).toBe(ListingStatus.PENDING_REVIEW);
+    });
+  });
+
+  describe('submit — ownership & status', () => {
+    it('throws 404 LISTING_NOT_FOUND when the listing does not exist', async () => {
+      const listings = makeSubmitListings(null);
+      const service = makeService({ listings, businesses: makeSubmitBusiness() });
+
+      await expect(service.submit(owner, 'missing')).rejects.toMatchObject({
+        code: ERROR_CODE.LISTING_NOT_FOUND,
+        status: 404,
+      });
+      expect(listings.submitTransition).not.toHaveBeenCalled();
+    });
+
+    it('throws 403 FORBIDDEN for another owner’s listing', async () => {
+      const listings = makeSubmitListings(draftListing());
+      const service = makeService({
+        listings,
+        businesses: makeSubmitBusiness({ ownerId: 'someone-else' }),
+      });
+
+      await expect(service.submit(owner, 'lst-1')).rejects.toMatchObject({
+        code: ERROR_CODE.FORBIDDEN,
+        status: 403,
+      });
+      expect(listings.submitTransition).not.toHaveBeenCalled();
+    });
+
+    it('throws 409 INVALID_STATUS_TRANSITION when the listing is not a DRAFT', async () => {
+      const listings = makeSubmitListings(draftListing({ status: ListingStatus.PENDING_REVIEW }));
+      const service = makeService({ listings, businesses: makeSubmitBusiness() });
+
+      await expect(service.submit(owner, 'lst-1')).rejects.toMatchObject({
+        code: ERROR_CODE.INVALID_STATUS_TRANSITION,
+        status: 409,
+      });
+      expect(listings.submitTransition).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('submit — publish gates (§10)', () => {
+    it('throws 403 BUSINESS_NOT_APPROVED when the business is not APPROVED', async () => {
+      const service = makeService({
+        listings: makeSubmitListings(draftListing({ branchIds: ['br-1'] })),
+        businesses: makeSubmitBusiness({ status: BusinessStatus.DRAFT }),
+        branches: makeActiveBranches([{ id: 'br-1', isActive: true }]),
+      });
+
+      await expect(service.submit(owner, 'lst-1')).rejects.toMatchObject({
+        code: ERROR_CODE.BUSINESS_NOT_APPROVED,
+        status: 403,
+      });
+    });
+
+    it('throws 422 NO_ACTIVE_BRANCH when an explicit branch is no longer active', async () => {
+      const service = makeService({
+        listings: makeSubmitListings(draftListing({ branchIds: ['br-1'] })),
+        businesses: makeSubmitBusiness(),
+        branches: makeActiveBranches([{ id: 'br-1', isActive: false }]),
+      });
+
+      await expect(service.submit(owner, 'lst-1')).rejects.toMatchObject({
+        code: ERROR_CODE.NO_ACTIVE_BRANCH,
+        status: 422,
+      });
+    });
+
+    it('throws 422 NO_ACTIVE_BRANCH when branchIds are empty and no branch is active', async () => {
+      const service = makeService({
+        listings: makeSubmitListings(draftListing({ branchIds: [] })),
+        businesses: makeSubmitBusiness(),
+        branches: makeActiveBranches([{ id: 'br-1', isActive: false }]),
+      });
+
+      await expect(service.submit(owner, 'lst-1')).rejects.toMatchObject({
+        code: ERROR_CODE.NO_ACTIVE_BRANCH,
+        status: 422,
+      });
+    });
+
+    it('snapshots the business’s active branches when branchIds are empty', async () => {
+      const listings = makeSubmitListings(draftListing({ branchIds: [] }));
+      const service = makeService({
+        listings,
+        businesses: makeSubmitBusiness(),
+        branches: makeActiveBranches([
+          { id: 'br-1', isActive: true },
+          { id: 'br-2', isActive: false },
+          { id: 'br-3', isActive: true },
+        ]),
+      });
+
+      const result = await service.submit(owner, 'lst-1');
+
+      expect(listings.submitTransition).toHaveBeenCalledWith('lst-1', {
+        branchIds: ['br-1', 'br-3'],
+      });
+      expect(result.status).toBe(ListingStatus.PENDING_REVIEW);
+      expect(result.branchIds).toEqual(['br-1', 'br-3']);
+    });
+
+    it('passes an online-only business with no branches (no branch required)', async () => {
+      const listings = makeSubmitListings(draftListing({ branchIds: [] }));
+      const branches = makeActiveBranches([]);
+      const service = makeService({
+        listings,
+        businesses: makeSubmitBusiness({ isOnlineOnly: true }),
+        branches,
+      });
+
+      const result = await service.submit(owner, 'lst-1');
+
+      expect(result.status).toBe(ListingStatus.PENDING_REVIEW);
+      expect(listings.submitTransition).toHaveBeenCalledWith('lst-1', { branchIds: undefined });
+      expect(branches.findManyByBusiness).not.toHaveBeenCalled();
+    });
+
+    it('throws 422 VALIDATION_ERROR when there are no images', async () => {
+      const service = makeService({
+        listings: makeSubmitListings(draftListing({ branchIds: ['br-1'], images: [] })),
+        businesses: makeSubmitBusiness(),
+        branches: makeActiveBranches([{ id: 'br-1', isActive: true }]),
+      });
+
+      await expect(service.submit(owner, 'lst-1')).rejects.toMatchObject({
+        code: ERROR_CODE.VALIDATION_ERROR,
+        status: 422,
+        fields: { images: expect.any(String) },
+      });
+    });
+
+    it('throws 422 FINAL_PRICE_INVALID from the recomputed price, ignoring the stored finalPrice', async () => {
+      const service = makeService({
+        listings: makeSubmitListings(
+          draftListing({
+            branchIds: ['br-1'],
+            // Stored finalPrice is stale/low; recompute yields 60_000 >= 55_000 → invalid.
+            discount: {
+              type: DiscountType.SPECIAL_PRICE,
+              value: 60_000,
+              finalPrice: 1,
+              conditions: null,
+              appliesToOptions: false,
+            },
+          }),
+        ),
+        businesses: makeSubmitBusiness(),
+        branches: makeActiveBranches([{ id: 'br-1', isActive: true }]),
+      });
+
+      await expect(service.submit(owner, 'lst-1')).rejects.toMatchObject({
+        code: ERROR_CODE.FINAL_PRICE_INVALID,
+        status: 422,
+      });
+    });
+
+    it('skips the price gate for a regular listing (_regular = "1")', async () => {
+      const service = makeService({
+        listings: makeSubmitListings(
+          draftListing({
+            branchIds: ['br-1'],
+            attributes: { _regular: '1' },
+            // Would be FINAL_PRICE_INVALID for a non-regular listing — must be skipped.
+            discount: {
+              type: DiscountType.SPECIAL_PRICE,
+              value: 60_000,
+              finalPrice: 55_000,
+              conditions: null,
+              appliesToOptions: false,
+            },
+          }),
+        ),
+        businesses: makeSubmitBusiness(),
+        branches: makeActiveBranches([{ id: 'br-1', isActive: true }]),
+      });
+
+      const result = await service.submit(owner, 'lst-1');
+
+      expect(result.status).toBe(ListingStatus.PENDING_REVIEW);
+    });
+
+    it('skips the price gate for a FREE_ITEM listing (1+1, finalPrice == originalPrice)', async () => {
+      const service = makeService({
+        listings: makeSubmitListings(
+          draftListing({
+            branchIds: ['br-1'],
+            // FREE_ITEM legitimately has finalPrice == originalPrice — must be publishable (mirrors CREATE).
+            discount: {
+              type: DiscountType.FREE_ITEM,
+              value: 0,
+              finalPrice: 55_000,
+              conditions: null,
+              appliesToOptions: false,
+            },
+          }),
+        ),
+        businesses: makeSubmitBusiness(),
+        branches: makeActiveBranches([{ id: 'br-1', isActive: true }]),
+      });
+
+      const result = await service.submit(owner, 'lst-1');
+
+      expect(result.status).toBe(ListingStatus.PENDING_REVIEW);
+    });
+
+    it('throws 422 VALIDATION_ERROR when validTo is in the past', async () => {
+      const service = makeService({
+        listings: makeSubmitListings(
+          draftListing({ branchIds: ['br-1'], validTo: new Date('2020-01-01T00:00:00Z') }),
+        ),
+        businesses: makeSubmitBusiness(),
+        branches: makeActiveBranches([{ id: 'br-1', isActive: true }]),
+      });
+
+      await expect(service.submit(owner, 'lst-1')).rejects.toMatchObject({
+        code: ERROR_CODE.VALIDATION_ERROR,
+        status: 422,
+        fields: { validTo: expect.any(String) },
+      });
+    });
+
+    it('throws 422 CATEGORY_NOT_IN_CATALOG when the category was removed from the catalog', async () => {
+      const service = makeService({
+        listings: makeSubmitListings(draftListing({ branchIds: ['br-1'], categoryKey: 'PIZZA' })),
+        businesses: makeSubmitBusiness(),
+        catalog: makeCatalog([category('SUSHI')]),
+        branches: makeActiveBranches([{ id: 'br-1', isActive: true }]),
+      });
+
+      await expect(service.submit(owner, 'lst-1')).rejects.toMatchObject({
+        code: ERROR_CODE.CATEGORY_NOT_IN_CATALOG,
+        status: 422,
+      });
+    });
+
+    it('throws 422 ATTRIBUTES_SCHEMA_MISMATCH when attributes drift from the schema', async () => {
+      const service = makeService({
+        listings: makeSubmitListings(draftListing({ branchIds: ['br-1'], attributes: null })),
+        businesses: makeSubmitBusiness(),
+        catalog: makeCatalog(undefined, [spec({ key: 'portionGrams', required: true })]),
+        branches: makeActiveBranches([{ id: 'br-1', isActive: true }]),
+      });
+
+      await expect(service.submit(owner, 'lst-1')).rejects.toMatchObject({
+        code: ERROR_CODE.ATTRIBUTES_SCHEMA_MISMATCH,
+        status: 422,
       });
     });
   });
