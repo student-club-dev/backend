@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { JwtModule } from '@nestjs/jwt';
 import type { Env } from '../../config/env';
 import { PrismaModule } from '../../infrastructure/database/prisma.module';
 import { GeocodingService } from './application/geocoding.service';
@@ -20,7 +21,7 @@ import { RegionsController } from './presentation/regions.controller';
  * depend on the GeocoderPort interface only — enabling real geocoding is env-only.
  */
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, JwtModule.register({})],
   controllers: [RegionsController, DistrictsController, GeocodeController],
   providers: [
     GeoService,
