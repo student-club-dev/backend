@@ -1,7 +1,14 @@
 import { Body, Controller, HttpCode, Post, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
+import { ERROR_CODE } from '../../../common/errors/error-code';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
+import {
+  ApiErrorEnvelope,
+  ApiOkEnvelope,
+  ApiUnauthorizedEnvelope,
+  ApiValidationEnvelope,
+} from '../../../common/swagger/api-envelope.decorator';
 import type { AuthenticatedUser } from '../../../common/types/authenticated-user';
 import { AuthService } from '../application/auth.service';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
@@ -20,7 +27,15 @@ export class BusinessPasswordController {
   @ApiBearerAuth()
   @UseGuards(JwtAuthGuard)
   @ApiOperation({ summary: 'Set or change the account password (authenticated)' })
-  @ApiOkResponse({ description: 'Password set/changed; `result` is null.' })
+  @ApiOkEnvelope(undefined, 'Password set/changed; `result` is null.')
+  @ApiUnauthorizedEnvelope()
+  @ApiValidationEnvelope('Invalid body — newPassword too short or missing.')
+  @ApiErrorEnvelope(
+    401,
+    ERROR_CODE.INVALID_CREDENTIALS,
+    'currentPassword is missing or incorrect when changing an existing password.',
+    'Login yoki parol xato',
+  )
   async set(@CurrentUser() user: AuthenticatedUser, @Body() dto: SetPasswordDto): Promise<void> {
     await this.authService.setPassword(user.id, dto.currentPassword ?? null, dto.newPassword);
   }
@@ -31,7 +46,14 @@ export class BusinessPasswordController {
     summary: 'Request a password-reset OTP via SMS',
     description: 'Always succeeds; `result` is null — never reveals whether the account exists.',
   })
-  @ApiOkResponse({ description: 'Always succeeds; `result` is null (anti-enumeration).' })
+  @ApiOkEnvelope(undefined, 'Always succeeds; `result` is null (anti-enumeration).')
+  @ApiErrorEnvelope(
+    429,
+    ERROR_CODE.OTP_COOLDOWN,
+    'A resend cooldown is active, or the hourly SMS limit for this phone was reached (`OTP_COOLDOWN` / `OTP_RESEND_LIMIT`).',
+    'Iltimos, biroz kutib qaytadan urinib ko‘ring',
+  )
+  @ApiValidationEnvelope('Invalid body — phoneNumber missing or not a valid phone number.')
   async forgot(@Body() dto: ForgotPasswordDto): Promise<void> {
     await this.authService.forgotPassword(dto.phoneNumber);
   }
@@ -39,7 +61,26 @@ export class BusinessPasswordController {
   @Post('reset')
   @HttpCode(200)
   @ApiOperation({ summary: 'Reset the password with the SMS OTP' })
-  @ApiOkResponse({ type: ResetPasswordResultDto })
+  @ApiOkEnvelope(ResetPasswordResultDto)
+  @ApiErrorEnvelope(
+    410,
+    ERROR_CODE.OTP_EXPIRED,
+    'No active reset OTP for this phone number — request a new one.',
+    'Kod eskirgan yoki topilmadi, qaytadan so‘rang',
+  )
+  @ApiErrorEnvelope(
+    429,
+    ERROR_CODE.OTP_TOO_MANY_ATTEMPTS,
+    'Too many failed verify attempts for this code — request a new one.',
+    'Urinishlar soni oshib ketdi, yangi kod so‘rang',
+  )
+  @ApiValidationEnvelope('Invalid body, or the code does not match (`OTP_INVALID`).')
+  @ApiErrorEnvelope(
+    401,
+    ERROR_CODE.INVALID_CREDENTIALS,
+    'No account with this phone number.',
+    'Login yoki parol xato',
+  )
   async reset(@Body() dto: ResetPasswordDto): Promise<ResetPasswordResultDto> {
     await this.authService.resetPassword(dto.phoneNumber, dto.code, dto.newPassword);
     return ResetPasswordResultDto.done();

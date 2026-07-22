@@ -8,17 +8,16 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import {
-  ApiBearerAuth,
-  ApiBody,
-  ApiConsumes,
-  ApiOkResponse,
-  ApiOperation,
-  ApiResponse,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import { ERROR_CODE } from '../../../common/errors/error-code';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
+import {
+  ApiErrorEnvelope,
+  ApiOkEnvelope,
+  ApiUnauthorizedEnvelope,
+  ApiValidationEnvelope,
+} from '../../../common/swagger/api-envelope.decorator';
 import type { UploadedImage } from '../application/media.io';
 import { MAX_IMAGE_SIZE_BYTES, MediaService } from '../application/media.service';
 import { MediaUploadResponseDto } from './dto/media-upload-response.dto';
@@ -30,6 +29,7 @@ import { MediaUploadResponseDto } from './dto/media-upload-response.dto';
  */
 @ApiTags('Media')
 @ApiBearerAuth()
+@ApiUnauthorizedEnvelope()
 @UseGuards(JwtAuthGuard, ThrottlerGuard)
 @Controller('media')
 export class MediaController {
@@ -63,9 +63,12 @@ export class MediaController {
       },
     },
   })
-  @ApiOkResponse({ type: MediaUploadResponseDto })
-  @ApiResponse({ status: 413, description: 'FILE_TOO_LARGE' })
-  @ApiResponse({ status: 429, description: 'RATE_LIMITED — 100 per hour' })
+  @ApiOkEnvelope(MediaUploadResponseDto)
+  @ApiValidationEnvelope(
+    'Unknown `purpose`, missing file, or the file is not a valid JPEG/PNG/WebP image.',
+  )
+  @ApiErrorEnvelope(413, ERROR_CODE.FILE_TOO_LARGE, 'File exceeds the 5 MB size limit.')
+  @ApiErrorEnvelope(429, ERROR_CODE.RATE_LIMITED, 'Rate limit exceeded — 100 uploads per hour.')
   async upload(
     @Body('purpose') purpose: string,
     @UploadedFile() file?: UploadedImage,

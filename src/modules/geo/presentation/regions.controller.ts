@@ -1,5 +1,6 @@
 import { Controller, Get } from '@nestjs/common';
-import { ApiOkResponse, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiOkEnvelope } from '../../../common/swagger/api-envelope.decorator';
 import { GeoService } from '../application/geo.service';
 import { RegionDto } from './dto/region.dto';
 
@@ -11,7 +12,7 @@ export class RegionsController {
 
   @Get()
   @ApiOperation({ summary: 'List regions (14 total)' })
-  @ApiOkResponse({ type: [RegionDto] })
+  @ApiOkEnvelope([RegionDto])
   async getRegions(): Promise<RegionDto[]> {
     const regions = await this.geoService.getRegions();
     return regions.map(RegionDto.fromDomain);

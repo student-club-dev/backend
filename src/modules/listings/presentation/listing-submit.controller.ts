@@ -1,7 +1,15 @@
 import { Controller, HttpCode, HttpStatus, Param, Post, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOkResponse, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
+import { ERROR_CODE } from '../../../common/errors/error-code';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
+import {
+  ApiErrorEnvelope,
+  ApiForbiddenEnvelope,
+  ApiNotFoundEnvelope,
+  ApiOkEnvelope,
+  ApiUnauthorizedEnvelope,
+} from '../../../common/swagger/api-envelope.decorator';
 import type { AuthenticatedUser } from '../../../common/types/authenticated-user';
 import { BusinessAccountGuard } from '../../business/presentation/guards/business-account.guard';
 import { ListingsService } from '../application/listings.service';
@@ -15,6 +23,11 @@ import { ListingDto } from './dto/listing.dto';
  */
 @ApiTags('Listings')
 @ApiBearerAuth()
+@ApiUnauthorizedEnvelope()
+@ApiForbiddenEnvelope(
+  'The caller is not a BUSINESS account, the associated business belongs to another owner, or ' +
+    'the business is not yet APPROVED (`BUSINESS_NOT_APPROVED`).',
+)
 @UseGuards(JwtAuthGuard, BusinessAccountGuard)
 @Controller('listings')
 export class ListingSubmitController {
@@ -28,7 +41,27 @@ export class ListingSubmitController {
       'DRAFT → PENDING_REVIEW. Re-validates every publish gate independently: the business is APPROVED, it has an active branch (or is online-only), at least 1 image, finalPrice < originalPrice (skipped for regular listings), validTo is in the future, the category is in the catalog for the business type, and attributes match the schema.',
   })
   @ApiParam({ name: 'listingId', description: 'Listing id' })
-  @ApiOkResponse({ type: ListingDto })
+  @ApiOkEnvelope(ListingDto)
+  @ApiNotFoundEnvelope(
+    ERROR_CODE.LISTING_NOT_FOUND,
+    'No listing with this id, or its business no longer exists (`BUSINESS_NOT_FOUND`).',
+    'E’lon topilmadi',
+  )
+  @ApiErrorEnvelope(
+    409,
+    ERROR_CODE.INVALID_STATUS_TRANSITION,
+    'Only a DRAFT listing may be submitted.',
+    'Faqat qoralama e’lonni ko‘rib chiqishga yuborish mumkin',
+  )
+  @ApiErrorEnvelope(
+    422,
+    ERROR_CODE.NO_ACTIVE_BRANCH,
+    'A publish gate failed: no active branch (`NO_ACTIVE_BRANCH`), fewer than 1 image or validTo ' +
+      'not in the future (`VALIDATION_ERROR`), finalPrice not below originalPrice ' +
+      '(`FINAL_PRICE_INVALID`), category no longer in the catalog (`INVALID_CATEGORY_FOR_TYPE`), or ' +
+      'attributes no longer matching the schema (`ATTRIBUTES_SCHEMA_MISMATCH`).',
+    'Faol filial topilmadi',
+  )
   async submit(
     @CurrentUser() user: AuthenticatedUser,
     @Param('listingId') listingId: string,

@@ -9,16 +9,18 @@ import {
   Put,
   UseGuards,
 } from '@nestjs/common';
-import {
-  ApiBearerAuth,
-  ApiCreatedResponse,
-  ApiOkResponse,
-  ApiOperation,
-  ApiParam,
-  ApiTags,
-} from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
+import { ERROR_CODE } from '../../../common/errors/error-code';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
+import {
+  ApiCreatedEnvelope,
+  ApiForbiddenEnvelope,
+  ApiNotFoundEnvelope,
+  ApiOkEnvelope,
+  ApiUnauthorizedEnvelope,
+  ApiValidationEnvelope,
+} from '../../../common/swagger/api-envelope.decorator';
 import type { AuthenticatedUser } from '../../../common/types/authenticated-user';
 import { BusinessService } from '../application/business.service';
 import { BusinessDto } from './dto/business.dto';
@@ -32,6 +34,10 @@ import { BusinessAccountGuard } from './guards/business-account.guard';
  */
 @ApiTags('Business')
 @ApiBearerAuth()
+@ApiUnauthorizedEnvelope()
+@ApiForbiddenEnvelope(
+  'The caller is not a BUSINESS account, or the business belongs to another owner.',
+)
 @UseGuards(JwtAuthGuard, BusinessAccountGuard)
 @Controller('business')
 export class BusinessController {
@@ -43,7 +49,8 @@ export class BusinessController {
     description:
       'Created with status = DRAFT and owned by the caller. `type` must exist in the catalog and is immutable afterwards. Requires a verified phone (D1).',
   })
-  @ApiCreatedResponse({ type: BusinessDto })
+  @ApiCreatedEnvelope(BusinessDto)
+  @ApiValidationEnvelope('Invalid body, unknown `type`, or the phone is not verified.')
   async create(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: CreateBusinessDto,
@@ -54,7 +61,7 @@ export class BusinessController {
 
   @Get('my')
   @ApiOperation({ summary: "List the caller's businesses (archived excluded)" })
-  @ApiOkResponse({ type: [BusinessDto] })
+  @ApiOkEnvelope([BusinessDto])
   async getMy(@CurrentUser() user: AuthenticatedUser): Promise<BusinessDto[]> {
     const businesses = await this.businessService.getMyBusinesses(user);
     return businesses.map(BusinessDto.fromDomain);
@@ -63,7 +70,12 @@ export class BusinessController {
   @Get(':id')
   @ApiOperation({ summary: 'Get a single business (owner only)' })
   @ApiParam({ name: 'id', description: 'Business id' })
-  @ApiOkResponse({ type: BusinessDto })
+  @ApiOkEnvelope(BusinessDto)
+  @ApiNotFoundEnvelope(
+    ERROR_CODE.BUSINESS_NOT_FOUND,
+    'No business with this id.',
+    'Biznes topilmadi',
+  )
   async getById(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
@@ -78,7 +90,15 @@ export class BusinessController {
     description: '`type` is immutable — a differing value returns BUSINESS_TYPE_IMMUTABLE.',
   })
   @ApiParam({ name: 'id', description: 'Business id' })
-  @ApiOkResponse({ type: BusinessDto })
+  @ApiOkEnvelope(BusinessDto)
+  @ApiNotFoundEnvelope(
+    ERROR_CODE.BUSINESS_NOT_FOUND,
+    'No business with this id.',
+    'Biznes topilmadi',
+  )
+  @ApiValidationEnvelope(
+    'Invalid body, or `type` differs from the stored one (`BUSINESS_TYPE_IMMUTABLE`).',
+  )
   async update(
     @CurrentUser() user: AuthenticatedUser,
     @Param('id') id: string,
@@ -96,7 +116,12 @@ export class BusinessController {
       'Soft-delete: the business and all its listings become ARCHIVED. `result` is null.',
   })
   @ApiParam({ name: 'id', description: 'Business id' })
-  @ApiOkResponse({ description: 'Archived; `result` is null.' })
+  @ApiOkEnvelope(undefined, 'Archived; `result` is null.')
+  @ApiNotFoundEnvelope(
+    ERROR_CODE.BUSINESS_NOT_FOUND,
+    'No business with this id.',
+    'Biznes topilmadi',
+  )
   async archive(@CurrentUser() user: AuthenticatedUser, @Param('id') id: string): Promise<void> {
     await this.businessService.archive(user, id);
   }

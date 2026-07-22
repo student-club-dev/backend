@@ -63,12 +63,59 @@ async function bootstrap(): Promise<void> {
 
   const swaggerConfig = new DocumentBuilder()
     .setTitle('ElonUz API')
-    .setDescription('Student discounts platform — backend')
+    .setDescription(
+      [
+        'Student discounts platform — backend.',
+        '',
+        `All endpoints are served under \`/${prefix}\` and every response — success **and** error — uses the same envelope:`,
+        '',
+        '```jsonc',
+        '{ "success": true,  "status": 200, "code": null, "message": "OK",',
+        '  "result": <payload>, "error": null }',
+        '',
+        '{ "success": false, "status": 404, "code": null, "message": "Biznes topilmadi",',
+        '  "result": null,',
+        '  "error": { "code": "BUSINESS_NOT_FOUND", "message": "Biznes topilmadi", "fields": {} } }',
+        '```',
+        '',
+        'The HTTP status code and the `status` field are always equal. `message` is user-facing Uzbek',
+        'text. On 422 the per-field messages are in `error.fields`. Money is an integer number of',
+        'so\'m (`currency: "UZS"`); dates are ISO-8601.',
+        '',
+        'Send the access token as `Authorization: Bearer <token>`. On `TOKEN_EXPIRED`, refresh and retry.',
+      ].join('\n'),
+    )
     .setVersion('1.0')
-    .addBearerAuth()
+    .addBearerAuth({
+      type: 'http',
+      scheme: 'bearer',
+      bearerFormat: 'JWT',
+      description: 'JWT access token issued by `/auth/login`, `/auth/register` or `/auth/refresh`.',
+    })
+    // Declared order drives the order of the groups in the UI.
+    .addTag('Auth — Student', 'Student app: register, login, OAuth, refresh, logout')
+    .addTag('Auth — Student OTP', 'Student app: SMS OTP request / verify')
+    .addTag('Auth — Student Password', 'Student app: set, forgot and reset password')
+    .addTag('Auth — Student Sessions', 'Student app: active sessions and revocation')
+    .addTag('Auth — Business', 'Business app: register, login, OAuth, refresh, logout')
+    .addTag('Auth — Business OTP', 'Business app: SMS OTP request / verify')
+    .addTag('Auth — Business Password', 'Business app: set, forgot and reset password')
+    .addTag('Auth — Business Sessions', 'Business app: active sessions and revocation')
+    .addTag('Profiles', 'The signed-in account’s profile')
+    .addTag('Business', 'Owner-side business CRUD')
+    .addTag('Catalog', 'Business types, categories and their attribute schemas')
+    .addTag('Branches', 'Branches of a business: location, working hours, delivery')
+    .addTag('Trade Centers', 'Trade centres a branch can be placed in')
+    .addTag('Listings', 'Discounted and regular offers')
+    .addTag('Geo', 'Regions, districts and geocoding')
+    .addTag('Media', 'Image upload')
+    .addTag('Admin — Business Types', 'Admin-only catalog maintenance (`X-Admin-Key`)')
+    .addTag('Health', 'Liveness probe')
     .build();
   const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup(`${prefix}/docs`, app, document);
+  SwaggerModule.setup('docs', app, document, {
+    swaggerOptions: { persistAuthorization: true },
+  });
 
   await app.listen(port);
 }

@@ -1,5 +1,7 @@
 import { Controller, Get, Param, Query } from '@nestjs/common';
-import { ApiOkResponse, ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { ERROR_CODE } from '../../../common/errors/error-code';
+import { ApiNotFoundEnvelope, ApiOkEnvelope } from '../../../common/swagger/api-envelope.decorator';
 import { CatalogService } from '../application/catalog.service';
 import { Gender } from '../domain/enums/gender.enum';
 import { BusinessTypeInfoDto } from './dto/business-type-info.dto';
@@ -7,7 +9,7 @@ import { CategoryDto } from './dto/category.dto';
 import { GenderQueryDto } from './dto/gender-query.dto';
 
 /** Public catalog endpoints (static reference data — no auth). Served under the `/v1` prefix. */
-@ApiTags('Business')
+@ApiTags('Catalog')
 @Controller('business/types')
 export class CatalogController {
   constructor(private readonly catalogService: CatalogService) {}
@@ -24,7 +26,7 @@ export class CatalogController {
     required: false,
     description: 'User gender — filters the list of types. All types are returned when omitted.',
   })
-  @ApiOkResponse({ type: [BusinessTypeInfoDto] })
+  @ApiOkEnvelope([BusinessTypeInfoDto])
   async getBusinessTypes(@Query() query: GenderQueryDto): Promise<BusinessTypeInfoDto[]> {
     const types = await this.catalogService.getBusinessTypes(query.gender ?? null);
     return types.map(BusinessTypeInfoDto.fromDomain);
@@ -43,7 +45,12 @@ export class CatalogController {
     required: false,
     description: 'Gender-specific categories for CLOTHING. Ignored for other types.',
   })
-  @ApiOkResponse({ type: [CategoryDto] })
+  @ApiOkEnvelope([CategoryDto])
+  @ApiNotFoundEnvelope(
+    ERROR_CODE.NOT_FOUND,
+    'No business type with this key.',
+    'Biznes turi topilmadi',
+  )
   async getCategories(
     @Param('type') type: string,
     @Query() query: GenderQueryDto,

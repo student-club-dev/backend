@@ -1,5 +1,7 @@
 import { Controller, Get, Query } from '@nestjs/common';
-import { ApiOkResponse, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
+import { ERROR_CODE } from '../../../common/errors/error-code';
+import { ApiNotFoundEnvelope, ApiOkEnvelope } from '../../../common/swagger/api-envelope.decorator';
 import { GeoService } from '../application/geo.service';
 import { DistrictQueryDto } from './dto/district-query.dto';
 import { DistrictDto } from './dto/district.dto';
@@ -18,10 +20,12 @@ export class DistrictsController {
   })
   @ApiQuery({
     name: 'regionId',
+    type: String,
     required: false,
     description: 'Filter by region. Omit to return all districts.',
   })
-  @ApiOkResponse({ type: [DistrictDto] })
+  @ApiOkEnvelope([DistrictDto])
+  @ApiNotFoundEnvelope(ERROR_CODE.NOT_FOUND, 'Unknown `regionId`.', 'Viloyat topilmadi')
   async getDistricts(@Query() query: DistrictQueryDto): Promise<DistrictDto[]> {
     const districts = await this.geoService.getDistricts(query.regionId ?? null);
     return districts.map(DistrictDto.fromDomain);
