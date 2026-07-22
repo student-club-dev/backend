@@ -6,5 +6,6 @@ coverage
 .env.*
 !.env.example
 *.log
-docs
+# NOTE: `docs` is NOT ignored — prisma/seed.ts reads docs/api/provider/catalog-seed.json.
+# It is only ever copied into the discarded build stage; the runtime image never gets it.
 tests

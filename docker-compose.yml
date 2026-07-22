@@ -22,6 +22,29 @@ services:
     volumes:
       - elonuz-redis-data:/data
 
+  # One-shot: applies migrations and seeds the catalog, then exits. Built from the `build`
+  # stage because the runtime image installs with --omit=dev and so has neither the Prisma
+  # CLI nor ts-node. Running it as its own service also keeps migrations to a single run,
+  # independent of how many backend replicas start.
+  migrate:
+    build:
+      context: .
+      target: build
+    container_name: elonuz-migrate
+    command: sh -c "npx prisma migrate deploy && npx prisma db seed"
+    restart: 'no'
+
+    depends_on:
+      db:
+        condition: service_healthy
+
+    env_file:
+      - .env
+    # Overrides whatever .env says: inside the compose network the database is `db`,
+    # never localhost. `environment` takes precedence over `env_file`.
+    environment:
+      DATABASE_URL: postgresql://elonuz:elonuz@db:5432/elonuz?schema=public
+
   backend:
     build: .
     container_name: elonuz-backend
@@ -32,9 +55,15 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+      migrate:
+        condition: service_completed_successfully
 
     env_file:
       - .env
+    # Same reason as above — service names, not localhost.
+    environment:
+      DATABASE_URL: postgresql://elonuz:elonuz@db:5432/elonuz?schema=public
+      REDIS_URL: redis://redis:6379
 
     ports:
       - '3000:3000'
