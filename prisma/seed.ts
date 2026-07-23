@@ -23,6 +23,7 @@ import {
 } from '@prisma/client';
 import { readFileSync } from 'fs';
 import { join } from 'path';
+import { assertUniqueSlugs, districtSlug, regionSlug } from './geo-slug';
 
 const prisma = new PrismaClient();
 
@@ -123,7 +124,8 @@ const TRADE_CENTERS: SeedTradeCenter[] = [
 ];
 
 // Raw shapes of the geo data files (prisma/data/uz-*.json). `name_oz`/`soato_id` are ignored
-// (no columns); `id`/`region_id` are numbers in the source and stringified into the PKs/FKs.
+// (no columns); the source `id`/`region_id` numbers are NOT used as PKs — ids are semantic slugs
+// derived from `name_uz` (see geo-slug.ts), matching the contract (e.g. TOSHKENT_SHAHRI, CHILONZOR).
 interface RawRegion {
   id: number;
   name_uz: string;
@@ -195,20 +197,30 @@ function loadGeo(): {
   const rawRegions = readJsonBom<RawRegion[]>(join(dataDir, 'uz-regions.json'));
   const rawDistricts = readJsonBom<RawDistrict[]>(join(dataDir, 'uz-districts.json'));
   const regions = rawRegions.map((r) => ({
-    id: String(r.id),
+    id: regionSlug(r.name_uz),
     nameUz: r.name_uz,
     nameRu: r.name_ru ?? null,
     centerLat: null,
     centerLng: null,
   }));
-  const districts = rawDistricts.map((d) => ({
-    id: String(d.id),
-    regionId: String(d.region_id),
-    nameUz: d.name_uz,
-    nameRu: d.name_ru ?? null,
-    centerLat: null,
-    centerLng: null,
-  }));
+  // District.regionId FK -> Region.id (slug). Map the source numeric region_id to the region slug.
+  const regionSlugByRawId = new Map(rawRegions.map((r) => [r.id, regionSlug(r.name_uz)]));
+  const districts = rawDistricts.map((d) => {
+    const regionId = regionSlugByRawId.get(d.region_id);
+    if (regionId === undefined) {
+      throw new Error(`uz-districts.json: "${d.name_uz}" has unknown region_id ${d.region_id}`);
+    }
+    return {
+      id: districtSlug(d.name_uz),
+      regionId,
+      nameUz: d.name_uz,
+      nameRu: d.name_ru ?? null,
+      centerLat: null,
+      centerLng: null,
+    };
+  });
+  assertUniqueSlugs('region', regions.map((r) => r.id));
+  assertUniqueSlugs('district', districts.map((d) => d.id));
   return { regions, districts };
 }
 
@@ -313,6 +325,11 @@ async function main(): Promise<void> {
 
     // 4. Geo — regions first (District.regionId FK -> Region). Upsert by id: idempotent and
     //    FK-safe (deleteMany would fail once Branches reference regions/districts).
+    //    Prune any id the current dataset no longer produces — this clears the old numeric-id rows
+    //    left by an earlier seed now that ids are slugs. Districts first (FK). Safe: a valid Branch
+    //    can only reference a currently seeded id, which is in the keep-set and so never pruned.
+    await tx.district.deleteMany({ where: { id: { notIn: geo.districts.map((d) => d.id) } } });
+    await tx.region.deleteMany({ where: { id: { notIn: geo.regions.map((r) => r.id) } } });
     for (const r of geo.regions) {
       const data = {
         nameUz: r.nameUz,
