@@ -7,6 +7,11 @@ services:
       POSTGRES_USER: elonuz
       POSTGRES_PASSWORD: elonuz
       POSTGRES_DB: elonuz
+    # Bound to 127.0.0.1 ONLY — Postgres is reachable from the server's loopback (for an SSH
+    # tunnel / admin GUI) but never from the public internet. Do NOT change to '5432:5432' or
+    # '0.0.0.0:...': that would expose elonuz:elonuz to the world.
+    ports:
+      - '127.0.0.1:5432:5432'
     volumes:
       - elonuz-db-data:/var/lib/postgresql/data
     healthcheck:
