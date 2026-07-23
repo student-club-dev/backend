@@ -5,16 +5,45 @@ import { ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { DocumentBuilder, SwaggerModule, type OpenAPIObject } from '@nestjs/swagger';
 import { ValidationError } from 'class-validator';
 import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 import { swaggerBasicAuth } from './common/middleware/swagger-basic-auth.middleware';
+import { filterOpenApiByTags } from './common/swagger/filter-openapi-by-tags';
 import { AppException } from './common/exceptions/app.exception';
 import { ERROR_CODE } from './common/errors/error-code';
 import type { Env } from './config/env';
+
+// Tags served in each per-app Swagger doc. The two mobile apps are generated from their own JSON, so
+// each doc carries only its account type's endpoints plus the shared ones (Profiles, Geo, Media).
+// `Health` and `Admin — Business Types` belong to neither app and are left out of both. Strings must
+// match the @ApiTags / DocumentBuilder.addTag names exactly — bootstrap asserts this at boot.
+const BUSINESS_DOC_TAGS = [
+  'Auth — Business',
+  'Auth — Business OTP',
+  'Auth — Business Password',
+  'Auth — Business Sessions',
+  'Business',
+  'Branches',
+  'Listings',
+  'Catalog',
+  'Trade Centers',
+  'Profiles',
+  'Geo',
+  'Media',
+];
+const STUDENT_DOC_TAGS = [
+  'Auth — Student',
+  'Auth — Student OTP',
+  'Auth — Student Password',
+  'Auth — Student Sessions',
+  'Profiles',
+  'Geo',
+  'Media',
+];
 
 // Money is stored as BigInt (integer so'm) but the contract sends it as a JSON number.
 (BigInt.prototype as unknown as { toJSON: () => number }).toJSON = function () {
@@ -88,8 +117,6 @@ async function bootstrap(): Promise<void> {
         'so\'m (`currency: "UZS"`); dates are ISO-8601.',
         '',
         'Send the access token as `Authorization: Bearer <token>`. On `TOKEN_EXPIRED`, refresh and retry.',
-        '',
-        `The full OpenAPI JSON (feed this to the mobile client codegen) is at [/${swaggerPath}/json](/${swaggerPath}/json).`,
       ].join('\n'),
     )
     .setVersion('1.0')
@@ -125,12 +152,48 @@ async function bootstrap(): Promise<void> {
   // keeping the JSON under `/${swaggerPath}/json` lets the browser reuse the same credentials.
   if (swaggerPassword || !isProd) {
     if (swaggerPassword) {
+      // One mount on `/${swaggerPath}` covers both sub-docs and their JSON.
       app.use(`/${swaggerPath}`, swaggerBasicAuth(swaggerUser, swaggerPassword));
     }
-    const document = SwaggerModule.createDocument(app, swaggerConfig);
-    SwaggerModule.setup(swaggerPath, app, document, {
-      jsonDocumentUrl: `${swaggerPath}/json`,
-      yamlDocumentUrl: `${swaggerPath}/yaml`,
+    const fullDocument = SwaggerModule.createDocument(app, swaggerConfig);
+
+    // Fail fast if a doc's tag list drifted from the actual @ApiTags / addTag names.
+    const knownTags = new Set((fullDocument.tags ?? []).map((tag) => tag.name));
+    for (const tag of [...BUSINESS_DOC_TAGS, ...STUDENT_DOC_TAGS]) {
+      if (!knownTags.has(tag)) {
+        throw new Error(`Swagger split references an unknown tag: "${tag}"`);
+      }
+    }
+
+    const commonDescription = fullDocument.info.description ?? '';
+    const withAppInfo = (doc: OpenAPIObject, title: string, jsonPath: string): OpenAPIObject => ({
+      ...doc,
+      info: {
+        ...doc.info,
+        title,
+        description: `${commonDescription}\n\nThe full OpenAPI JSON (feed this to the mobile client codegen) is at [${jsonPath}](${jsonPath}).`,
+      },
+    });
+
+    const businessDoc = withAppInfo(
+      filterOpenApiByTags(fullDocument, BUSINESS_DOC_TAGS),
+      'ElonUz — Business API',
+      `/${swaggerPath}/business/json`,
+    );
+    const studentDoc = withAppInfo(
+      filterOpenApiByTags(fullDocument, STUDENT_DOC_TAGS),
+      'ElonUz — Student API',
+      `/${swaggerPath}/student/json`,
+    );
+
+    SwaggerModule.setup(`${swaggerPath}/business`, app, businessDoc, {
+      jsonDocumentUrl: `${swaggerPath}/business/json`,
+      yamlDocumentUrl: `${swaggerPath}/business/yaml`,
+      swaggerOptions: { persistAuthorization: true },
+    });
+    SwaggerModule.setup(`${swaggerPath}/student`, app, studentDoc, {
+      jsonDocumentUrl: `${swaggerPath}/student/json`,
+      yamlDocumentUrl: `${swaggerPath}/student/yaml`,
       swaggerOptions: { persistAuthorization: true },
     });
   } else {
