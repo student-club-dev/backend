@@ -1,4 +1,5 @@
 import { Business, BusinessContacts } from './entities/business.entity';
+import { BusinessStatus } from './enums/business-status.enum';
 
 /** Injection token for the business repository port (bound to the Prisma impl in the module). */
 export const BUSINESS_REPOSITORY = Symbol('BUSINESS_REPOSITORY');
@@ -6,6 +7,7 @@ export const BUSINESS_REPOSITORY = Symbol('BUSINESS_REPOSITORY');
 /** Fields set when a business is created. `status` and `ownerId` are set by the service. */
 export interface CreateBusinessData {
   ownerId: string;
+  status: BusinessStatus;
   type: string;
   name: string;
   phone: string;

@@ -27,8 +27,12 @@ export class BusinessService {
   ) {}
 
   /**
-   * Creates a DRAFT business owned by the caller. Rejects an unknown `type` (422) and — per the
+   * Creates a business owned by the caller. Rejects an unknown `type` (422) and — per the
    * D1 phone-verification gate — an owner whose phone is not verified (403).
+   *
+   * MVP: new businesses are created APPROVED so owners can publish listings without waiting for
+   * moderation. TODO(post-MVP): create as DRAFT and add the submit → admin approve/reject flow
+   * (Level 2); changing APPROVED back to DRAFT below re-enables the BUSINESS_NOT_APPROVED gate.
    */
   async create(user: AuthenticatedUser, input: CreateBusinessInput): Promise<Business> {
     if (!(await this.catalog.typeExists(input.type))) {
@@ -39,6 +43,7 @@ export class BusinessService {
     await this.assertPhoneVerified(user.id);
     return this.businesses.create({
       ownerId: user.id,
+      status: BusinessStatus.APPROVED, // MVP auto-approve — see the TODO(post-MVP) above.
       type: input.type,
       name: input.name,
       phone: input.phone,

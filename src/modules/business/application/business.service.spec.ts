@@ -54,7 +54,7 @@ function createInput(overrides: Partial<CreateBusinessInput> = {}): CreateBusine
 function makeBusinesses(overrides: Partial<BusinessRepository> = {}): BusinessRepository {
   return {
     create: jest.fn(async (data) =>
-      business({ ownerId: data.ownerId, type: data.type, name: data.name }),
+      business({ ownerId: data.ownerId, type: data.type, name: data.name, status: data.status }),
     ),
     findById: jest.fn().mockResolvedValue(null),
     findManyByOwner: jest.fn().mockResolvedValue([]),
@@ -82,15 +82,20 @@ function makeService(
 
 describe('BusinessService', () => {
   describe('create', () => {
-    it('creates a DRAFT business owned by the caller when the type exists and the phone is verified', async () => {
+    it('creates an APPROVED business (MVP auto-approve) owned by the caller when the type exists and the phone is verified', async () => {
       const businesses = makeBusinesses();
       const service = makeService(businesses, makeOwners(true), makeCatalog(true));
 
       const result = await service.create(owner, createInput());
 
-      expect(result.status).toBe(BusinessStatus.DRAFT);
+      expect(result.status).toBe(BusinessStatus.APPROVED);
       expect(businesses.create).toHaveBeenCalledWith(
-        expect.objectContaining({ ownerId: 'owner-1', type: 'CAFE_RESTAURANT', name: 'Navruz' }),
+        expect.objectContaining({
+          ownerId: 'owner-1',
+          status: BusinessStatus.APPROVED,
+          type: 'CAFE_RESTAURANT',
+          name: 'Navruz',
+        }),
       );
     });
 

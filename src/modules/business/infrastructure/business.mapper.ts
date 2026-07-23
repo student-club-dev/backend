@@ -1,4 +1,8 @@
-import { Prisma, type Business as BusinessRow } from '@prisma/client';
+import {
+  Prisma,
+  BusinessStatus as PrismaBusinessStatus,
+  type Business as BusinessRow,
+} from '@prisma/client';
 import { CreateBusinessData, UpdateBusinessData } from '../domain/business.repository';
 import { Business, BusinessContacts } from '../domain/entities/business.entity';
 import { BusinessStatus } from '../domain/enums/business-status.enum';
@@ -35,6 +39,7 @@ export class BusinessMapper {
   static toCreateData(data: CreateBusinessData): Prisma.BusinessUncheckedCreateInput {
     return {
       ownerId: data.ownerId,
+      status: PrismaBusinessStatus[data.status],
       type: data.type,
       name: data.name,
       phone: data.phone,
