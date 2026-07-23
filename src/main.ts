@@ -43,6 +43,10 @@ async function bootstrap(): Promise<void> {
   const config = app.get<ConfigService<Env, true>>(ConfigService);
   const prefix = config.get('API_PREFIX', { infer: true });
   const port = config.get('PORT', { infer: true });
+  const swaggerPath = config.get('SWAGGER_PATH', { infer: true });
+  const swaggerUser = config.get('SWAGGER_USER', { infer: true });
+  const swaggerPassword = config.get('SWAGGER_PASSWORD', { infer: true });
+  const isProd = config.get('NODE_ENV', { infer: true }) === 'production';
 
   // Serve uploaded media from disk in dev (prod serves the same /uploads path via Nginx). Kept
   // OUTSIDE the global `/v1` prefix — useStaticAssets is not affected by setGlobalPrefix.
@@ -84,6 +88,8 @@ async function bootstrap(): Promise<void> {
         'so\'m (`currency: "UZS"`); dates are ISO-8601.',
         '',
         'Send the access token as `Authorization: Bearer <token>`. On `TOKEN_EXPIRED`, refresh and retry.',
+        '',
+        `The full OpenAPI JSON (feed this to the mobile client codegen) is at [/${swaggerPath}/json](/${swaggerPath}/json).`,
       ].join('\n'),
     )
     .setVersion('1.0')
@@ -113,10 +119,6 @@ async function bootstrap(): Promise<void> {
     .addTag('Admin — Business Types', 'Admin-only catalog maintenance (`X-Admin-Key`)')
     .addTag('Health', 'Liveness probe')
     .build();
-  const swaggerPath = config.get('SWAGGER_PATH', { infer: true });
-  const swaggerUser = config.get('SWAGGER_USER', { infer: true });
-  const swaggerPassword = config.get('SWAGGER_PASSWORD', { infer: true });
-  const isProd = config.get('NODE_ENV', { infer: true }) === 'production';
 
   // Expose the docs only when protected (a password is set) or outside production. When a password
   // is set, gate the UI + JSON + YAML with Basic auth before SwaggerModule registers those routes;
