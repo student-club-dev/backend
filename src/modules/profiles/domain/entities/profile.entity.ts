@@ -4,8 +4,9 @@ import { ProfileRole } from '../enums/profile-role.enum';
 
 /**
  * The authenticated account's own profile. One shape for both account types (D6): the
- * student-only fields (gender, universityId, universityEmail, birthYear, courseYear) are
- * always `null` for a business owner. `role` is derived from the account type by the mapper.
+ * university/course fields (universityId, universityEmail, birthYear, courseYear) are
+ * always `null` for a business owner. `gender` is carried by both. `role` is derived from
+ * the account type by the mapper.
  */
 export interface Profile {
   id: string;

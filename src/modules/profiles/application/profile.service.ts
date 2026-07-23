@@ -70,11 +70,12 @@ export class ProfileService {
       patch.phoneNumber = input.phoneNumber;
       patch.phoneVerified = false;
     }
-    // Student-only fields — silently ignored for a business owner (no error).
+    // Gender applies to both account types.
+    if (input.gender !== undefined) {
+      patch.gender = input.gender;
+    }
+    // University/course fields — student-only, silently ignored for a business owner (no error).
     if (type === AccountType.STUDENT) {
-      if (input.gender !== undefined) {
-        patch.gender = input.gender;
-      }
       if (input.universityId !== undefined) {
         patch.universityId = input.universityId;
       }

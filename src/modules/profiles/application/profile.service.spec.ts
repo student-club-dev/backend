@@ -136,7 +136,7 @@ describe('ProfileService', () => {
       expect(students.findByPhone).not.toHaveBeenCalled();
     });
 
-    it('ignores student-only fields for a business owner', async () => {
+    it('applies gender but ignores university/course fields for a business owner', async () => {
       const business = makeRepository({
         findById: jest.fn().mockResolvedValue(businessProfile()),
       });
@@ -150,7 +150,10 @@ describe('ProfileService', () => {
         courseYear: CourseYear.MASTER,
       });
 
-      expect(business.update).toHaveBeenCalledWith('biz-1', { firstName: 'Bek' });
+      expect(business.update).toHaveBeenCalledWith('biz-1', {
+        firstName: 'Bek',
+        gender: Gender.MALE,
+      });
     });
 
     it('applies student-only fields for a student', async () => {

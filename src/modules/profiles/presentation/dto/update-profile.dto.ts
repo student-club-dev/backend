@@ -9,7 +9,7 @@ import { ProfileRole } from '../../domain/enums/profile-role.enum';
  * UpdateProfileRequestDto — a partial update of the authenticated profile (matches elon-uz.json).
  * Every field is optional; an unset (or null) field is left unchanged. `role` is accepted for
  * contract compatibility but ignored — role is read-only, derived from the account type.
- * Student-only fields are ignored for a business owner.
+ * University/course fields are ignored for a business owner; `gender` applies to both.
  */
 export class UpdateProfileDto {
   @ApiPropertyOptional({ nullable: true })

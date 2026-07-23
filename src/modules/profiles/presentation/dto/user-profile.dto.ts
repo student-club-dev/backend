@@ -5,9 +5,9 @@ import { Gender } from '../../domain/enums/gender.enum';
 import { ProfileRole } from '../../domain/enums/profile-role.enum';
 
 /**
- * UserProfileDto — the authenticated account's profile (matches elon-uz.json). Student-only
- * fields (gender, universityId, universityEmail, birthYear, courseYear) are `null` for a
- * business owner.
+ * UserProfileDto — the authenticated account's profile (matches elon-uz.json). The
+ * university/course fields (universityId, universityEmail, birthYear, courseYear) are `null`
+ * for a business owner; `gender` is carried by both account types.
  */
 export class UserProfileDto {
   @ApiProperty({ nullable: true, example: 'Quvonchbek' })

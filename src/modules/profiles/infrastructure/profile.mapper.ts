@@ -56,8 +56,9 @@ export function toStudentProfile(row: Student): Profile {
 }
 
 /**
- * Maps a BusinessOwner Prisma row to the profile domain type (role = BUSINESS). Student-only
- * fields are `null` — the `business_owners` table does not have them.
+ * Maps a BusinessOwner Prisma row to the profile domain type (role = BUSINESS). Business owners
+ * carry `gender`; the university/course fields are `null` — the `business_owners` table has no
+ * such columns.
  */
 export function toBusinessProfile(row: BusinessOwner): Profile {
   return {
@@ -67,7 +68,7 @@ export function toBusinessProfile(row: BusinessOwner): Profile {
     lastName: row.lastName,
     phoneNumber: row.phoneNumber,
     avatarUrl: row.avatarUrl,
-    gender: null,
+    gender: row.gender === null ? null : GENDER_TO_DOMAIN[row.gender],
     universityId: null,
     universityEmail: null,
     birthYear: null,
@@ -96,9 +97,13 @@ export function toStudentUpdateData(patch: ProfilePatch): Prisma.StudentUpdateIn
   return data;
 }
 
-/** Builds the Prisma update payload for a BusinessOwner (shared identity fields only). */
+/** Builds the Prisma update payload for a BusinessOwner (shared identity fields + gender). */
 export function toBusinessUpdateData(patch: ProfilePatch): Prisma.BusinessOwnerUpdateInput {
-  return toSharedUpdateData(patch);
+  const data: Prisma.BusinessOwnerUpdateInput = { ...toSharedUpdateData(patch) };
+  if (patch.gender !== undefined) {
+    data.gender = GENDER_TO_PRISMA[patch.gender];
+  }
+  return data;
 }
 
 /** Identity fields common to both tables. */
