@@ -10,6 +10,11 @@ export const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3000),
   API_PREFIX: z.string().min(1).default('v1'),
 
+  // Pretty, human-readable logs via pino-pretty. LOCAL DEV ONLY: pino-pretty is a devDependency
+  // and is absent from the production Docker image, so this must stay off there (any deployment,
+  // including dev-mode containers, emits structured JSON). Off by default. See app.module.ts.
+  LOG_PRETTY: z.enum(['true', 'false']).default('false'),
+
   // Swagger docs. Served at `/${SWAGGER_PATH}` with the JSON at `/${SWAGGER_PATH}/json`. Protected by
   // HTTP Basic auth whenever SWAGGER_PASSWORD is set. In production the docs are NOT exposed at all
   // unless SWAGGER_PASSWORD is set — so a misconfigured prod never leaks the API surface unprotected.

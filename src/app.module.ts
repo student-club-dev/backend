@@ -31,8 +31,11 @@ import { TradeCentersModule } from './modules/trade-centers/trade-centers.module
         },
         autoLogging: true,
         redact: ['req.headers.authorization', 'req.body.password', 'req.body.otp'],
+        // Pretty logs are opt-in via LOG_PRETTY, NOT tied to NODE_ENV: pino-pretty is a
+        // devDependency absent from the prod image, so a dev-mode container (NODE_ENV=development
+        // with --omit=dev deps) would otherwise crash here. Deployments emit structured JSON.
         transport:
-          process.env.NODE_ENV !== 'production'
+          process.env.LOG_PRETTY === 'true'
             ? { target: 'pino-pretty', options: { singleLine: true } }
             : undefined,
       },
