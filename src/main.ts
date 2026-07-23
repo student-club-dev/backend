@@ -11,6 +11,7 @@ import { Logger } from 'nestjs-pino';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
+import { swaggerBasicAuth } from './common/middleware/swagger-basic-auth.middleware';
 import { AppException } from './common/exceptions/app.exception';
 import { ERROR_CODE } from './common/errors/error-code';
 import type { Env } from './config/env';
@@ -112,10 +113,29 @@ async function bootstrap(): Promise<void> {
     .addTag('Admin — Business Types', 'Admin-only catalog maintenance (`X-Admin-Key`)')
     .addTag('Health', 'Liveness probe')
     .build();
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('docs', app, document, {
-    swaggerOptions: { persistAuthorization: true },
-  });
+  const swaggerPath = config.get('SWAGGER_PATH', { infer: true });
+  const swaggerUser = config.get('SWAGGER_USER', { infer: true });
+  const swaggerPassword = config.get('SWAGGER_PASSWORD', { infer: true });
+  const isProd = config.get('NODE_ENV', { infer: true }) === 'production';
+
+  // Expose the docs only when protected (a password is set) or outside production. When a password
+  // is set, gate the UI + JSON + YAML with Basic auth before SwaggerModule registers those routes;
+  // keeping the JSON under `/${swaggerPath}/json` lets the browser reuse the same credentials.
+  if (swaggerPassword || !isProd) {
+    if (swaggerPassword) {
+      app.use(`/${swaggerPath}`, swaggerBasicAuth(swaggerUser, swaggerPassword));
+    }
+    const document = SwaggerModule.createDocument(app, swaggerConfig);
+    SwaggerModule.setup(swaggerPath, app, document, {
+      jsonDocumentUrl: `${swaggerPath}/json`,
+      yamlDocumentUrl: `${swaggerPath}/yaml`,
+      swaggerOptions: { persistAuthorization: true },
+    });
+  } else {
+    app
+      .get(Logger)
+      .warn('Swagger docs are disabled in production (set SWAGGER_PASSWORD to enable).');
+  }
 
   await app.listen(port);
 }

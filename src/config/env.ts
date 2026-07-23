@@ -10,6 +10,13 @@ export const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(3000),
   API_PREFIX: z.string().min(1).default('v1'),
 
+  // Swagger docs. Served at `/${SWAGGER_PATH}` with the JSON at `/${SWAGGER_PATH}/json`. Protected by
+  // HTTP Basic auth whenever SWAGGER_PASSWORD is set. In production the docs are NOT exposed at all
+  // unless SWAGGER_PASSWORD is set — so a misconfigured prod never leaks the API surface unprotected.
+  SWAGGER_PATH: z.string().min(1).default('docs'),
+  SWAGGER_USER: z.string().min(1).default('admin'),
+  SWAGGER_PASSWORD: z.string().optional(),
+
   DATABASE_URL: z.string().url().optional(),
 
   JWT_ACCESS_SECRET: z.string().min(1).default('change-me-access'),
