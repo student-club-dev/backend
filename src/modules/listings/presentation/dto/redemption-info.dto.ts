@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsInt, IsOptional, IsString } from 'class-validator';
+import { Allow, IsEnum, IsInt, IsOptional, IsString } from 'class-validator';
 import { RedemptionInput } from '../../application/listings.io';
 import { ListingRedemption } from '../../domain/entities/listing.entity';
 import { RedemptionMethod } from '../../domain/enums/redemption-method.enum';
@@ -44,6 +44,7 @@ export class RedemptionInfoDto {
   totalLimit?: number | null;
 
   @ApiPropertyOptional({ format: 'int32', description: 'Computed by the server' })
+  @Allow()
   usedCount?: number;
 
   toInput(): RedemptionInput {

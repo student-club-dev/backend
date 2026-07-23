@@ -1,5 +1,14 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsNumber, IsOptional, IsString, Length, Max, MaxLength, Min } from 'class-validator';
+import {
+  Allow,
+  IsNumber,
+  IsOptional,
+  IsString,
+  Length,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
 import { BranchLocation } from '../../domain/entities/branch.entity';
 
 /**
@@ -48,6 +57,7 @@ export class LocationDto {
     nullable: true,
     description: 'Computed by the server (7 characters ~150 m). Not accepted from the client.',
   })
+  @Allow()
   geohash?: string | null;
 
   @ApiPropertyOptional({ nullable: true })
