@@ -59,12 +59,30 @@ export const envSchema = z.object({
   // and PUBLIC_MEDIA_BASE_URL=https://api.studentclub.uz/uploads. Switching to S3/R2 is a storage
   // adapter swap, not a config-shape change.
   UPLOADS_DIR: z.string().min(1).default('./uploads'),
-  PUBLIC_MEDIA_BASE_URL: z.string().min(1).default('http://localhost:3000/uploads'),
+  // Baked into every image URL served to the mobile clients — MUST be a valid URL. `.url()` rejects
+  // a placeholder such as `https://<sening-domening>/uploads`; the prod localhost guard is below.
+  PUBLIC_MEDIA_BASE_URL: z.string().url().default('http://localhost:3000/uploads'),
 
   // Placeholder admin credential for the admin-only endpoints (business-type CRUD). Compared
   // against the `X-Admin-Key` header by AdminGuard. Unset → every admin request is rejected.
   ADMIN_API_KEY: z.string().optional(),
-});
+})
+  // Prod must serve media from a public URL, never the localhost dev default — otherwise every image
+  // URL handed to the mobile clients is unreachable. Mirrors the SMS/geocoder "no dev default in
+  // prod" guards. (`.url()` above already rejects a non-URL placeholder.)
+  .superRefine((env, ctx) => {
+    if (env.NODE_ENV === 'production') {
+      const host = new URL(env.PUBLIC_MEDIA_BASE_URL).hostname;
+      if (host === 'localhost' || host === '127.0.0.1') {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['PUBLIC_MEDIA_BASE_URL'],
+          message:
+            'must be a public URL in production, not localhost — e.g. https://api.studentclub.uz/uploads',
+        });
+      }
+    }
+  });
 
 export type Env = z.infer<typeof envSchema>;
 
