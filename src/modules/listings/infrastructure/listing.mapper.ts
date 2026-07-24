@@ -14,7 +14,7 @@ import { ListingStatus } from '../domain/enums/listing-status.enum';
 import { RedemptionMethod } from '../domain/enums/redemption-method.enum';
 import { RedemptionPeriod } from '../domain/enums/redemption-period.enum';
 import { SelectionType } from '../domain/enums/selection-type.enum';
-import { CreateListingData } from '../domain/listing.repository';
+import { CreateListingData, UpdateListingData } from '../domain/listing.repository';
 
 /**
  * The relations a listing is read with: its branch associations and its option groups (each with its
@@ -118,26 +118,73 @@ export class ListingMapper {
       optionGroups:
         data.optionGroups.length === 0
           ? undefined
-          : {
-              create: data.optionGroups.map((group) => ({
-                name: group.name,
-                selectionType: PrismaSelectionType[group.selectionType],
-                isRequired: group.isRequired,
-                minSelect: group.minSelect,
-                maxSelect: group.maxSelect,
-                sortOrder: group.sortOrder,
-                options: {
-                  create: group.options.map((option) => ({
-                    name: option.name,
-                    priceDelta: BigInt(option.priceDelta),
-                    isAvailable: option.isAvailable,
-                    sortOrder: option.sortOrder,
-                  })),
-                },
-              })),
-            },
+          : { create: optionGroupsCreate(data.optionGroups) },
     };
   }
+
+  /**
+   * Editable listing columns → Prisma update payload. Replaces the ListingBranch and OptionGroup
+   * rows wholesale (`deleteMany` then `create`; options cascade-delete with their group). Never
+   * writes `status`, `usedCount`, `viewsCount` or `currency` — those are preserved.
+   */
+  static toUpdateData(data: UpdateListingData): Prisma.ListingUncheckedUpdateInput {
+    return {
+      categoryKey: data.categoryKey,
+      customCategoryName: data.customCategoryName,
+      title: data.title,
+      description: data.description,
+      images: data.images,
+      priceUnit: PrismaPriceUnit[data.priceUnit],
+      originalPrice: BigInt(data.originalPrice),
+      discountType: PrismaDiscountType[data.discount.type],
+      discountValue: BigInt(data.discount.value),
+      finalPrice: BigInt(data.discount.finalPrice),
+      discountConditions: data.discount.conditions,
+      appliesToOptions: data.discount.appliesToOptions,
+      redemptionMethod: PrismaRedemptionMethod[data.redemption.method],
+      promoCode: data.redemption.promoCode,
+      redemptionUrl: data.redemption.url,
+      perUserLimit: data.redemption.perUserLimit,
+      perUserPeriod:
+        data.redemption.perUserPeriod === null
+          ? null
+          : PrismaRedemptionPeriod[data.redemption.perUserPeriod],
+      totalLimit: data.redemption.totalLimit,
+      attributes: attributesToJson(data.attributes),
+      validFrom: data.validFrom,
+      validTo: data.validTo,
+      listingBranches: {
+        deleteMany: {},
+        create: data.branchIds.map((branchId) => ({ branchId })),
+      },
+      optionGroups: {
+        deleteMany: {},
+        create: optionGroupsCreate(data.optionGroups),
+      },
+    };
+  }
+}
+
+/** Prisma nested-create payload for a listing's option groups (each with its options). */
+function optionGroupsCreate(
+  groups: CreateListingData['optionGroups'],
+): Prisma.OptionGroupCreateWithoutListingInput[] {
+  return groups.map((group) => ({
+    name: group.name,
+    selectionType: PrismaSelectionType[group.selectionType],
+    isRequired: group.isRequired,
+    minSelect: group.minSelect,
+    maxSelect: group.maxSelect,
+    sortOrder: group.sortOrder,
+    options: {
+      create: group.options.map((option) => ({
+        name: option.name,
+        priceDelta: BigInt(option.priceDelta),
+        isAvailable: option.isAvailable,
+        sortOrder: option.sortOrder,
+      })),
+    },
+  }));
 }
 
 function toOptionGroup(group: OptionGroupRow): ListingOptionGroup {

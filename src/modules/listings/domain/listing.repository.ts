@@ -61,6 +61,30 @@ export interface SubmitTransitionData {
 }
 
 /**
+ * The editable columns of a listing (full-replace PUT). `businessId`, `currency`, `status`,
+ * `usedCount` and `viewsCount` are NOT changed by an edit — the owner updates content only, the
+ * server keeps ownership, counters and lifecycle. `discount.finalPrice` is server-recomputed;
+ * `branchIds` and `optionGroups` replace their rows wholesale.
+ */
+export interface UpdateListingData {
+  branchIds: string[];
+  categoryKey: string;
+  customCategoryName: string | null;
+  title: string;
+  description: string | null;
+  images: string[];
+  priceUnit: PriceUnit;
+  originalPrice: number;
+  discount: ListingDiscount;
+  /** Redemption config minus `usedCount` — the stored counter is preserved. */
+  redemption: Omit<ListingRedemption, 'usedCount'>;
+  validFrom: Date;
+  validTo: Date;
+  attributes: Record<string, string> | null;
+  optionGroups: CreateOptionGroupData[];
+}
+
+/**
  * Filters for a paginated, business-scoped listing query. `status`/`categoryKey` are `null` when the
  * client sent no filter; a `null` status excludes ARCHIVED (the soft-deleted state), an explicit one
  * (including ARCHIVED) matches exactly. `page` is 1-based.
@@ -100,4 +124,14 @@ export interface ListingRepository {
    * with the resolved snapshot (`branchIds`). Returns the updated aggregate.
    */
   submitTransition(id: string, data: SubmitTransitionData): Promise<Listing>;
+
+  /**
+   * Full-replace update of a listing's editable columns (branches and option groups replaced
+   * wholesale) in one transaction. Leaves `status`, `usedCount` and `viewsCount` untouched. Returns
+   * the updated aggregate.
+   */
+  update(id: string, data: UpdateListingData): Promise<Listing>;
+
+  /** Soft-delete: set the listing to ARCHIVED. */
+  archive(id: string): Promise<void>;
 }

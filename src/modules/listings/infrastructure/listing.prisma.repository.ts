@@ -8,6 +8,7 @@ import {
   ListingPageQuery,
   ListingRepository,
   SubmitTransitionData,
+  UpdateListingData,
 } from '../domain/listing.repository';
 import { LISTING_INCLUDE, ListingMapper } from './listing.mapper';
 
@@ -81,5 +82,29 @@ export class ListingPrismaRepository implements ListingRepository {
       });
     });
     return ListingMapper.toDomain(row);
+  }
+
+  /**
+   * Full-replace update of a listing's editable columns in one transaction — scalars plus a
+   * wholesale replace of its ListingBranch and OptionGroup rows (options cascade-delete with their
+   * group). `status`, `usedCount` and `viewsCount` are left untouched. Returns the updated aggregate.
+   */
+  async update(id: string, data: UpdateListingData): Promise<Listing> {
+    const row = await this.prisma.$transaction((tx) =>
+      tx.listing.update({
+        where: { id },
+        data: ListingMapper.toUpdateData(data),
+        include: LISTING_INCLUDE,
+      }),
+    );
+    return ListingMapper.toDomain(row);
+  }
+
+  /** Soft-delete: set the listing to ARCHIVED. */
+  async archive(id: string): Promise<void> {
+    await this.prisma.listing.update({
+      where: { id },
+      data: { status: PrismaListingStatus.ARCHIVED },
+    });
   }
 }

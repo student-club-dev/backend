@@ -9,6 +9,7 @@ import { CatalogModule } from '../catalog/catalog.module';
 import { ListingsService } from './application/listings.service';
 import { LISTING_REPOSITORY } from './domain/listing.repository';
 import { ListingPrismaRepository } from './infrastructure/listing.prisma.repository';
+import { ListingController } from './presentation/listing.controller';
 import { ListingSubmitController } from './presentation/listing-submit.controller';
 import { ListingsController } from './presentation/listings.controller';
 
@@ -20,7 +21,7 @@ import { ListingsController } from './presentation/listings.controller';
  */
 @Module({
   imports: [PrismaModule, JwtModule.register({}), BusinessModule, CatalogModule, BranchesModule],
-  controllers: [ListingsController, ListingSubmitController],
+  controllers: [ListingsController, ListingController, ListingSubmitController],
   providers: [
     ListingsService,
     JwtAuthGuard,

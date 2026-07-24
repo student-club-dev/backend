@@ -23,6 +23,7 @@ import {
   ListingPageQuery,
   ListingRepository,
   SubmitTransitionData,
+  UpdateListingData,
 } from '../domain/listing.repository';
 import { CreateListingInput } from './listings.io';
 import { ListingsService } from './listings.service';
@@ -120,6 +121,8 @@ function makeListings(): ListingRepository {
     findById: jest.fn().mockResolvedValue(null),
     findPageByBusiness: jest.fn().mockResolvedValue({ items: [], total: 0 }),
     submitTransition: jest.fn(),
+    update: jest.fn(),
+    archive: jest.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -177,6 +180,24 @@ function makeSubmitListings(listing: Listing | null): ListingRepository {
       status: ListingStatus.PENDING_REVIEW,
       branchIds: data.branchIds ?? (listing as Listing).branchIds,
     })),
+    update: jest.fn(),
+    archive: jest.fn().mockResolvedValue(undefined),
+  };
+}
+
+/** Listings repo for update/archive: `findById` returns the given listing; writes echo it back. */
+function makeByIdListings(listing: Listing | null): ListingRepository {
+  return {
+    create: jest.fn(),
+    findById: jest.fn().mockResolvedValue(listing),
+    findPageByBusiness: jest.fn().mockResolvedValue({ items: [], total: 0 }),
+    submitTransition: jest.fn(),
+    update: jest.fn(async (_id: string, data: UpdateListingData) => ({
+      ...(listing as Listing),
+      title: data.title,
+      discount: data.discount,
+    })),
+    archive: jest.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -874,6 +895,121 @@ describe('ListingsService', () => {
         status: 403,
       });
       expect(listings.findPageByBusiness).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('update', () => {
+    it('re-validates and persists the edit for a listing the caller owns, recomputing finalPrice', async () => {
+      const listings = makeByIdListings(draftListing());
+      const service = makeService({ listings });
+
+      const result = await service.update(owner, 'lst-1', createInput({ title: 'Yangi sarlavha' }));
+
+      expect(listings.update).toHaveBeenCalledWith(
+        'lst-1',
+        expect.objectContaining({
+          title: 'Yangi sarlavha',
+          discount: expect.objectContaining({ finalPrice: 44_000 }),
+        }),
+      );
+      expect(result.id).toBe('lst-1');
+    });
+
+    it('never writes status, currency or usedCount (the owner edits content, not lifecycle)', async () => {
+      const listings = makeByIdListings(draftListing());
+      const service = makeService({ listings });
+
+      await service.update(owner, 'lst-1', createInput());
+
+      const [, data] = (listings.update as jest.Mock).mock.calls[0];
+      expect(data).not.toHaveProperty('status');
+      expect(data).not.toHaveProperty('currency');
+      expect(data.redemption).not.toHaveProperty('usedCount');
+    });
+
+    it('throws 404 LISTING_NOT_FOUND when the listing does not exist', async () => {
+      const service = makeService({ listings: makeByIdListings(null) });
+
+      await expect(service.update(owner, 'lst-1', createInput())).rejects.toMatchObject({
+        code: ERROR_CODE.LISTING_NOT_FOUND,
+        status: 404,
+      });
+    });
+
+    it('throws 404 LISTING_NOT_FOUND when the listing is ARCHIVED (treated as deleted)', async () => {
+      const listings = makeByIdListings(draftListing({ status: ListingStatus.ARCHIVED }));
+      const service = makeService({ listings });
+
+      await expect(service.update(owner, 'lst-1', createInput())).rejects.toMatchObject({
+        code: ERROR_CODE.LISTING_NOT_FOUND,
+        status: 404,
+      });
+      expect(listings.update).not.toHaveBeenCalled();
+    });
+
+    it('throws 403 FORBIDDEN when the listing belongs to another owner', async () => {
+      const listings = makeByIdListings(draftListing());
+      const service = makeService({ listings, businesses: makeBusinesses('other-owner') });
+
+      await expect(service.update(owner, 'lst-1', createInput())).rejects.toMatchObject({
+        code: ERROR_CODE.FORBIDDEN,
+        status: 403,
+      });
+      expect(listings.update).not.toHaveBeenCalled();
+    });
+
+    it('throws 422 DISCOUNT_TOO_HIGH when the edited discount exceeds 90%', async () => {
+      const listings = makeByIdListings(draftListing());
+      const service = makeService({ listings });
+
+      await expect(
+        service.update(
+          owner,
+          'lst-1',
+          createInput({
+            discount: {
+              type: DiscountType.PERCENT,
+              value: 95,
+              conditions: null,
+              appliesToOptions: false,
+            },
+          }),
+        ),
+      ).rejects.toMatchObject({ code: ERROR_CODE.DISCOUNT_TOO_HIGH, status: 422 });
+      expect(listings.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('archive', () => {
+    it('archives a listing the caller owns', async () => {
+      const listings = makeByIdListings(draftListing());
+      const service = makeService({ listings });
+
+      await service.archive(owner, 'lst-1');
+
+      expect(listings.archive).toHaveBeenCalledWith('lst-1');
+    });
+
+    it('throws 404 LISTING_NOT_FOUND when the listing is already ARCHIVED', async () => {
+      const listings = makeByIdListings(draftListing({ status: ListingStatus.ARCHIVED }));
+      const service = makeService({ listings });
+
+      await expect(service.archive(owner, 'lst-1')).rejects.toMatchObject({
+        code: ERROR_CODE.LISTING_NOT_FOUND,
+        status: 404,
+      });
+      expect(listings.archive).not.toHaveBeenCalled();
+    });
+
+    it('throws 403 FORBIDDEN when the listing belongs to another owner', async () => {
+      const listings = makeByIdListings(draftListing());
+      const service = makeService({ listings, businesses: makeBusinesses('other-owner') });
+
+      await expect(service.archive(owner, 'lst-1')).rejects.toMatchObject({
+        code: ERROR_CODE.FORBIDDEN,
+        status: 403,
+      });
+      expect(listings.archive).not.toHaveBeenCalled();
     });
   });
 });

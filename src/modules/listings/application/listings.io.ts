@@ -62,3 +62,9 @@ export interface CreateListingInput {
   attributes: Record<string, string> | null;
   optionGroups: OptionGroupInput[];
 }
+
+/**
+ * Normalised edit-listing payload (from UpdateListingRequestDto). Same shape as create minus
+ * `currency` — currency is immutable on edit; the stored value is kept.
+ */
+export type UpdateListingInput = Omit<CreateListingInput, 'currency'>;

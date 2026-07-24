@@ -24,7 +24,12 @@ import {
 import { computeFinalPrice } from '../domain/pricing/final-price';
 import { REGULAR_KEY, REGULAR_VALUE } from '../domain/reserved-attribute-keys';
 import { validateAttributes } from './attribute-validation';
-import { CreateListingInput, OptionGroupInput, RedemptionInput } from './listings.io';
+import {
+  CreateListingInput,
+  OptionGroupInput,
+  RedemptionInput,
+  UpdateListingInput,
+} from './listings.io';
 
 const MIN_TITLE_LENGTH = 3;
 const MAX_TITLE_LENGTH = 120;
@@ -58,38 +63,12 @@ export class ListingsService {
   ): Promise<Listing> {
     // 1. Ownership — the business must exist (404) and belong to the caller (403). A draft may be
     //    created before the business is APPROVED.
-    const summary = await this.businesses.findSummaryById(businessId);
-    if (summary === null) {
-      throw AppException.notFound(ERROR_CODE.BUSINESS_NOT_FOUND, 'Biznes topilmadi');
-    }
-    if (summary.ownerId !== user.id) {
-      throw AppException.forbidden();
-    }
+    const summary = await this.assertBusinessOwned(user, businessId);
 
-    // 2. Category must be in the catalog for the business type; OTHER requires a custom name.
-    await this.assertCategory(summary.type, input);
+    // 2. Shared create/edit validation (§10) → normalised discount + option groups.
+    const { discount, optionGroups } = await this.validateAndResolve(summary, input);
 
-    // 3. Scalar draft rules.
-    this.assertScalars(input);
-
-    // 4. Pricing / regular normalisation (§4/§5).
-    const isRegular = input.attributes?.[REGULAR_KEY] === REGULAR_VALUE;
-    const discount = this.resolveDiscount(input, isRegular);
-
-    // 5. Attributes — full strict against the catalog schema (§6).
-    const specs = await this.catalog.findAttributeSpecs(summary.type, input.categoryKey);
-    validateAttributes(input.attributes, specs);
-
-    // 6. Redemption configuration (§7).
-    this.assertRedemption(input.redemption);
-
-    // 7. Option groups (§8).
-    const optionGroups = this.resolveOptionGroups(input.optionGroups);
-
-    // 8. branchIds ownership (§9) — empty means "not specified yet".
-    await this.assertBranchIds(businessId, input.branchIds);
-
-    // 9. Persist the whole aggregate atomically as DRAFT.
+    // 3. Persist the whole aggregate atomically as DRAFT.
     return this.listings.create({
       businessId,
       branchIds: input.branchIds,
@@ -125,8 +104,11 @@ export class ListingsService {
     return this.listings.findPageByBusiness(businessId, query);
   }
 
-  /** The business must exist (404) and belong to the caller (403). */
-  private async assertBusinessOwned(user: AuthenticatedUser, businessId: string): Promise<void> {
+  /** The business must exist (404) and belong to the caller (403). Returns its summary. */
+  private async assertBusinessOwned(
+    user: AuthenticatedUser,
+    businessId: string,
+  ): Promise<BusinessSummary> {
     const summary = await this.businesses.findSummaryById(businessId);
     if (summary === null) {
       throw AppException.notFound(ERROR_CODE.BUSINESS_NOT_FOUND, 'Biznes topilmadi');
@@ -134,6 +116,89 @@ export class ListingsService {
     if (summary.ownerId !== user.id) {
       throw AppException.forbidden();
     }
+    return summary;
+  }
+
+  /**
+   * Full-replace edit of a listing the caller owns. The listing must exist and not be ARCHIVED
+   * (404), and its business must belong to the caller (403). The payload is re-validated exactly
+   * like create — so the stored listing stays internally valid — and `finalPrice` is recomputed;
+   * `status`, `currency` and the counters are preserved (the owner edits content, not lifecycle).
+   */
+  async update(
+    user: AuthenticatedUser,
+    listingId: string,
+    input: UpdateListingInput,
+  ): Promise<Listing> {
+    const { summary } = await this.loadOwnedListing(user, listingId);
+    const { discount, optionGroups } = await this.validateAndResolve(summary, input);
+    return this.listings.update(listingId, {
+      branchIds: input.branchIds,
+      categoryKey: input.categoryKey,
+      customCategoryName: input.customCategoryName,
+      title: input.title,
+      description: input.description,
+      images: input.images,
+      priceUnit: input.priceUnit,
+      originalPrice: input.originalPrice,
+      discount,
+      redemption: input.redemption,
+      validFrom: input.validFrom,
+      validTo: input.validTo,
+      attributes: input.attributes,
+      optionGroups,
+    });
+  }
+
+  /** Soft-deletes (ARCHIVED) a listing the caller owns. */
+  async archive(user: AuthenticatedUser, listingId: string): Promise<void> {
+    await this.loadOwnedListing(user, listingId);
+    await this.listings.archive(listingId);
+  }
+
+  /**
+   * Loads a listing for a write: it must exist and not be ARCHIVED (else 404 — an archived listing
+   * is treated as deleted, mirroring business archive), and its business must belong to the caller
+   * (else 403). Returns the listing and its business summary.
+   */
+  private async loadOwnedListing(
+    user: AuthenticatedUser,
+    listingId: string,
+  ): Promise<{ listing: Listing; summary: BusinessSummary }> {
+    const listing = await this.listings.findById(listingId);
+    if (listing === null || listing.status === ListingStatus.ARCHIVED) {
+      throw AppException.notFound(ERROR_CODE.LISTING_NOT_FOUND, 'E’lon topilmadi');
+    }
+    const summary = await this.businesses.findSummaryById(listing.businessId);
+    if (summary === null) {
+      throw AppException.notFound(ERROR_CODE.BUSINESS_NOT_FOUND, 'Biznes topilmadi');
+    }
+    if (summary.ownerId !== user.id) {
+      throw AppException.forbidden();
+    }
+    return { listing, summary };
+  }
+
+  /**
+   * Shared create/edit validation (LISTINGS.md §10): category + custom-name, scalar rules, pricing
+   * (§4/§5), attributes against the catalog schema (§6), redemption (§7), option groups (§8) and
+   * branchIds ownership (§9). Returns the normalised discount (with the server-computed finalPrice)
+   * and the option groups to persist.
+   */
+  private async validateAndResolve(
+    summary: BusinessSummary,
+    input: UpdateListingInput,
+  ): Promise<{ discount: ListingDiscount; optionGroups: CreateOptionGroupData[] }> {
+    await this.assertCategory(summary.type, input);
+    this.assertScalars(input);
+    const isRegular = input.attributes?.[REGULAR_KEY] === REGULAR_VALUE;
+    const discount = this.resolveDiscount(input, isRegular);
+    const specs = await this.catalog.findAttributeSpecs(summary.type, input.categoryKey);
+    validateAttributes(input.attributes, specs);
+    this.assertRedemption(input.redemption);
+    const optionGroups = this.resolveOptionGroups(input.optionGroups);
+    await this.assertBranchIds(summary.id, input.branchIds);
+    return { discount, optionGroups };
   }
 
   /**
@@ -278,7 +343,7 @@ export class ListingsService {
   }
 
   /** §10: `categoryKey` must be in the catalog for the type; OTHER requires `customCategoryName`. */
-  private async assertCategory(type: string, input: CreateListingInput): Promise<void> {
+  private async assertCategory(type: string, input: UpdateListingInput): Promise<void> {
     await this.assertCategoryInCatalog(type, input.categoryKey);
     if (
       input.categoryKey === OTHER_CATEGORY_KEY &&
@@ -289,7 +354,7 @@ export class ListingsService {
   }
 
   /** §10: title length, positive price, image count and the validity window. */
-  private assertScalars(input: CreateListingInput): void {
+  private assertScalars(input: UpdateListingInput): void {
     if (input.title.length < MIN_TITLE_LENGTH || input.title.length > MAX_TITLE_LENGTH) {
       throw AppException.validation({
         title: `Sarlavha ${MIN_TITLE_LENGTH}-${MAX_TITLE_LENGTH} belgidan iborat bo‘lishi kerak`,
@@ -318,7 +383,7 @@ export class ListingsService {
    * a canonical no-discount form and skip the pricing gates; others are gated on the discount value
    * (PERCENT ≤ 90) and require `finalPrice < originalPrice` (all types except FREE_ITEM).
    */
-  private resolveDiscount(input: CreateListingInput, isRegular: boolean): ListingDiscount {
+  private resolveDiscount(input: UpdateListingInput, isRegular: boolean): ListingDiscount {
     if (isRegular) {
       return {
         type: DiscountType.PERCENT,
