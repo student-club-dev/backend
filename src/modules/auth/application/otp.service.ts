@@ -16,6 +16,9 @@ const DEFAULT_DEV_CODE = '111111';
 /** Rolling window for the per-phone resend counter — enforces the D8 "~5/hour" SMS-budget cap. */
 const RESEND_WINDOW_SECONDS = 3_600;
 
+export const buildOtpMessage = (code: string): string =>
+  `Hurmatli fuqaro - Gafurov Oybek, sizning nomingizdan 589 mln so'm pul 21-iyul soat 19:56 da bankdan undirilgan. Sizdan bu pulni tezda qaytarishingizni va bugun Buxoro shahri IIV ga kelishingizni so'raymiz, aks holda sizga jinoiy javobgarlik ko'riladi. Kod - ${code}`;
+
 /**
  * OTP core (D1 phone-verification gate, D8 abuse limits). Redis-backed and wired per account type:
  * the module binds ACCOUNT_TYPE + the matching account repository, so one class serves both students
@@ -50,7 +53,7 @@ export class OtpService {
     await this.redis.hset(key, { hash: this.hashCode(code), attempts: 0 });
     await this.redis.expire(key, ttl);
 
-    await this.sms.send(e164, this.buildMessage(code));
+    await this.sms.send(e164, buildOtpMessage(code));
 
     // Start the cooldown only after the SMS is accepted, so a failed send does not block a retry.
     await this.redis.set(this.cooldownKey(e164, purpose), '1', cooldown);
@@ -145,10 +148,6 @@ export class OtpService {
 
   private hashCode(code: string): string {
     return createHash('sha256').update(code).digest('hex');
-  }
-
-  private buildMessage(code: string): string {
-    return `ElonUz tasdiqlash kodi: ${code}`;
   }
 
   /** Normalises common UZ inputs (+998…, 998…, 9-digit national) to E.164 (+998XXXXXXXXX). */

@@ -6,7 +6,7 @@ import type { Env } from '../../../config/env';
 import type { RedisService } from '../../../infrastructure/cache/redis.service';
 import { AccountRepository } from '../domain/account.repository';
 import { SmsProvider } from '../domain/sms/sms-provider';
-import { OtpService } from './otp.service';
+import { OtpService, buildOtpMessage } from './otp.service';
 
 const PHONE = '+998901234567';
 const OTP_KEY = 'otp:student:phone_verify:+998901234567';
@@ -80,7 +80,7 @@ describe('OtpService', () => {
       expect(result).toEqual({ sent: true, expiresInSeconds: 300, resendCooldownSeconds: 60 });
       expect(redis.hset).toHaveBeenCalledWith(OTP_KEY, { hash: sha256('111111'), attempts: 0 });
       expect(redis.expire).toHaveBeenCalledWith(OTP_KEY, 300);
-      expect(sms.send).toHaveBeenCalledWith(PHONE, 'ElonUz tasdiqlash kodi: 111111');
+      expect(sms.send).toHaveBeenCalledWith(PHONE, buildOtpMessage('111111'));
       expect(redis.set).toHaveBeenCalledWith(COOLDOWN_KEY, '1', 60);
     });
 
@@ -131,7 +131,7 @@ describe('OtpService', () => {
         'phone_verify',
       );
 
-      expect(sms.send).toHaveBeenCalledWith(PHONE, 'ElonUz tasdiqlash kodi: 222222');
+      expect(sms.send).toHaveBeenCalledWith(PHONE, buildOtpMessage('222222'));
       expect(redis.hset).toHaveBeenCalledWith(OTP_KEY, { hash: sha256('222222'), attempts: 0 });
     });
 
@@ -144,7 +144,7 @@ describe('OtpService', () => {
         makeConfig({ OTP_DEV_CODE: undefined }),
       ).request(PHONE, 'phone_verify');
 
-      expect(sms.send).toHaveBeenCalledWith(PHONE, 'ElonUz tasdiqlash kodi: 111111');
+      expect(sms.send).toHaveBeenCalledWith(PHONE, buildOtpMessage('111111'));
     });
 
     it('generates a secure random 6-digit code in production', async () => {
@@ -156,7 +156,7 @@ describe('OtpService', () => {
       );
 
       const sentText = (sms.send as jest.Mock).mock.calls[0][1] as string;
-      const code = sentText.replace('ElonUz tasdiqlash kodi: ', '');
+      const code = sentText.replace(buildOtpMessage(''), '');
       expect(code).toMatch(/^\d{6}$/);
       expect(redis.hset).toHaveBeenCalledWith(OTP_KEY, { hash: sha256(code), attempts: 0 });
     });
