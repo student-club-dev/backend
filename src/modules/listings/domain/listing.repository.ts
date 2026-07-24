@@ -61,6 +61,24 @@ export interface SubmitTransitionData {
 }
 
 /**
+ * Filters for a paginated, business-scoped listing query. `status`/`categoryKey` are `null` when the
+ * client sent no filter; a `null` status excludes ARCHIVED (the soft-deleted state), an explicit one
+ * (including ARCHIVED) matches exactly. `page` is 1-based.
+ */
+export interface ListingPageQuery {
+  status: ListingStatus | null;
+  categoryKey: string | null;
+  page: number;
+  size: number;
+}
+
+/** A page of listings plus the unpaginated total, for building the response envelope. */
+export interface ListingPage {
+  items: Listing[];
+  total: number;
+}
+
+/**
  * Listing data-access port. The application layer depends on this interface only; the Prisma
  * implementation lives in infrastructure.
  */
@@ -70,6 +88,12 @@ export interface ListingRepository {
 
   /** Loads the full aggregate by id, or `null` when it does not exist. */
   findById(id: string): Promise<Listing | null>;
+
+  /**
+   * A page of a business's listings, newest first. A `null` status excludes ARCHIVED (soft-deleted);
+   * an explicit status (including ARCHIVED) matches exactly. `null` categoryKey means all categories.
+   */
+  findPageByBusiness(businessId: string, query: ListingPageQuery): Promise<ListingPage>;
 
   /**
    * Transitions a draft to PENDING_REVIEW atomically, optionally replacing the ListingBranch rows

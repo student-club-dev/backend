@@ -1,9 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { ListingStatus as PrismaListingStatus } from '@prisma/client';
+import { ListingStatus as PrismaListingStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { Listing } from '../domain/entities/listing.entity';
 import {
   CreateListingData,
+  ListingPage,
+  ListingPageQuery,
   ListingRepository,
   SubmitTransitionData,
 } from '../domain/listing.repository';
@@ -29,6 +31,33 @@ export class ListingPrismaRepository implements ListingRepository {
   async findById(id: string): Promise<Listing | null> {
     const row = await this.prisma.listing.findUnique({ where: { id }, include: LISTING_INCLUDE });
     return row === null ? null : ListingMapper.toDomain(row);
+  }
+
+  /**
+   * A page of a business's listings (newest first) plus the unpaginated total, read in one
+   * transaction. A `null` status excludes ARCHIVED; an explicit one matches exactly. `categoryKey`
+   * narrows further when present.
+   */
+  async findPageByBusiness(businessId: string, query: ListingPageQuery): Promise<ListingPage> {
+    const where: Prisma.ListingWhereInput = {
+      businessId,
+      status:
+        query.status === null
+          ? { not: PrismaListingStatus.ARCHIVED }
+          : PrismaListingStatus[query.status],
+      ...(query.categoryKey === null ? {} : { categoryKey: query.categoryKey }),
+    };
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.listing.findMany({
+        where,
+        include: LISTING_INCLUDE,
+        orderBy: { createdAt: 'desc' },
+        skip: (query.page - 1) * query.size,
+        take: query.size,
+      }),
+      this.prisma.listing.count({ where }),
+    ]);
+    return { items: rows.map(ListingMapper.toDomain), total };
   }
 
   /**

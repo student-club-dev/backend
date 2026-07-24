@@ -3,6 +3,7 @@
     "deny": [
       "Bash(rm:*)",
       "Bash(git push:*)",
+      "Bash(git commit:*)",
       "Read(./.env)",
       "Bash(sudo *)",
       "Read(~/.ssh/**)"

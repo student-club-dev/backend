@@ -1,4 +1,4 @@
-import { Body, Controller, Param, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { ERROR_CODE } from '../../../common/errors/error-code';
@@ -7,6 +7,7 @@ import {
   ApiCreatedEnvelope,
   ApiForbiddenEnvelope,
   ApiNotFoundEnvelope,
+  ApiOkEnvelope,
   ApiUnauthorizedEnvelope,
   ApiValidationEnvelope,
 } from '../../../common/swagger/api-envelope.decorator';
@@ -14,7 +15,9 @@ import type { AuthenticatedUser } from '../../../common/types/authenticated-user
 import { BusinessAccountGuard } from '../../business/presentation/guards/business-account.guard';
 import { ListingsService } from '../application/listings.service';
 import { CreateListingRequestDto } from './dto/create-listing-request.dto';
+import { ListListingsQueryDto } from './dto/list-listings-query.dto';
 import { ListingDto } from './dto/listing.dto';
+import { ListingPageDto } from './dto/listing-page.dto';
 
 /**
  * Owner-side listing creation, nested under a business. JWT-guarded and restricted to BUSINESS
@@ -32,6 +35,29 @@ import { ListingDto } from './dto/listing.dto';
 @Controller('business/:businessId/listings')
 export class ListingsController {
   constructor(private readonly listingsService: ListingsService) {}
+
+  @Get()
+  @ApiOperation({
+    summary: "List a business's listings (owner only)",
+    description:
+      'Paginated, newest first. Filter by `status` and `categoryKey`. Without a `status` filter, ' +
+      'ARCHIVED (soft-deleted) listings are excluded.',
+  })
+  @ApiOkEnvelope(ListingPageDto)
+  @ApiNotFoundEnvelope(
+    ERROR_CODE.BUSINESS_NOT_FOUND,
+    'No business with this id.',
+    'Biznes topilmadi',
+  )
+  async list(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('businessId') businessId: string,
+    @Query() query: ListListingsQueryDto,
+  ): Promise<ListingPageDto> {
+    const q = query.toQuery();
+    const page = await this.listingsService.listByBusiness(user, businessId, q);
+    return ListingPageDto.fromPage(page, q.page, q.size);
+  }
 
   @Post()
   @ApiOperation({

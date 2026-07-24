@@ -17,6 +17,8 @@ import { RedemptionMethod } from '../domain/enums/redemption-method.enum';
 import {
   CreateOptionGroupData,
   LISTING_REPOSITORY,
+  ListingPage,
+  ListingPageQuery,
   ListingRepository,
 } from '../domain/listing.repository';
 import { computeFinalPrice } from '../domain/pricing/final-price';
@@ -107,6 +109,31 @@ export class ListingsService {
       optionGroups,
       status: ListingStatus.DRAFT,
     });
+  }
+
+  /**
+   * A page of a business's listings the caller owns. Ownership is enforced first (the business must
+   * exist → 404, and belong to the caller → 403); the repository applies the `status`/`categoryKey`
+   * filters, paging and ordering. A `null` status excludes ARCHIVED, mirroring `business/my`.
+   */
+  async listByBusiness(
+    user: AuthenticatedUser,
+    businessId: string,
+    query: ListingPageQuery,
+  ): Promise<ListingPage> {
+    await this.assertBusinessOwned(user, businessId);
+    return this.listings.findPageByBusiness(businessId, query);
+  }
+
+  /** The business must exist (404) and belong to the caller (403). */
+  private async assertBusinessOwned(user: AuthenticatedUser, businessId: string): Promise<void> {
+    const summary = await this.businesses.findSummaryById(businessId);
+    if (summary === null) {
+      throw AppException.notFound(ERROR_CODE.BUSINESS_NOT_FOUND, 'Biznes topilmadi');
+    }
+    if (summary.ownerId !== user.id) {
+      throw AppException.forbidden();
+    }
   }
 
   /**

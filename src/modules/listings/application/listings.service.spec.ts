@@ -19,6 +19,8 @@ import { RedemptionMethod } from '../domain/enums/redemption-method.enum';
 import { SelectionType } from '../domain/enums/selection-type.enum';
 import {
   CreateListingData,
+  ListingPage,
+  ListingPageQuery,
   ListingRepository,
   SubmitTransitionData,
 } from '../domain/listing.repository';
@@ -116,6 +118,7 @@ function makeListings(): ListingRepository {
   return {
     create: jest.fn(async (data: CreateListingData) => listingFromData(data)),
     findById: jest.fn().mockResolvedValue(null),
+    findPageByBusiness: jest.fn().mockResolvedValue({ items: [], total: 0 }),
     submitTransition: jest.fn(),
   };
 }
@@ -168,6 +171,7 @@ function makeSubmitListings(listing: Listing | null): ListingRepository {
   return {
     create: jest.fn(),
     findById: jest.fn().mockResolvedValue(listing),
+    findPageByBusiness: jest.fn().mockResolvedValue({ items: [], total: 0 }),
     submitTransition: jest.fn(async (_id: string, data: SubmitTransitionData) => ({
       ...(listing as Listing),
       status: ListingStatus.PENDING_REVIEW,
@@ -834,6 +838,42 @@ describe('ListingsService', () => {
         code: ERROR_CODE.ATTRIBUTES_SCHEMA_MISMATCH,
         status: 422,
       });
+    });
+  });
+
+  describe('listByBusiness', () => {
+    const query: ListingPageQuery = { status: null, categoryKey: null, page: 1, size: 20 };
+
+    it('returns the repository page and forwards the query for a business the caller owns', async () => {
+      const page: ListingPage = { items: [draftListing()], total: 1 };
+      const listings = makeListings();
+      (listings.findPageByBusiness as jest.Mock).mockResolvedValue(page);
+      const service = makeService({ listings });
+
+      const result = await service.listByBusiness(owner, BUSINESS_ID, query);
+
+      expect(result).toBe(page);
+      expect(listings.findPageByBusiness).toHaveBeenCalledWith(BUSINESS_ID, query);
+    });
+
+    it('throws 404 BUSINESS_NOT_FOUND when the business does not exist', async () => {
+      const service = makeService({ businesses: makeBusinesses(null) });
+
+      await expect(service.listByBusiness(owner, BUSINESS_ID, query)).rejects.toMatchObject({
+        code: ERROR_CODE.BUSINESS_NOT_FOUND,
+        status: 404,
+      });
+    });
+
+    it('throws 403 FORBIDDEN when the business belongs to another owner', async () => {
+      const listings = makeListings();
+      const service = makeService({ listings, businesses: makeBusinesses('other-owner') });
+
+      await expect(service.listByBusiness(owner, BUSINESS_ID, query)).rejects.toMatchObject({
+        code: ERROR_CODE.FORBIDDEN,
+        status: 403,
+      });
+      expect(listings.findPageByBusiness).not.toHaveBeenCalled();
     });
   });
 });
