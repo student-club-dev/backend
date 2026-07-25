@@ -7,14 +7,14 @@ import { OtpService } from './application/otp.service';
 import { ACCOUNT_REPOSITORY, ACCOUNT_TYPE } from './domain/account.repository';
 import { StudentAccountPrismaRepository } from './infrastructure/student-account.prisma.repository';
 import { StudentOtpController } from './presentation/student-otp.controller';
-import { SmsProviderModule } from './sms-provider.module';
+import { OtpDeliveryModule } from './otp-delivery.module';
 
 /**
  * Wires the shared OtpService to the `students` table (D6). RedisService is global; SMS_PROVIDER comes
- * from SmsProviderModule; JwtModule is registered so JwtAuthGuard can verify the access token.
+ * from OtpDeliveryModule; JwtModule is registered so JwtAuthGuard can verify the access token.
  */
 @Module({
-  imports: [PrismaModule, SmsProviderModule, JwtModule.register({})],
+  imports: [PrismaModule, OtpDeliveryModule, JwtModule.register({})],
   controllers: [StudentOtpController],
   providers: [
     OtpService,

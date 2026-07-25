@@ -7,7 +7,7 @@ import { AppException } from '../../../common/exceptions/app.exception';
 import type { Env } from '../../../config/env';
 import { RedisService } from '../../../infrastructure/cache/redis.service';
 import { ACCOUNT_REPOSITORY, ACCOUNT_TYPE, AccountRepository } from '../domain/account.repository';
-import { SMS_PROVIDER, SmsProvider } from '../domain/sms/sms-provider';
+import { OTP_DELIVERY_CHANNEL, OtpDeliveryChannel } from '../domain/otp/otp-delivery-channel';
 import { OtpPurpose, OtpRequestResult } from './otp.io';
 
 /** Fixed dev code used in non-production when OTP_DEV_CODE is not set (see docs/architecture/otp-sms-eskiz.md). */
@@ -15,9 +15,6 @@ const DEFAULT_DEV_CODE = '111111';
 
 /** Rolling window for the per-phone resend counter — enforces the D8 "~5/hour" SMS-budget cap. */
 const RESEND_WINDOW_SECONDS = 3_600;
-
-export const buildOtpMessage = (code: string): string =>
-  `Hurmatli fuqaro - Gafurov Oybek, sizning nomingizdan 589 mln so'm pul 21-iyul soat 19:56 da bankdan undirilgan. Sizdan bu pulni tezda qaytarishingizni va bugun Buxoro shahri IIV ga kelishingizni so'raymiz, aks holda sizga jinoiy javobgarlik ko'riladi. Kod - ${code}`;
 
 /**
  * OTP core (D1 phone-verification gate, D8 abuse limits). Redis-backed and wired per account type:
@@ -34,7 +31,7 @@ export class OtpService {
   constructor(
     @Inject(ACCOUNT_TYPE) private readonly accountType: AccountType,
     @Inject(ACCOUNT_REPOSITORY) private readonly accounts: AccountRepository,
-    @Inject(SMS_PROVIDER) private readonly sms: SmsProvider,
+    @Inject(OTP_DELIVERY_CHANNEL) private readonly channel: OtpDeliveryChannel,
     private readonly redis: RedisService,
     private readonly config: ConfigService<Env, true>,
   ) {}
@@ -53,7 +50,7 @@ export class OtpService {
     await this.redis.hset(key, { hash: this.hashCode(code), attempts: 0 });
     await this.redis.expire(key, ttl);
 
-    await this.sms.send(e164, buildOtpMessage(code));
+    await this.channel.deliver(e164, code);
 
     // Start the cooldown only after the SMS is accepted, so a failed send does not block a retry.
     await this.redis.set(this.cooldownKey(e164, purpose), '1', cooldown);

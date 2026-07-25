@@ -15,7 +15,7 @@ import { OAuthProviderModule } from './oauth-provider.module';
 import { BusinessAuthController } from './presentation/business-auth.controller';
 import { BusinessPasswordController } from './presentation/business-password.controller';
 import { BusinessSessionsController } from './presentation/business-sessions.controller';
-import { SmsProviderModule } from './sms-provider.module';
+import { OtpDeliveryModule } from './otp-delivery.module';
 import { TokenModule } from './token.module';
 
 /**
@@ -28,7 +28,7 @@ import { TokenModule } from './token.module';
     PrismaModule,
     TokenModule,
     OAuthProviderModule,
-    SmsProviderModule,
+    OtpDeliveryModule,
     JwtModule.register({}),
   ],
   controllers: [BusinessAuthController, BusinessSessionsController, BusinessPasswordController],

@@ -15,7 +15,7 @@ import { OAuthProviderModule } from './oauth-provider.module';
 import { StudentAuthController } from './presentation/student-auth.controller';
 import { StudentPasswordController } from './presentation/student-password.controller';
 import { StudentSessionsController } from './presentation/student-sessions.controller';
-import { SmsProviderModule } from './sms-provider.module';
+import { OtpDeliveryModule } from './otp-delivery.module';
 import { TokenModule } from './token.module';
 
 /**
@@ -28,7 +28,7 @@ import { TokenModule } from './token.module';
     PrismaModule,
     TokenModule,
     OAuthProviderModule,
-    SmsProviderModule,
+    OtpDeliveryModule,
     JwtModule.register({}),
   ],
   controllers: [StudentAuthController, StudentSessionsController, StudentPasswordController],
