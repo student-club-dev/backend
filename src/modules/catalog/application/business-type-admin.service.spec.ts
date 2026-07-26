@@ -6,6 +6,7 @@ import { BusinessTypeAdminService } from './business-type-admin.service';
 
 function write(overrides: Partial<BusinessTypeWrite> = {}): BusinessTypeWrite {
   return {
+    groupKey: 'SHOPPING',
     nameUz: 'Kafe',
     nameRu: null,
     emoji: null,
@@ -21,6 +22,7 @@ function write(overrides: Partial<BusinessTypeWrite> = {}): BusinessTypeWrite {
 function businessType(type: string): BusinessType {
   return {
     type,
+    groupKey: 'SHOPPING',
     nameUz: 'Kafe',
     nameRu: null,
     iconUrl: null,
@@ -29,12 +31,19 @@ function businessType(type: string): BusinessType {
     defaultPriceUnit: PriceUnit.PER_ITEM,
     priceUnits: [PriceUnit.PER_ITEM],
     availableForGenders: [],
+    allCategoryLabel: null,
+    optionGroupHint: null,
   };
 }
 
 function makeCatalog(overrides: Partial<CatalogRepository> = {}): CatalogRepository {
   return {
     findBusinessTypes: jest.fn(),
+    findGroups: jest.fn().mockResolvedValue([]),
+    findBusinessTypesByGroups: jest.fn().mockResolvedValue([]),
+    groupExists: jest.fn().mockResolvedValue(true),
+    countVisibleListingsByType: jest.fn().mockResolvedValue(new Map<string, number>()),
+    countCategoriesByType: jest.fn().mockResolvedValue(new Map<string, number>()),
     findCategoriesByType: jest.fn(),
     findAttributeSpecs: jest.fn(),
     typeExists: jest.fn().mockResolvedValue(false),

@@ -1,5 +1,6 @@
 import { AttributeSpec } from './entities/attribute-spec.entity';
 import { BusinessType } from './entities/business-type.entity';
+import { CatalogGroup } from './entities/catalog-group.entity';
 import { Category } from './entities/category.entity';
 import { Gender } from './enums/gender.enum';
 import { PriceUnit } from './enums/price-unit.enum';
@@ -9,6 +10,7 @@ export const CATALOG_REPOSITORY = Symbol('CATALOG_REPOSITORY');
 
 /** Writable fields of a business type (`type` — the PK — is passed separately on create). */
 export interface BusinessTypeWrite {
+  groupKey: string;
   nameUz: string;
   nameRu: string | null;
   emoji: string | null;
@@ -19,6 +21,13 @@ export interface BusinessTypeWrite {
   availableForGenders: Gender[];
 }
 
+/** A point + radius used to scope listing counts to what is near the student. */
+export interface GeoScope {
+  lat: number;
+  lng: number;
+  radiusMeters: number;
+}
+
 /**
  * Catalog data-access port. The application layer depends on this interface only;
  * the Prisma implementation lives in the infrastructure layer.
@@ -26,6 +35,25 @@ export interface BusinessTypeWrite {
 export interface CatalogRepository {
   /** All business types, unfiltered — the service applies gender personalisation. */
   findBusinessTypes(): Promise<BusinessType[]>;
+
+  /** All catalog groups with their member type keys, ordered by `sortOrder`. */
+  findGroups(): Promise<CatalogGroup[]>;
+
+  /** Business types belonging to any of `groupKeys`. Empty input → empty result. */
+  findBusinessTypesByGroups(groupKeys: string[]): Promise<BusinessType[]>;
+
+  /** Whether a catalog group with this key exists (admin write guard). */
+  groupExists(key: string): Promise<boolean>;
+
+  /**
+   * Visible-listing count per business type (STUDENT_FEED.md Q4: listing ACTIVE, business
+   * APPROVED, validFrom <= now <= validTo). Scoped to `geo` when given. Types with no visible
+   * listing are absent from the map — callers default to 0.
+   */
+  countVisibleListingsByType(geo: GeoScope | null): Promise<Map<string, number>>;
+
+  /** Number of base (non gender-specific) categories per business type. */
+  countCategoriesByType(): Promise<Map<string, number>>;
 
   /**
    * All categories for a business type (base list + per-gender lists), each with its fields.

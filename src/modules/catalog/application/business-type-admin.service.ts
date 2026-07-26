@@ -25,12 +25,16 @@ export class BusinessTypeAdminService {
         'Bu biznes turi allaqachon mavjud',
       );
     }
+    await this.assertGroupExists(data.groupKey);
     return this.catalog.createType(type, data);
   }
 
   /** Updates an existing business type (404 if it does not exist). */
   async update(type: string, data: Partial<BusinessTypeWrite>): Promise<BusinessType> {
     await this.assertExists(type);
+    if (data.groupKey !== undefined) {
+      await this.assertGroupExists(data.groupKey);
+    }
     return this.catalog.updateType(type, data);
   }
 
@@ -53,6 +57,16 @@ export class BusinessTypeAdminService {
   private async assertExists(type: string): Promise<void> {
     if (!(await this.catalog.typeExists(type))) {
       throw AppException.notFound(ERROR_CODE.BUSINESS_TYPE_NOT_FOUND, 'Biznes turi topilmadi');
+    }
+  }
+
+  /**
+   * `business_types.group_key` is a NOT NULL FK — an unknown key would surface as a raw Prisma
+   * constraint error (500). Check first so the admin gets a 422 naming the field instead.
+   */
+  private async assertGroupExists(groupKey: string): Promise<void> {
+    if (!(await this.catalog.groupExists(groupKey))) {
+      throw AppException.validation({ groupKey: 'Bunday katalog guruhi yo‘q' });
     }
   }
 }

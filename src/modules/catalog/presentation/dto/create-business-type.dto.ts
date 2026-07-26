@@ -11,6 +11,14 @@ export class CreateBusinessTypeDto {
   @Length(1, 64)
   type!: string;
 
+  @ApiProperty({
+    description: 'Catalog group this type belongs to (must exist in catalog_groups)',
+    example: 'GAMES',
+  })
+  @IsString()
+  @Length(1, 64)
+  groupKey!: string;
+
   @ApiProperty({ example: 'Kafe va Restoran' })
   @IsString()
   @Length(1, 120)
@@ -65,6 +73,7 @@ export class CreateBusinessTypeDto {
 
   toWrite(): BusinessTypeWrite {
     return {
+      groupKey: this.groupKey,
       nameUz: this.nameUz,
       nameRu: this.nameRu ?? null,
       emoji: this.emoji ?? null,

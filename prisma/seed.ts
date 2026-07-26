@@ -2,7 +2,8 @@
  * ElonUz catalog seed.
  *
  * Loads docs/api/provider/catalog-seed.json into the catalog tables:
- *   - BusinessTypeInfo (7 types)      -> upsert by `type` (PK; referenced by FKs)
+ *   - CatalogGroup (8 groups)         -> upsert by `key` (must run first — BusinessTypeInfo FK)
+ *   - BusinessTypeInfo (27 types)     -> upsert by `type` (PK; referenced by FKs)
  *   - Category (base + per-gender)    -> deleteMany + createMany (nullable `gender` in the
  *                                        unique key makes upsert unreliable, so replace wholesale)
  *   - AttributeSpec (type + category) -> deleteMany + createMany (nullable `categoryKey` — same reason)
@@ -30,8 +31,19 @@ const prisma = new PrismaClient();
 // ---------------------------------------------------------------------------
 // JSON shape (only the fields we read)
 // ---------------------------------------------------------------------------
+interface SeedGroup {
+  key: string;
+  nameUz: string;
+  nameRu?: string;
+  emoji?: string;
+  icon?: string;
+  accentColor?: string;
+  sortOrder: number;
+}
+
 interface SeedBusinessType {
   type: string;
+  groupKey: string;
   nameUz: string;
   nameRu?: string;
   emoji?: string;
@@ -142,6 +154,7 @@ interface RawDistrict {
 interface CatalogSeed {
   version: string;
   constants: Record<string, string>;
+  groups: SeedGroup[];
   businessTypes: SeedBusinessType[];
   categories: Record<string, SeedCategory[]>;
   categoriesByGender: Record<string, Record<string, SeedCategory[]>>;
@@ -294,9 +307,27 @@ async function main(): Promise<void> {
   const geo = loadGeo();
 
   await prisma.$transaction(async (tx) => {
+    // 0. Catalog groups — upsert by `key` (referenced by BusinessTypeInfo.groupKey FK).
+    for (const g of seed.groups) {
+      const data = {
+        nameUz: g.nameUz,
+        nameRu: g.nameRu ?? null,
+        emoji: g.emoji ?? null,
+        icon: g.icon ?? null,
+        accentColor: g.accentColor ?? null,
+        sortOrder: g.sortOrder,
+      };
+      await tx.catalogGroup.upsert({
+        where: { key: g.key },
+        create: { key: g.key, ...data },
+        update: data,
+      });
+    }
+
     // 1. Business types — upsert (PK `type` is referenced by Category/AttributeSpec/Business FKs).
     for (const bt of seed.businessTypes) {
       const data = {
+        groupKey: bt.groupKey,
         nameUz: bt.nameUz,
         nameRu: bt.nameRu ?? null,
         emoji: bt.emoji ?? null,

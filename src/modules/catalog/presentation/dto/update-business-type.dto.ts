@@ -9,6 +9,15 @@ import { PriceUnit } from '../../domain/enums/price-unit.enum';
  * and is not updatable. Only the present keys are written.
  */
 export class UpdateBusinessTypeDto {
+  @ApiPropertyOptional({
+    description: 'Move the type to another catalog group (must exist in catalog_groups)',
+    example: 'GAMES',
+  })
+  @IsOptional()
+  @IsString()
+  @Length(1, 64)
+  groupKey?: string;
+
   @ApiPropertyOptional({ example: 'Kafe va Restoran' })
   @IsOptional()
   @IsString()
@@ -55,6 +64,9 @@ export class UpdateBusinessTypeDto {
   /** Only the present keys — an absent field is left unchanged. */
   toWrite(): Partial<BusinessTypeWrite> {
     const write: Partial<BusinessTypeWrite> = {};
+    if (this.groupKey !== undefined) {
+      write.groupKey = this.groupKey;
+    }
     if (this.nameUz !== undefined) {
       write.nameUz = this.nameUz;
     }

@@ -3,11 +3,13 @@ import {
   PriceUnit as PrismaPriceUnit,
   type AttributeSpec as AttributeSpecRow,
   type BusinessTypeInfo as BusinessTypeInfoRow,
+  type CatalogGroup as CatalogGroupRow,
   type Category as CategoryRow,
   type Prisma,
 } from '@prisma/client';
 import { AttributeSpec } from '../domain/entities/attribute-spec.entity';
 import { BusinessType } from '../domain/entities/business-type.entity';
+import { CatalogGroup } from '../domain/entities/catalog-group.entity';
 import { AttributeField, AttributeOption, Category } from '../domain/entities/category.entity';
 import { BusinessTypeWrite } from '../domain/catalog.repository';
 import { AttributeFieldType } from '../domain/enums/attribute-field-type.enum';
@@ -26,6 +28,7 @@ export class CatalogMapper {
   static toBusinessType(row: BusinessTypeInfoRow): BusinessType {
     return {
       type: row.type,
+      groupKey: row.groupKey,
       nameUz: row.nameUz,
       nameRu: row.nameRu,
       iconUrl: row.iconUrl,
@@ -34,6 +37,22 @@ export class CatalogMapper {
       defaultPriceUnit: PriceUnit[row.defaultPriceUnit],
       priceUnits: row.priceUnits.map((unit) => PriceUnit[unit]),
       availableForGenders: row.availableForGenders.map((gender) => Gender[gender]),
+      allCategoryLabel: row.allCategoryLabel,
+      optionGroupHint: row.optionGroupHint,
+    };
+  }
+
+  /** A group row plus the type keys resolved from `business_types.group_key`. */
+  static toCatalogGroup(row: CatalogGroupRow, typeKeys: string[]): CatalogGroup {
+    return {
+      key: row.key,
+      nameUz: row.nameUz,
+      nameRu: row.nameRu,
+      emoji: row.emoji,
+      icon: row.icon,
+      accentColor: row.accentColor,
+      sortOrder: row.sortOrder,
+      typeKeys,
     };
   }
 
@@ -66,6 +85,7 @@ export class CatalogMapper {
   ): Prisma.BusinessTypeInfoUncheckedCreateInput {
     return {
       type,
+      groupKey: data.groupKey,
       nameUz: data.nameUz,
       nameRu: data.nameRu,
       emoji: data.emoji,
@@ -82,6 +102,9 @@ export class CatalogMapper {
     data: Partial<BusinessTypeWrite>,
   ): Prisma.BusinessTypeInfoUpdateInput {
     const update: Prisma.BusinessTypeInfoUpdateInput = {};
+    if (data.groupKey !== undefined) {
+      update.group = { connect: { key: data.groupKey } };
+    }
     if (data.nameUz !== undefined) {
       update.nameUz = data.nameUz;
     }

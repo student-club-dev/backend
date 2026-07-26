@@ -258,6 +258,11 @@ function makeCatalog(
     deleteType: jest.fn(),
     countBusinessesOfType: jest.fn().mockResolvedValue(0),
     countCategoriesOfType: jest.fn().mockResolvedValue(0),
+    findGroups: jest.fn().mockResolvedValue([]),
+    findBusinessTypesByGroups: jest.fn().mockResolvedValue([]),
+    groupExists: jest.fn().mockResolvedValue(true),
+    countVisibleListingsByType: jest.fn().mockResolvedValue(new Map<string, number>()),
+    countCategoriesByType: jest.fn().mockResolvedValue(new Map<string, number>()),
   };
 }
 

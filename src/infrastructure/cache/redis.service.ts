@@ -27,6 +27,11 @@ export class RedisService implements OnModuleDestroy {
     return this.client.set(key, value, 'EX', ttlSeconds);
   }
 
+  /** Returns `null` when the key is absent or expired. */
+  get(key: string): Promise<string | null> {
+    return this.client.get(key);
+  }
+
   async exists(key: string): Promise<boolean> {
     return (await this.client.exists(key)) > 0;
   }

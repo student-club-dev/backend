@@ -193,7 +193,12 @@ describe('Business (owner CRUD) + admin business types — e2e', () => {
       const created = await request(app.getHttpServer())
         .post('/v1/admin/business-types')
         .set('X-Admin-Key', adminKey ?? '')
-        .send({ type: ADMIN_TYPE, nameUz: 'Test turi', defaultPriceUnit: 'PER_ITEM' })
+        .send({
+          type: ADMIN_TYPE,
+          groupKey: 'SHOPPING',
+          nameUz: 'Test turi',
+          defaultPriceUnit: 'PER_ITEM',
+        })
         .expect(201);
       expect(created.body.result.type).toBe(ADMIN_TYPE);
 
@@ -201,7 +206,12 @@ describe('Business (owner CRUD) + admin business types — e2e', () => {
       const dup = await request(app.getHttpServer())
         .post('/v1/admin/business-types')
         .set('X-Admin-Key', adminKey ?? '')
-        .send({ type: ADMIN_TYPE, nameUz: 'Test turi', defaultPriceUnit: 'PER_ITEM' })
+        .send({
+          type: ADMIN_TYPE,
+          groupKey: 'SHOPPING',
+          nameUz: 'Test turi',
+          defaultPriceUnit: 'PER_ITEM',
+        })
         .expect(409);
       expect(dup.body.error.code).toBe('BUSINESS_TYPE_EXISTS');
 

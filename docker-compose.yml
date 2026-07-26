@@ -24,6 +24,10 @@ services:
     image: redis:7-alpine
     container_name: elonuz-redis
     restart: unless-stopped
+    # Loopback ONLY — same rule as `db` above. Needed so the e2e suites, which run on the host
+    # against REDIS_URL=localhost:6379, can reach it. Never bind to '0.0.0.0'.
+    ports:
+      - '127.0.0.1:6379:6379'
     volumes:
       - elonuz-redis-data:/data
 

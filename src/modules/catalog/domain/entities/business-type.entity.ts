@@ -9,6 +9,7 @@ import { PriceUnit } from '../enums/price-unit.enum';
  */
 export interface BusinessType {
   type: string;
+  groupKey: string;
   nameUz: string;
   nameRu: string | null;
   iconUrl: string | null;
@@ -17,4 +18,6 @@ export interface BusinessType {
   defaultPriceUnit: PriceUnit;
   priceUnits: PriceUnit[];
   availableForGenders: Gender[];
+  allCategoryLabel: string | null;
+  optionGroupHint: string | null;
 }

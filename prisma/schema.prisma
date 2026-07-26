@@ -277,9 +277,28 @@ model BusinessOwnerRefreshToken {
 // CATALOG (seeded from catalog-seed.json; served by the catalog endpoints)
 // ============================================================================
 
+// Top-level grouping over the 27 business types (STUDENT_FEED.md, Ilova). The mapping lives in
+// the DB, NOT in code — moving a type to another group must not require an app release.
+model CatalogGroup {
+  key         String   @id
+  nameUz      String   @map("name_uz")
+  nameRu      String?  @map("name_ru")
+  emoji       String?
+  icon        String?
+  accentColor String?  @map("accent_color")
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  businessTypes BusinessTypeInfo[]
+
+  @@map("catalog_groups")
+}
+
 // BusinessType is data-driven, NOT an enum. `type` is the string PK.
 model BusinessTypeInfo {
   type                String      @id
+  groupKey            String      @map("group_key")
   nameUz              String      @map("name_uz")
   nameRu              String?     @map("name_ru")
   emoji               String?
@@ -293,10 +312,12 @@ model BusinessTypeInfo {
   createdAt           DateTime    @default(now()) @map("created_at")
   updatedAt           DateTime    @updatedAt @map("updated_at")
 
+  group          CatalogGroup    @relation(fields: [groupKey], references: [key], onDelete: Restrict)
   categories     Category[]
   attributeSpecs AttributeSpec[]
   businesses     Business[]
 
+  @@index([groupKey])
   @@map("business_types")
 }
 
