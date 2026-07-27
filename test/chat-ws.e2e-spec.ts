@@ -169,6 +169,28 @@ describe('Chat gateway (/chat WS) — e2e', () => {
     expect(received.message.seq).toBe(1);
   }, 15000);
 
+  it('is idempotent — the same clientMsgId returns the same message (C6)', async () => {
+    const aSocket = connect(aToken);
+    await waitFor(aSocket, 'connect');
+    await settle();
+
+    const send = (): Promise<{ id: string; seq: number; status: string }> =>
+      new Promise((resolve) => {
+        aSocket.emit(
+          'message:send',
+          { conversationId, clientMsgId: 'dup-1', body: 'once' },
+          resolve,
+        );
+      });
+
+    const first = await send();
+    const second = await send();
+
+    expect(first.status).toBe('sent');
+    expect(second.id).toBe(first.id);
+    expect(second.seq).toBe(first.seq);
+  }, 15000);
+
   it('delivers a read receipt: B reads, A receives message:read', async () => {
     const aSocket = connect(aToken);
     const bSocket = connect(bToken);

@@ -3,6 +3,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { StudentGuard } from '../../common/guards/student.guard';
 import { PrismaModule } from '../../infrastructure/database/prisma.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { ChatService } from './application/chat.service';
 import { ChatGateway } from './chat.gateway';
 import { CHAT_REPOSITORY } from './domain/chat.repository';
@@ -18,7 +19,7 @@ import { ConversationsController } from './presentation/conversations.controller
  * Socket.IO gateway; presence in Redis (global). `RedisService` is provided globally by RedisModule.
  */
 @Module({
-  imports: [PrismaModule, JwtModule.register({})],
+  imports: [PrismaModule, JwtModule.register({}), NotificationsModule],
   controllers: [ConversationsController],
   providers: [
     ChatService,

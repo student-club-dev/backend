@@ -20,7 +20,7 @@ export class ConversationsQueryDto {
   size?: number;
 }
 
-/** Query for `GET /v1/conversations/:id/messages` — cursor by `before` (a `seq`), plus `size`. */
+/** Query for `GET /v1/conversations/:id/messages` — scroll-up (`before`) or catch-up (`after`). */
 export class HistoryQueryDto {
   @ApiPropertyOptional({ description: 'Return messages with seq < before (omit for the latest)' })
   @IsOptional()
@@ -28,6 +28,15 @@ export class HistoryQueryDto {
   @IsInt()
   @Min(1)
   before?: number;
+
+  @ApiPropertyOptional({
+    description: 'Reconnect catch-up: messages with seq > after, oldest-first (C6)',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  after?: number;
 
   @ApiPropertyOptional({ minimum: 1, maximum: 100, default: 30 })
   @IsOptional()

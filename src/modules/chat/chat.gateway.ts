@@ -15,6 +15,7 @@ import { ERROR_CODE } from '../../common/errors/error-code';
 import { AppException } from '../../common/exceptions/app.exception';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import type { Env } from '../../config/env';
+import { NotificationsService } from '../notifications/application/notifications.service';
 import {
   CHAT_EVENT,
   CursorPayload,
@@ -46,6 +47,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   constructor(
     private readonly chat: ChatService,
+    private readonly notifications: NotificationsService,
     private readonly jwt: JwtService,
     private readonly config: ConfigService<Env, true>,
   ) {}
@@ -86,7 +88,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return { clientMsgId: payload?.clientMsgId, status: 'error', error: unauthorized() };
     }
     try {
-      const message = await this.chat.sendMessage(user, payload.conversationId, payload.body);
+      const message = await this.chat.sendMessage(
+        user,
+        payload.conversationId,
+        payload.body,
+        payload.clientMsgId ?? null,
+      );
       await this.broadcastMessage(message);
       return {
         clientMsgId: payload.clientMsgId,
@@ -151,17 +158,25 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   /** Broadcast a new message to both members' personal rooms (used by WS send + the REST fallback). */
   async broadcastMessage(message: Message): Promise<void> {
-    if (this.server === undefined) {
-      return; // no WS server bound (e.g. REST-only context) — broadcast is best-effort
-    }
     const otherId = await this.chat.otherMemberId(message.conversationId, message.senderId);
-    const payload = {
-      conversationId: message.conversationId,
-      message: MessageDto.fromDomain(message),
-    };
-    this.server.to(personalRoom(message.senderId)).emit(CHAT_EVENT.MESSAGE_NEW, payload);
-    if (otherId !== null) {
-      this.server.to(personalRoom(otherId)).emit(CHAT_EVENT.MESSAGE_NEW, payload);
+    // WS fan-out to both members' devices (only when a socket server is bound).
+    if (this.server !== undefined) {
+      const payload = {
+        conversationId: message.conversationId,
+        message: MessageDto.fromDomain(message),
+      };
+      this.server.to(personalRoom(message.senderId)).emit(CHAT_EVENT.MESSAGE_NEW, payload);
+      if (otherId !== null) {
+        this.server.to(personalRoom(otherId)).emit(CHAT_EVENT.MESSAGE_NEW, payload);
+      }
+    }
+    // Offline push to the recipient (C8) — best-effort; only when they have no open socket.
+    if (otherId !== null && !(await this.chat.isOnline(otherId))) {
+      await this.notifications.pushToStudent(otherId, {
+        title: 'Yangi xabar',
+        body: message.body ?? '',
+        data: { conversationId: message.conversationId },
+      });
     }
   }
 

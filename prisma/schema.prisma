@@ -192,6 +192,7 @@ model Student {
   // Chat
   conversationMemberships ConversationMember[]
   messagesSent            Message[]
+  deviceTokens            DeviceToken[]
 
   @@map("students")
 }
@@ -925,6 +926,8 @@ model Message {
   seq            Int
   type           MessageType @default(TEXT)
   body           String?
+  // Client-generated id — makes a retried send idempotent (C6). Null for server/system messages.
+  clientMsgId    String?     @map("client_msg_id")
   createdAt      DateTime    @default(now()) @map("created_at")
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
@@ -932,6 +935,30 @@ model Message {
   reports      Report[]     @relation("ReportMessage")
 
   @@unique([conversationId, seq])
+  @@unique([senderId, clientMsgId])
   @@index([conversationId, seq])
   @@map("messages")
+}
+
+// ---- Push notifications (device tokens for offline delivery — chat.md C8) ----
+
+enum DevicePlatform {
+  IOS
+  ANDROID
+  WEB
+}
+
+/// A student's push token for one device. Provider-agnostic (FCM/APNs plug in later).
+model DeviceToken {
+  id        String         @id @default(cuid())
+  studentId String         @map("student_id")
+  token     String         @unique
+  platform  DevicePlatform
+  createdAt DateTime       @default(now()) @map("created_at")
+  updatedAt DateTime       @updatedAt @map("updated_at")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([studentId])
+  @@map("device_tokens")
 }

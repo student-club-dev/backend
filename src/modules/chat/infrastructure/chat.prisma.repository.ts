@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { MessageType as PrismaMessageType } from '@prisma/client';
+import { MessageType as PrismaMessageType, Prisma } from '@prisma/client';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { ChatRepository, ConversationPage } from '../domain/chat.repository';
 import { Conversation, ConversationMember } from '../domain/entities/conversation.entity';
@@ -63,24 +63,52 @@ export class ChatPrismaRepository implements ChatRepository {
    * Persists a message, assigning the next per-conversation `seq` atomically: post-incrementing
    * `nextSeq` (so the returned value is the new one) means this message takes `nextSeq - 1` (C4).
    */
-  async appendMessage(conversationId: string, senderId: string, body: string): Promise<Message> {
-    const row = await this.prisma.$transaction(async (tx) => {
-      const convo = await tx.conversation.update({
-        where: { id: conversationId },
-        data: { nextSeq: { increment: 1 }, lastMessageAt: new Date() },
-        select: { nextSeq: true },
+  async appendMessage(
+    conversationId: string,
+    senderId: string,
+    body: string,
+    clientMsgId: string | null,
+  ): Promise<Message> {
+    // Idempotency (C6): a retry with the same clientMsgId returns the already-stored message.
+    if (clientMsgId !== null) {
+      const prior = await this.prisma.message.findFirst({ where: { senderId, clientMsgId } });
+      if (prior !== null) {
+        return ChatMapper.toMessage(prior);
+      }
+    }
+    try {
+      const row = await this.prisma.$transaction(async (tx) => {
+        const convo = await tx.conversation.update({
+          where: { id: conversationId },
+          data: { nextSeq: { increment: 1 }, lastMessageAt: new Date() },
+          select: { nextSeq: true },
+        });
+        return tx.message.create({
+          data: {
+            conversationId,
+            senderId,
+            seq: convo.nextSeq - 1,
+            body,
+            clientMsgId,
+            type: PrismaMessageType.TEXT,
+          },
+        });
       });
-      return tx.message.create({
-        data: {
-          conversationId,
-          senderId,
-          seq: convo.nextSeq - 1,
-          body,
-          type: PrismaMessageType.TEXT,
-        },
-      });
-    });
-    return ChatMapper.toMessage(row);
+      return ChatMapper.toMessage(row);
+    } catch (error) {
+      // A concurrent send with the same clientMsgId won the unique race — return the stored one.
+      if (
+        clientMsgId !== null &&
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        const prior = await this.prisma.message.findFirst({ where: { senderId, clientMsgId } });
+        if (prior !== null) {
+          return ChatMapper.toMessage(prior);
+        }
+      }
+      throw error;
+    }
   }
 
   async listMessages(
@@ -91,6 +119,15 @@ export class ChatPrismaRepository implements ChatRepository {
     const rows = await this.prisma.message.findMany({
       where: { conversationId, ...(beforeSeq === null ? {} : { seq: { lt: beforeSeq } }) },
       orderBy: { seq: 'desc' },
+      take: size,
+    });
+    return rows.map(ChatMapper.toMessage);
+  }
+
+  async listSince(conversationId: string, afterSeq: number, size: number): Promise<Message[]> {
+    const rows = await this.prisma.message.findMany({
+      where: { conversationId, seq: { gt: afterSeq } },
+      orderBy: { seq: 'asc' },
       take: size,
     });
     return rows.map(ChatMapper.toMessage);

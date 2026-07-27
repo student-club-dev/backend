@@ -73,7 +73,10 @@ export class ConversationsController {
     @Query() query: HistoryQueryDto,
   ): Promise<MessageListDto> {
     const size = query.size ?? 30;
-    const messages = await this.chat.history(user, id, query.before ?? null, size);
+    const messages =
+      query.after === undefined
+        ? await this.chat.history(user, id, query.before ?? null, size)
+        : await this.chat.messagesSince(user, id, query.after, size);
     return MessageListDto.from(messages, size);
   }
 
@@ -89,7 +92,7 @@ export class ConversationsController {
     @Param('id') id: string,
     @Body() dto: SendMessageDto,
   ): Promise<MessageDto> {
-    const message = await this.chat.sendMessage(user, id, dto.body);
+    const message = await this.chat.sendMessage(user, id, dto.body, dto.clientMsgId ?? null);
     this.gateway.broadcastMessage(message);
     return MessageDto.fromDomain(message);
   }

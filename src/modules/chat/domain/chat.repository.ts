@@ -30,11 +30,23 @@ export interface ChatRepository {
   /** The other member's id in a DIRECT conversation, or `null`. */
   otherMemberId(conversationId: string, selfId: string): Promise<string | null>;
 
-  /** Persists a message, atomically assigning the next per-conversation `seq` + `lastMessageAt`. */
-  appendMessage(conversationId: string, senderId: string, body: string): Promise<Message>;
+  /**
+   * Persists a message, atomically assigning the next per-conversation `seq` + `lastMessageAt`.
+   * When `clientMsgId` is set, a retry with the same id returns the already-stored message instead
+   * of creating a duplicate (C6 idempotency), enforced by a `(senderId, clientMsgId)` unique index.
+   */
+  appendMessage(
+    conversationId: string,
+    senderId: string,
+    body: string,
+    clientMsgId: string | null,
+  ): Promise<Message>;
 
   /** History strictly before `beforeSeq` (null = latest), newest-first, capped at `size`. */
   listMessages(conversationId: string, beforeSeq: number | null, size: number): Promise<Message[]>;
+
+  /** Messages strictly after `afterSeq`, oldest-first — for reconnect catch-up (C6). */
+  listSince(conversationId: string, afterSeq: number, size: number): Promise<Message[]>;
 
   /** The caller's conversations (other member + last message + unread), by `lastMessageAt` desc. */
   listConversations(studentId: string, page: number, size: number): Promise<ConversationPage>;

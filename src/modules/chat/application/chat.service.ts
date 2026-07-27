@@ -43,6 +43,7 @@ export class ChatService {
     user: AuthenticatedUser,
     conversationId: string,
     body: string,
+    clientMsgId: string | null = null,
   ): Promise<Message> {
     const text = body.trim();
     if (text.length === 0) {
@@ -53,7 +54,18 @@ export class ChatService {
     if (otherId !== null && !(await this.connectionCheck.areConnected(user.id, otherId))) {
       throw new AppException(ERROR_CODE.NOT_CONNECTED, 403, "Avval bog'lanish kerak");
     }
-    return this.chat.appendMessage(conversationId, user.id, text);
+    return this.chat.appendMessage(conversationId, user.id, text, clientMsgId);
+  }
+
+  /** Reconnect catch-up (C6): messages after `afterSeq`, oldest-first, for a conversation member. */
+  async messagesSince(
+    user: AuthenticatedUser,
+    conversationId: string,
+    afterSeq: number,
+    size: number,
+  ): Promise<Message[]> {
+    await this.assertMember(conversationId, user.id);
+    return this.chat.listSince(conversationId, afterSeq, size);
   }
 
   /** History for a conversation the caller belongs to (newest-first, `seq`-cursor). */
@@ -118,6 +130,11 @@ export class ChatService {
   /** Distinct conversation partners of a student — presence fan-out targets. */
   partnerIds(studentId: string): Promise<string[]> {
     return this.chat.partnerIds(studentId);
+  }
+
+  /** Whether a student currently has an open socket (⇒ deliver over WS, not push). */
+  isOnline(studentId: string): Promise<boolean> {
+    return this.presence.isOnline(studentId);
   }
 
   private async assertMember(conversationId: string, studentId: string): Promise<void> {

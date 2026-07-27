@@ -6,6 +6,7 @@ import type { IncomingMessage, ServerResponse } from 'http';
 import { AppConfigModule } from './config/config.module';
 import { RedisModule } from './infrastructure/cache/redis.module';
 import { PrismaModule } from './infrastructure/database/prisma.module';
+import { PushModule } from './infrastructure/push/push.module';
 import { StorageModule } from './infrastructure/storage/storage.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { BranchesModule } from './modules/branches/branches.module';
@@ -18,6 +19,7 @@ import { GeoModule } from './modules/geo/geo.module';
 import { HealthModule } from './modules/health/health.module';
 import { ListingsModule } from './modules/listings/listings.module';
 import { MediaModule } from './modules/media/media.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import { ProfileModule } from './modules/profiles/profile.module';
 import { RedemptionsModule } from './modules/redemptions/redemptions.module';
 import { TradeCentersModule } from './modules/trade-centers/trade-centers.module';
@@ -49,6 +51,7 @@ import { TradeCentersModule } from './modules/trade-centers/trade-centers.module
     PrismaModule,
     RedisModule,
     StorageModule,
+    PushModule,
     HealthModule,
     CatalogModule,
     DiscountsModule,
@@ -62,6 +65,7 @@ import { TradeCentersModule } from './modules/trade-centers/trade-centers.module
     RedemptionsModule,
     ConnectionsModule,
     ChatModule,
+    NotificationsModule,
     MediaModule,
   ],
 })

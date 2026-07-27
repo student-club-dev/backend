@@ -63,6 +63,7 @@ function makeChat(overrides: Partial<ChatRepository> = {}): ChatRepository {
       message({ conversationId, senderId, body }),
     ),
     listMessages: jest.fn().mockResolvedValue([]),
+    listSince: jest.fn().mockResolvedValue([]),
     listConversations: jest.fn().mockResolvedValue({ items: [], total: 0 }),
     advanceCursor: jest.fn().mockResolvedValue(undefined),
     touchLastSeen: jest.fn().mockResolvedValue(new Date('2026-07-27T00:00:00Z')),
@@ -152,8 +153,30 @@ describe('ChatService', () => {
     it('appends the trimmed message for a connected member', async () => {
       const chat = makeChat();
       const result = await makeService(chat).sendMessage(me, 'conv-1', '  salom  ');
-      expect(chat.appendMessage).toHaveBeenCalledWith('conv-1', 'me', 'salom');
+      expect(chat.appendMessage).toHaveBeenCalledWith('conv-1', 'me', 'salom', null);
       expect(result.body).toBe('salom');
+    });
+
+    it('passes the clientMsgId through for idempotency (C6)', async () => {
+      const chat = makeChat();
+      await makeService(chat).sendMessage(me, 'conv-1', 'salom', 'client-42');
+      expect(chat.appendMessage).toHaveBeenCalledWith('conv-1', 'me', 'salom', 'client-42');
+    });
+  });
+
+  describe('messagesSince', () => {
+    it('404 for a non-member', async () => {
+      const chat = makeChat({ findMembership: jest.fn().mockResolvedValue(null) });
+      await expect(makeService(chat).messagesSince(me, 'conv-1', 3, 20)).rejects.toMatchObject({
+        code: ERROR_CODE.CONVERSATION_NOT_FOUND,
+      });
+    });
+
+    it('returns messages after the cursor for a member', async () => {
+      const chat = makeChat({ listSince: jest.fn().mockResolvedValue([message({ seq: 4 })]) });
+      const result = await makeService(chat).messagesSince(me, 'conv-1', 3, 20);
+      expect(chat.listSince).toHaveBeenCalledWith('conv-1', 3, 20);
+      expect(result).toHaveLength(1);
     });
   });
 
