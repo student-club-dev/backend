@@ -40,6 +40,7 @@ const STUDENT_DOC_TAGS = [
   'Auth — Student Sessions',
   'Catalog (student feed)',
   'Discounts (student feed)',
+  'Connections',
   'Profiles',
   'Geo',
   'Media',
@@ -125,6 +126,7 @@ async function bootstrap(): Promise<void> {
     .addTag('Catalog', 'Business types, categories and their attribute schemas')
     .addTag('Catalog (student feed)', 'Student app: catalog groups and their business types')
     .addTag('Discounts (student feed)', 'Student app: the offers feed — search, detail, favourites')
+    .addTag('Connections', 'Student app: connections, requests, blocks and reports (chat gate)')
     .addTag('Branches', 'Branches of a business: location, working hours, delivery')
     .addTag('Trade Centers', 'Trade centres a branch can be placed in')
     .addTag('Listings', 'Discounted and regular offers')

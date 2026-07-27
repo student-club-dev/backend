@@ -1,0 +1,41 @@
+import { Module } from '@nestjs/common';
+import { JwtModule } from '@nestjs/jwt';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { StudentGuard } from '../../common/guards/student.guard';
+import { PrismaModule } from '../../infrastructure/database/prisma.module';
+import { ConnectionsService } from './application/connections.service';
+import { ReportsService } from './application/reports.service';
+import { CONNECTIONS_REPOSITORY } from './domain/connections.repository';
+import { REPORTS_REPOSITORY } from './domain/reports.repository';
+import { STUDENT_DIRECTORY } from './domain/student-directory.repository';
+import { ConnectionPrismaRepository } from './infrastructure/connection.prisma.repository';
+import { ReportPrismaRepository } from './infrastructure/report.prisma.repository';
+import { StudentDirectoryPrismaRepository } from './infrastructure/student-directory.prisma.repository';
+import { BlocksController } from './presentation/blocks.controller';
+import { ConnectionsController } from './presentation/connections.controller';
+import { ReportsController } from './presentation/reports.controller';
+import { StudentSearchController } from './presentation/student-search.controller';
+
+/**
+ * LinkedIn-style connections, blocks and abuse reports — the gate for student chat (Plan 2).
+ * Students-only (JwtAuthGuard + StudentGuard). Repository ports are bound to their Prisma impls.
+ */
+@Module({
+  imports: [PrismaModule, JwtModule.register({})],
+  controllers: [
+    StudentSearchController,
+    ConnectionsController,
+    BlocksController,
+    ReportsController,
+  ],
+  providers: [
+    ConnectionsService,
+    ReportsService,
+    JwtAuthGuard,
+    StudentGuard,
+    { provide: CONNECTIONS_REPOSITORY, useClass: ConnectionPrismaRepository },
+    { provide: REPORTS_REPOSITORY, useClass: ReportPrismaRepository },
+    { provide: STUDENT_DIRECTORY, useClass: StudentDirectoryPrismaRepository },
+  ],
+})
+export class ConnectionsModule {}
