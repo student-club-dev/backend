@@ -143,13 +143,34 @@ describe('ConnectionsService', () => {
       expect(result.status).toBe(ConnectionStatus.ACCEPTED);
     });
 
-    it('clears a prior DECLINED edge then creates a fresh request', async () => {
+    it('clears a prior DECLINED edge then creates a fresh request once the cooldown has passed', async () => {
       const connections = makeConnections({
-        findEdge: jest.fn().mockResolvedValue(edge({ status: ConnectionStatus.DECLINED })),
+        findEdge: jest.fn().mockResolvedValue(
+          edge({
+            status: ConnectionStatus.DECLINED,
+            respondedAt: new Date(Date.now() - 25 * 60 * 60 * 1000), // 25h ago — past cooldown
+          }),
+        ),
       });
       await makeService(connections).sendRequest(me, 'other');
       expect(connections.deleteEdge).toHaveBeenCalledWith('me', 'other');
       expect(connections.create).toHaveBeenCalledWith('me', 'other');
+    });
+
+    it('throws 429 RATE_LIMITED when re-requesting within the decline cooldown (C10)', async () => {
+      const connections = makeConnections({
+        findEdge: jest.fn().mockResolvedValue(
+          edge({
+            status: ConnectionStatus.DECLINED,
+            respondedAt: new Date(Date.now() - 60 * 60 * 1000), // 1h ago — inside cooldown
+          }),
+        ),
+      });
+      await expect(makeService(connections).sendRequest(me, 'other')).rejects.toMatchObject({
+        code: ERROR_CODE.RATE_LIMITED,
+        status: 429,
+      });
+      expect(connections.create).not.toHaveBeenCalled();
     });
   });
 

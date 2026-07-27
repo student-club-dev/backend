@@ -10,6 +10,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { ERROR_CODE } from '../../../common/errors/error-code';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
@@ -41,6 +42,8 @@ export class ConnectionsController {
   constructor(private readonly connections: ConnectionsService) {}
 
   @Post('requests')
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @ApiOperation({
     summary: 'Send a connection request',
     description: 'If the addressee already sent you a pending request, this auto-accepts it (C1).',

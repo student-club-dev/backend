@@ -12,10 +12,13 @@ import {
 } from '../domain/student-directory.repository';
 import { ConnectionListItem, Page, RequestListItem, SearchResult } from './connections.io';
 
+/** After a decline, this long must pass before the same pair may re-request (C10 anti-spam). */
+const DECLINE_COOLDOWN_MS = 24 * 60 * 60 * 1000;
+
 /**
  * Connection use-cases (LinkedIn-style, docs/architecture/chat.md C1/C11). Students-only; the caller
- * id is the JWT `sub`. Depends on repository interfaces only. Rate-limits/cooldowns (C10) are a
- * follow-up (plan Task 10).
+ * id is the JWT `sub`. Depends on repository interfaces only. Per-request rate-limiting is a
+ * `@Throttle` on the controller; the decline cooldown (C10) lives here.
  */
 @Injectable()
 export class ConnectionsService {
@@ -63,7 +66,18 @@ export class ConnectionsService {
       return this.connections.setStatus(edge.id, ConnectionStatus.ACCEPTED);
     }
     if (edge !== null) {
-      // a prior DECLINED edge — clear it so the unique pair constraint allows a fresh request.
+      // A prior DECLINED edge — enforce a cooldown before a fresh request is allowed (C10).
+      if (
+        edge.respondedAt !== null &&
+        Date.now() - edge.respondedAt.getTime() < DECLINE_COOLDOWN_MS
+      ) {
+        throw new AppException(
+          ERROR_CODE.RATE_LIMITED,
+          429,
+          "Rad etilgan so'rovni birozdan so'ng qayta yuborishingiz mumkin",
+        );
+      }
+      // Cooldown passed — clear it so the unique pair constraint allows a new request.
       await this.connections.deleteEdge(user.id, addresseeId);
     }
     return this.connections.create(user.id, addresseeId);

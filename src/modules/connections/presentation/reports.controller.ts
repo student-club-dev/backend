@@ -1,5 +1,6 @@
 import { Body, Controller, Post, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { ERROR_CODE } from '../../../common/errors/error-code';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
@@ -27,6 +28,8 @@ export class ReportsController {
   constructor(private readonly reports: ReportsService) {}
 
   @Post()
+  @UseGuards(ThrottlerGuard)
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
   @ApiOperation({
     summary: 'Report a student or a message',
     description:
