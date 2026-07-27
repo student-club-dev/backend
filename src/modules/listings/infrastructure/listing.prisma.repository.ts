@@ -62,8 +62,9 @@ export class ListingPrismaRepository implements ListingRepository {
   }
 
   /**
-   * Sets `status = PENDING_REVIEW` and, when a branch snapshot is supplied, replaces the
-   * ListingBranch rows with it — both in one transaction — then returns the updated aggregate.
+   * Applies the submit transition: the service's target `status` and, when a branch snapshot is
+   * supplied, a wholesale replace of the ListingBranch rows — both in one transaction — then
+   * returns the updated aggregate.
    */
   async submitTransition(id: string, data: SubmitTransitionData): Promise<Listing> {
     const row = await this.prisma.$transaction(async (tx) => {
@@ -77,7 +78,7 @@ export class ListingPrismaRepository implements ListingRepository {
       }
       return tx.listing.update({
         where: { id },
-        data: { status: PrismaListingStatus.PENDING_REVIEW },
+        data: { status: PrismaListingStatus[data.status] },
         include: LISTING_INCLUDE,
       });
     });

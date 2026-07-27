@@ -55,11 +55,14 @@ export interface CreateListingData {
 /**
  * Fields to change when a draft is submitted (LISTINGS.md §9/§10). `branchIds` is the resolved
  * active-branch snapshot for the empty-branchIds case — when present, the ListingBranch rows are
- * replaced with it; when absent, the existing associations are left untouched. The status is always
- * set to PENDING_REVIEW by the transition.
+ * replaced with it; when absent, the existing associations are left untouched.
+ *
+ * `status` is decided by the service, not the repository: for the MVP a submitted listing is
+ * published straight away, but which published state it lands in depends on `validFrom`.
  */
 export interface SubmitTransitionData {
   branchIds?: string[];
+  status: ListingStatus;
 }
 
 /**

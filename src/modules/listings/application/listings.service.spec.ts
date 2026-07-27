@@ -160,7 +160,9 @@ function draftListing(overrides: Partial<Listing> = {}): Listing {
       totalLimit: null,
       usedCount: 0,
     },
-    validFrom: new Date('2026-08-01T00:00:00Z'),
+    // Relative, not a fixed date: the common case is a listing whose window has already opened, and
+    // a hard-coded date silently changes meaning as the calendar passes it.
+    validFrom: new Date(Date.now() - 86_400_000),
     validTo: new Date('2030-01-01T00:00:00Z'),
     attributes: null,
     optionGroups: [],
@@ -181,7 +183,7 @@ function makeSubmitListings(listing: Listing | null): ListingRepository {
     findPageByBusiness: jest.fn().mockResolvedValue({ items: [], total: 0 }),
     submitTransition: jest.fn(async (_id: string, data: SubmitTransitionData) => ({
       ...(listing as Listing),
-      status: ListingStatus.PENDING_REVIEW,
+      status: data.status,
       branchIds: data.branchIds ?? (listing as Listing).branchIds,
     })),
     update: jest.fn(),
@@ -755,7 +757,7 @@ describe('ListingsService', () => {
   });
 
   describe('submit — happy path', () => {
-    it('transitions an approved business’s valid DRAFT to PENDING_REVIEW', async () => {
+    it('publishes an approved business’s valid DRAFT straight to ACTIVE (MVP auto-approve)', async () => {
       const listings = makeSubmitListings(draftListing({ branchIds: ['br-1'] }));
       const service = makeService({
         listings,
@@ -765,8 +767,43 @@ describe('ListingsService', () => {
 
       const result = await service.submit(owner, 'lst-1');
 
-      expect(listings.submitTransition).toHaveBeenCalledWith('lst-1', { branchIds: undefined });
-      expect(result.status).toBe(ListingStatus.PENDING_REVIEW);
+      expect(listings.submitTransition).toHaveBeenCalledWith('lst-1', {
+        branchIds: undefined,
+        status: ListingStatus.ACTIVE,
+      });
+      expect(result.status).toBe(ListingStatus.ACTIVE);
+    });
+
+    it('holds a DRAFT whose validFrom has not arrived at SCHEDULED', async () => {
+      const listings = makeSubmitListings(
+        draftListing({
+          branchIds: ['br-1'],
+          validFrom: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        }),
+      );
+      const service = makeService({
+        listings,
+        businesses: makeSubmitBusiness(),
+        branches: makeActiveBranches([{ id: 'br-1', isActive: true }]),
+      });
+
+      const result = await service.submit(owner, 'lst-1');
+
+      // Publishing must not make a listing live before the owner said it should start.
+      expect(result.status).toBe(ListingStatus.SCHEDULED);
+    });
+
+    it('publishes when validFrom is exactly now — the window is inclusive', async () => {
+      const listings = makeSubmitListings(
+        draftListing({ branchIds: ['br-1'], validFrom: new Date(Date.now() - 1000) }),
+      );
+      const service = makeService({
+        listings,
+        businesses: makeSubmitBusiness(),
+        branches: makeActiveBranches([{ id: 'br-1', isActive: true }]),
+      });
+
+      expect((await service.submit(owner, 'lst-1')).status).toBe(ListingStatus.ACTIVE);
     });
   });
 
@@ -864,8 +901,9 @@ describe('ListingsService', () => {
 
       expect(listings.submitTransition).toHaveBeenCalledWith('lst-1', {
         branchIds: ['br-1', 'br-3'],
+        status: ListingStatus.ACTIVE,
       });
-      expect(result.status).toBe(ListingStatus.PENDING_REVIEW);
+      expect(result.status).toBe(ListingStatus.ACTIVE);
       expect(result.branchIds).toEqual(['br-1', 'br-3']);
     });
 
@@ -880,8 +918,11 @@ describe('ListingsService', () => {
 
       const result = await service.submit(owner, 'lst-1');
 
-      expect(result.status).toBe(ListingStatus.PENDING_REVIEW);
-      expect(listings.submitTransition).toHaveBeenCalledWith('lst-1', { branchIds: undefined });
+      expect(result.status).toBe(ListingStatus.ACTIVE);
+      expect(listings.submitTransition).toHaveBeenCalledWith('lst-1', {
+        branchIds: undefined,
+        status: ListingStatus.ACTIVE,
+      });
       expect(branches.findManyByBusiness).not.toHaveBeenCalled();
     });
 
@@ -950,7 +991,7 @@ describe('ListingsService', () => {
 
       const result = await service.submit(owner, 'lst-1');
 
-      expect(result.status).toBe(ListingStatus.PENDING_REVIEW);
+      expect(result.status).toBe(ListingStatus.ACTIVE);
     });
 
     it('skips the price gate for a FREE_ITEM listing (1+1, finalPrice == originalPrice)', async () => {
@@ -976,7 +1017,7 @@ describe('ListingsService', () => {
 
       const result = await service.submit(owner, 'lst-1');
 
-      expect(result.status).toBe(ListingStatus.PENDING_REVIEW);
+      expect(result.status).toBe(ListingStatus.ACTIVE);
     });
 
     it('throws 422 VALIDATION_ERROR when validTo is in the past', async () => {

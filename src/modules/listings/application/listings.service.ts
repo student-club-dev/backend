@@ -266,8 +266,23 @@ export class ListingsService {
     const specs = await this.catalog.findAttributeSpecs(summary.type, listing.categoryKey);
     validateAttributes(listing.attributes, specs);
 
-    // 5. Transition to PENDING_REVIEW (persisting the branch snapshot when one was resolved).
-    return this.listings.submitTransition(listingId, { branchIds: branchSnapshot });
+    // 5. Publish (persisting the branch snapshot when one was resolved).
+    //
+    // TODO(post-MVP): route this through moderation — DRAFT → PENDING_REVIEW, and an admin
+    // approve/reject moves it on. For the MVP a submitted listing goes live immediately, exactly
+    // as businesses are auto-approved on create (commit 5315542). Without this the pipeline dead-
+    // ends: nothing else in the codebase ever sets ACTIVE, so no listing could reach the student
+    // feed, which only shows ACTIVE ones (STUDENT_FEED.md Q4).
+    //
+    // SCHEDULED when the owner dated the listing forward — publishing must not start it early.
+    // NOTE: SCHEDULED → ACTIVE needs the cron from BACKEND_PROMPT §7, which does not exist yet.
+    const publishedStatus =
+      listing.validFrom > new Date() ? ListingStatus.SCHEDULED : ListingStatus.ACTIVE;
+
+    return this.listings.submitTransition(listingId, {
+      branchIds: branchSnapshot,
+      status: publishedStatus,
+    });
   }
 
   /**

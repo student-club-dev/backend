@@ -151,6 +151,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   /** Broadcast a new message to both members' personal rooms (used by WS send + the REST fallback). */
   async broadcastMessage(message: Message): Promise<void> {
+    if (this.server === undefined) {
+      return; // no WS server bound (e.g. REST-only context) — broadcast is best-effort
+    }
     const otherId = await this.chat.otherMemberId(message.conversationId, message.senderId);
     const payload = {
       conversationId: message.conversationId,
@@ -164,6 +167,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
   /** Broadcast a read receipt to the other member (the sender whose messages were read). */
   async broadcastRead(conversationId: string, readerId: string, seq: number): Promise<void> {
+    if (this.server === undefined) {
+      return;
+    }
     const otherId = await this.chat.otherMemberId(conversationId, readerId);
     if (otherId !== null) {
       this.server.to(personalRoom(otherId)).emit(CHAT_EVENT.READ_RECEIPT, {
