@@ -6,7 +6,7 @@ import { PriceUnit } from '../../domain/enums/price-unit.enum';
 
 /** CreateBusinessTypeDto — admin body to add a business type (`type` is the PK/key). */
 export class CreateBusinessTypeDto {
-  @ApiProperty({ description: 'Business type key (PK)', example: 'GAME_CLUB' })
+  @ApiProperty({ description: 'Business type key (PK)', example: 'PLAYSTATION' })
   @IsString()
   @Length(1, 64)
   type!: string;

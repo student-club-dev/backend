@@ -212,14 +212,18 @@ describe('Filter schema (student feed) — e2e', () => {
       .send(body({ types: ['TENNIS'] }))
       .expect(422);
 
+    // The same code search and suggest use — one client mistake, one code, whatever the endpoint.
+    expect(res.body.error.code).toBe('TYPE_GROUP_MISMATCH');
     expect(res.body.error.fields).toHaveProperty(['types']);
   });
 
   it('rejects an unknown group key', async () => {
-    await request(app.getHttpServer())
+    const res = await request(app.getHttpServer())
       .post('/v1/catalog/filter-schema')
       .send({ groupKeys: ['NOPE'] })
       .expect(422);
+
+    expect(res.body.error.code).toBe('UNKNOWN_GROUP');
   });
 
   it('returns the sorts the feed offers', async () => {

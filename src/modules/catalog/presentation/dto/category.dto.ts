@@ -7,7 +7,7 @@ export class CategoryDto {
   @ApiProperty({ example: 'PIZZA' })
   key!: string;
 
-  @ApiProperty({ description: 'Business type key', example: 'CAFE_RESTAURANT' })
+  @ApiProperty({ description: 'Business type key', example: 'NATIONAL_FOOD' })
   businessType!: string;
 
   @ApiProperty({ example: 'Pitsa' })

@@ -95,9 +95,11 @@ describe('Business (owner CRUD) + admin business types — e2e', () => {
       const created = await request(app.getHttpServer())
         .post('/v1/business')
         .set('Authorization', auth)
-        .send({ type: 'CAFE_RESTAURANT', name: 'Navruz Cafe', phone: OWNER_PHONE })
+        .send({ type: 'NATIONAL_FOOD', name: 'Navruz Cafe', phone: OWNER_PHONE })
         .expect(201);
-      expect(created.body.result.status).toBe('DRAFT');
+      // APPROVED, not DRAFT: new businesses are auto-approved for the MVP and moderation is
+      // deferred to Level 2 (commit 5315542).
+      expect(created.body.result.status).toBe('APPROVED');
       expect(created.body.result.ownerUserId).toBeDefined();
       const businessId = created.body.result.id as string;
 
@@ -124,7 +126,7 @@ describe('Business (owner CRUD) + admin business types — e2e', () => {
       const immutable = await request(app.getHttpServer())
         .put(`/v1/business/${businessId}`)
         .set('Authorization', auth)
-        .send({ type: 'GAME_CLUB' })
+        .send({ type: 'PLAYSTATION' })
         .expect(422);
       expect(immutable.body.error.code).toBe('BUSINESS_TYPE_IMMUTABLE');
 
@@ -158,7 +160,7 @@ describe('Business (owner CRUD) + admin business types — e2e', () => {
       const res = await request(app.getHttpServer())
         .post('/v1/business')
         .set('Authorization', auth)
-        .send({ type: 'CAFE_RESTAURANT', name: 'No Phone', phone: '+998900000056' })
+        .send({ type: 'NATIONAL_FOOD', name: 'No Phone', phone: '+998900000056' })
         .expect(403);
       expect(res.body.error.code).toBe('PHONE_NOT_VERIFIED');
 
@@ -175,7 +177,7 @@ describe('Business (owner CRUD) + admin business types — e2e', () => {
       const res = await request(app.getHttpServer())
         .post('/v1/business')
         .set('Authorization', auth)
-        .send({ type: 'CAFE_RESTAURANT', name: 'Nope', phone: '+998900000057' })
+        .send({ type: 'NATIONAL_FOOD', name: 'Nope', phone: '+998900000057' })
         .expect(403);
       expect(res.body.error.code).toBe('FORBIDDEN');
     });

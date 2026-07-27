@@ -45,6 +45,7 @@ const FILTER: SearchFilter & { groupKeys: string[] } = {
   discount: { types: [], minPercent: null, maxPercent: null, minSavedAmount: null },
   redemption: { methods: [], hasPromoCode: null, onlyAvailable: false },
   flags: { withImagesOnly: false, favoritesOnly: false, hasDeliveryOnly: false, newOnly: false },
+  availability: { openNow: false, openAt: null, validAt: null, endingWithinHours: null },
   attributes: [],
   attributesMatch: 'ALL',
 };
@@ -365,6 +366,63 @@ describe('SearchService — attribute filters (§5)', () => {
         withFilter({ attributes: [attribute({ key: 'games', op: 'ANY', values: [] })] }),
       ),
       ERROR_CODE.VALIDATION_ERROR,
+    );
+  });
+});
+
+describe('SearchService — availability (§4)', () => {
+  const OPEN_NOW: SearchFilter['availability'] = {
+    openNow: true,
+    openAt: null,
+    validAt: null,
+    endingWithinHours: null,
+  };
+
+  it('hands the availability block to the LIST query untouched', async () => {
+    const search = makeSearch();
+
+    await makeService({ search }).search(withFilter({ availability: OPEN_NOW }));
+
+    expect(search.search).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filter: expect.objectContaining({ availability: OPEN_NOW }),
+        now: expect.any(Date),
+      }),
+    );
+  });
+
+  it('gives COUNT the instant openNow asks about, so its total still matches LIST', async () => {
+    const search = makeSearch();
+
+    await makeService({ search }).search({
+      ...withFilter({ availability: OPEN_NOW }),
+      mode: 'COUNT',
+    });
+
+    expect(search.count).toHaveBeenCalledWith(
+      expect.objectContaining({ availability: OPEN_NOW }),
+      null,
+      expect.any(Date),
+    );
+  });
+
+  it('gives MAP that instant too, so a pin and a card never disagree on "open"', async () => {
+    const search = makeSearch();
+    const geo = {
+      ...FILTER.geo,
+      bbox: { minLat: 41.28, minLng: 69.2, maxLat: 41.35, maxLng: 69.31 },
+    };
+
+    await makeService({ search }).search({
+      ...withFilter({ availability: OPEN_NOW, geo }),
+      mode: 'MAP',
+    });
+
+    expect(search.searchMarkers).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filter: expect.objectContaining({ availability: OPEN_NOW }),
+        now: expect.any(Date),
+      }),
     );
   });
 });

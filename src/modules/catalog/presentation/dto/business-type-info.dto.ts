@@ -4,7 +4,7 @@ import { PriceUnit } from '../../domain/enums/price-unit.enum';
 
 /** BusinessTypeInfoDto — a business type and its price units (matches elon-uz.json). */
 export class BusinessTypeInfoDto {
-  @ApiProperty({ description: 'Business type key (e.g. GAME_CLUB)', example: 'CAFE_RESTAURANT' })
+  @ApiProperty({ description: 'Business type key (e.g. PLAYSTATION)', example: 'NATIONAL_FOOD' })
   type!: string;
 
   @ApiProperty({ example: 'Kafe va Restoran' })

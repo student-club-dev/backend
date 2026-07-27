@@ -1,4 +1,4 @@
-import { tashkentClock } from './feed-time';
+import { scheduleClock, tashkentClock } from './feed-time';
 
 describe('tashkentClock', () => {
   it('shifts UTC into Tashkent time (UTC+5)', () => {
@@ -33,5 +33,28 @@ describe('tashkentClock', () => {
       day: 'TUE',
       minuteOfDay: 0,
     });
+  });
+});
+
+describe('scheduleClock', () => {
+  it('reads an onDay + atTime pair as minutes past midnight', () => {
+    expect(scheduleClock('SAT', '19:30')).toEqual({
+      day: 'SAT',
+      previousDay: 'FRI',
+      minuteOfDay: 19 * 60 + 30,
+    });
+  });
+
+  it('carries the previous day, so an asked-about time can fall in an overnight shift', () => {
+    // 02:00 on Sunday is served by Saturday's 20:00–04:00 row.
+    expect(scheduleClock('SUN', '02:00')).toEqual({
+      day: 'SUN',
+      previousDay: 'SAT',
+      minuteOfDay: 120,
+    });
+  });
+
+  it('reads midnight as minute zero', () => {
+    expect(scheduleClock('MON', '00:00')).toMatchObject({ previousDay: 'SUN', minuteOfDay: 0 });
   });
 });

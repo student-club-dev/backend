@@ -1,4 +1,4 @@
-import { AppException } from '../../../common/exceptions/app.exception';
+import { ERROR_CODE } from '../../../common/errors/error-code';
 import { CatalogRepository } from '../../catalog/domain/catalog.repository';
 import { CatalogGroup } from '../../catalog/domain/entities/catalog-group.entity';
 import { FacetRepository } from '../domain/facet.repository';
@@ -82,21 +82,27 @@ describe('FilterSchemaService', () => {
     );
   });
 
-  it('rejects a type that is not in the selected groups', async () => {
+  it('rejects a type outside the selected groups with the same code search uses', async () => {
     const service = new FilterSchemaService(makeCatalog(), makeFacets());
 
-    await expect(service.getSchema({ ...QUERY, types: ['TENNIS'] })).rejects.toBeInstanceOf(
-      AppException,
-    );
+    // The same client mistake must carry the same error.code on every feed endpoint — otherwise
+    // the app has to branch on which URL it happened to call.
+    await expect(service.getSchema({ ...QUERY, types: ['TENNIS'] })).rejects.toMatchObject({
+      code: ERROR_CODE.TYPE_GROUP_MISMATCH,
+      status: 422,
+    });
   });
 
-  it('rejects an unknown group key', async () => {
+  it('rejects an unknown group key with the same code search uses', async () => {
     const service = new FilterSchemaService(
       makeCatalog({ findGroups: jest.fn().mockResolvedValue([]) }),
       makeFacets(),
     );
 
-    await expect(service.getSchema(QUERY)).rejects.toBeInstanceOf(AppException);
+    await expect(service.getSchema(QUERY)).rejects.toMatchObject({
+      code: ERROR_CODE.UNKNOWN_GROUP,
+      status: 422,
+    });
   });
 
   it('reports listingKind buckets that sum to the total', async () => {

@@ -6,11 +6,13 @@ import {
   IsBoolean,
   IsIn,
   IsInt,
+  IsISO8601,
   IsLatitude,
   IsLongitude,
   IsNumber,
   IsOptional,
   IsString,
+  Matches,
   Max,
   MaxLength,
   Min,
@@ -23,10 +25,12 @@ import {
   type MapView,
   type SearchQuery,
 } from '../../application/search-query.model';
+import { scheduleClock, WEEK_DAYS, type WeekDay } from '../../domain/feed-time';
 import type {
   AttributeFilter,
   AttributeOp,
   AttributesMatch,
+  AvailabilityFilter,
   DiscountFilter,
   FlagsFilter,
   GeoFilter,
@@ -102,6 +106,17 @@ const NO_FLAGS: FlagsFilter = {
   hasDeliveryOnly: false,
   newOnly: false,
 };
+const NO_AVAILABILITY: AvailabilityFilter = {
+  openNow: false,
+  openAt: null,
+  validAt: null,
+  endingWithinHours: null,
+};
+
+/** `availability.atTime` — `HH:mm` on a 24-hour clock. */
+const CLOCK_TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
+/** A year of hours: past that, "ends within N hours" stops narrowing anything. */
+const MAX_ENDING_WITHIN_HOURS = 8760;
 
 /**
  * `filter.geo.bbox` (§4) — the map viewport. The service rejects a box that is inverted or outside
@@ -347,6 +362,80 @@ export class SearchFlagsDto {
 }
 
 /**
+ * `filter.availability` (§4, D11) — opening hours and the validity window.
+ *
+ * `onDay` and `atTime` come as a pair, the same way `geo.lat`/`geo.lng` do: half a time is a client
+ * bug, and answering it with an unfiltered feed (or an empty one) would hide that.
+ *
+ * `openNow` and the `onDay`/`atTime` pair are two different questions, so both are applied when
+ * both arrive. Opening hours are read in Tashkent time (UTC+5), overnight shifts included.
+ */
+export class SearchAvailabilityDto {
+  @ApiProperty({
+    required: false,
+    description: 'Some branch is open right now, Tashkent time (UTC+5).',
+  })
+  @IsOptional()
+  @IsBoolean()
+  openNow?: boolean;
+
+  @ApiProperty({
+    required: false,
+    enum: WEEK_DAYS,
+    example: 'SAT',
+    description: 'Required together with `atTime`.',
+  })
+  @ValidateIf((a: SearchAvailabilityDto) => a.onDay !== undefined || a.atTime !== undefined)
+  @IsIn(WEEK_DAYS, { message: 'onDay va atTime birga yuboriladi; onDay hafta kuni bo‘lsin' })
+  onDay?: WeekDay;
+
+  @ApiProperty({
+    required: false,
+    example: '19:30',
+    description: '`HH:mm`. Required together with `onDay`.',
+  })
+  @ValidateIf((a: SearchAvailabilityDto) => a.onDay !== undefined || a.atTime !== undefined)
+  @Matches(CLOCK_TIME, { message: 'onDay va atTime birga yuboriladi; atTime HH:mm ko‘rinishida' })
+  atTime?: string;
+
+  @ApiProperty({
+    required: false,
+    example: '2026-07-25T15:00:00Z',
+    description: 'ISO-8601. The offer must also be valid at this instant; defaults to now.',
+  })
+  @IsOptional()
+  @IsISO8601({}, { message: 'validAt ISO-8601 sana bo‘lsin' })
+  validAt?: string;
+
+  @ApiProperty({
+    required: false,
+    example: 24,
+    minimum: 1,
+    maximum: MAX_ENDING_WITHIN_HOURS,
+    description: 'Ends within this many hours — the "expires today" filter.',
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(1, { message: 'endingWithinHours kamida 1 soat bo‘lsin' })
+  @Max(MAX_ENDING_WITHIN_HOURS, {
+    message: `endingWithinHours ko‘pi bilan ${MAX_ENDING_WITHIN_HOURS} soat`,
+  })
+  endingWithinHours?: number;
+
+  toDomain(): AvailabilityFilter {
+    return {
+      openNow: this.openNow ?? false,
+      openAt:
+        this.onDay === undefined || this.atTime === undefined
+          ? null
+          : scheduleClock(this.onDay, this.atTime),
+      validAt: this.validAt === undefined ? null : new Date(this.validAt),
+      endingWithinHours: this.endingWithinHours ?? null,
+    };
+  }
+}
+
+/**
  * One attribute condition (§5). Which operand is read follows from `op`: `EQ`/`NEQ` take
  * `text`/`number`/`boolean`, `IN`/`NOT_IN`/`ANY`/`ALL` take `values`, `BETWEEN` takes `min`/`max`,
  * `GTE`/`LTE` take `number`, `CONTAINS` takes `text`, `EXISTS` takes none.
@@ -413,9 +502,8 @@ export class SearchAttributeDto {
  * exception), which is why the Q3 check itself lives in the service and not in a decorator.
  *
  * Fields of §4 that Level 1 does not answer are deliberately absent, so sending one fails
- * validation instead of being silently dropped: `options` (D13), `availability` (needs the
- * working-hours join), `tradeCenterIds` / `geo.bbox` / `geo.inTradeCenterOnly` (MAP slice),
- * `includeCustomCategories`.
+ * validation instead of being silently dropped: `options` (D13), `tradeCenterIds` /
+ * `geo.bbox` / `geo.inTradeCenterOnly` (MAP slice), `includeCustomCategories`.
  */
 export class SearchFilterDto {
   @ApiProperty({ required: false, type: [String], example: ['FOOD'], maxItems: 3 })
@@ -530,6 +618,12 @@ export class SearchFilterDto {
   @Type(() => SearchFlagsDto)
   flags?: SearchFlagsDto;
 
+  @ApiProperty({ required: false, type: SearchAvailabilityDto })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => SearchAvailabilityDto)
+  availability?: SearchAvailabilityDto;
+
   @ApiProperty({ required: false, type: [SearchAttributeDto], maxItems: MAX_ATTRIBUTES })
   @IsOptional()
   @IsArray()
@@ -562,6 +656,7 @@ export class SearchFilterDto {
       discount: this.discount?.toDomain() ?? NO_DISCOUNT,
       redemption: this.redemption?.toDomain() ?? NO_REDEMPTION,
       flags: this.flags?.toDomain() ?? NO_FLAGS,
+      availability: this.availability?.toDomain() ?? NO_AVAILABILITY,
       attributes: (this.attributes ?? []).map((attribute) => attribute.toDomain()),
       attributesMatch: this.attributesMatch ?? 'ALL',
     };

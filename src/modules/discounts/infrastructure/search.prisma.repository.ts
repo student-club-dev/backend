@@ -45,11 +45,14 @@ export class SearchPrismaRepository implements SearchRepository {
   async search(criteria: SearchCriteria): Promise<SearchPage> {
     const filter = effectiveFilter(criteria.filter);
     const synonyms = await this.findSynonyms(filter);
-    const where = searchWhere(filter, criteria.studentId, synonyms);
+    // One clock for the whole request: the `openNow` filter and the card's `isOpenNow` badge then
+    // answer for the same instant, so a row can never be kept as open and drawn as closed.
+    const clock = tashkentClock(criteria.now);
+    const where = searchWhere(filter, criteria.studentId, synonyms, clock);
     const offset = criteria.page.number * criteria.page.size;
 
     const rowsQuery = Prisma.sql`
-      ${cardSelect(filter.geo.point, tashkentClock(criteria.now), criteria.studentId)}
+      ${cardSelect(filter.geo.point, clock, criteria.studentId)}
       WHERE ${where}
       ORDER BY ${searchOrderBy(criteria.sort.by, criteria.sort.direction, filter.query)}
       LIMIT ${criteria.page.size} OFFSET ${offset}
@@ -71,11 +74,11 @@ export class SearchPrismaRepository implements SearchRepository {
     };
   }
 
-  async count(filter: SearchFilter, studentId: string | null): Promise<number> {
+  async count(filter: SearchFilter, studentId: string | null, now: Date): Promise<number> {
     const effective = effectiveFilter(filter);
     const synonyms = await this.findSynonyms(effective);
     const rows = await this.prisma.$queryRaw<{ count: number }[]>(
-      countQuery(searchWhere(effective, studentId, synonyms)),
+      countQuery(searchWhere(effective, studentId, synonyms, tashkentClock(now))),
     );
     return rows[0]?.count ?? 0;
   }
@@ -90,7 +93,7 @@ export class SearchPrismaRepository implements SearchRepository {
   async searchMarkers(criteria: MapCriteria): Promise<MapMarkerPage> {
     const filter = effectiveFilter(criteria.filter);
     const synonyms = await this.findSynonyms(filter);
-    const where = searchWhere(filter, criteria.studentId, synonyms);
+    const where = searchWhere(filter, criteria.studentId, synonyms, tashkentClock(criteria.now));
     const inView = markerInView(filter.geo);
 
     const markersQuery = Prisma.sql`

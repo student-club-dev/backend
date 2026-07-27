@@ -1,6 +1,7 @@
 import type { GeoBox } from '../../../common/geo/geo-box';
 import type { GeoScope } from '../../../common/geo/geo-scope';
 import type { DiscountCard } from './discount-card.model';
+import type { FeedClock } from './feed-time';
 import type { MapMarker } from './map-marker.model';
 
 /** Injection token for the search repository port (bound to the Prisma impl in the module). */
@@ -104,6 +105,26 @@ export interface FlagsFilter {
 }
 
 /**
+ * Time and opening hours (§4 `availability`, D11). Every field is optional; an absent one is no
+ * filter at all.
+ *
+ * `openNow` and `openAt` are two different questions ("open right now" vs "open on Saturday at
+ * 19:30"), so both apply when both are asked. The request's `onDay` + `atTime` pair is already
+ * resolved into `openAt` — a half-specified pair cannot be represented here, because the DTO
+ * refuses it with a 422.
+ */
+export interface AvailabilityFilter {
+  /** Open at the moment the request is served, Tashkent time (UTC+5). */
+  openNow: boolean;
+  /** Open at the named weekday and time; null = not asked. */
+  openAt: FeedClock | null;
+  /** The instant the validity window is tested at instead of now(); null = now(). */
+  validAt: Date | null;
+  /** "Ends within N hours" — `valid_to <= now() + N hours`; null = no filter. */
+  endingWithinHours: number | null;
+}
+
+/**
  * A fully resolved filter: `types` is the expansion of the request's `groupKeys`/`types` (Q3), and
  * every optional field has been defaulted. Empty array = "no filter on this dimension".
  */
@@ -125,6 +146,7 @@ export interface SearchFilter {
   discount: DiscountFilter;
   redemption: RedemptionFilter;
   flags: FlagsFilter;
+  availability: AvailabilityFilter;
   attributes: AttributeFilter[];
   attributesMatch: AttributesMatch;
 }
@@ -153,6 +175,8 @@ export interface MapCriteria {
   filter: SearchFilter;
   studentId: string | null;
   limit: number;
+  /** Same role as {@link SearchCriteria.now} — the instant `availability.openNow` is asked about. */
+  now: Date;
 }
 
 /** The markers a viewport holds, with both counts D15 distinguishes. */
@@ -174,7 +198,7 @@ export interface SearchRepository {
   search(criteria: SearchCriteria): Promise<SearchPage>;
 
   /** Matching count only — COUNT mode never loads rows (§8.3). */
-  count(filter: SearchFilter, studentId: string | null): Promise<number>;
+  count(filter: SearchFilter, studentId: string | null, now: Date): Promise<number>;
 
   /** One marker per (listing, branch) inside the viewport, plus both D15 counts. */
   searchMarkers(criteria: MapCriteria): Promise<MapMarkerPage>;

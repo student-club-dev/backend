@@ -11,7 +11,7 @@ export class BusinessDto {
   @ApiProperty({ description: 'Resolved from the Bearer token' })
   ownerUserId!: string;
 
-  @ApiProperty({ description: 'Business type key (immutable)', example: 'CAFE_RESTAURANT' })
+  @ApiProperty({ description: 'Business type key (immutable)', example: 'NATIONAL_FOOD' })
   type!: string;
 
   @ApiProperty({ minLength: 2, maxLength: 80 })

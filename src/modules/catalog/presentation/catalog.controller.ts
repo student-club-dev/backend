@@ -38,7 +38,7 @@ export class CatalogController {
     description:
       'The base list plus, for CLOTHING when `gender` is supplied, the matching per-gender categories. Each category carries its form `fields`.',
   })
-  @ApiParam({ name: 'type', description: 'Business type key', example: 'CAFE_RESTAURANT' })
+  @ApiParam({ name: 'type', description: 'Business type key', example: 'NATIONAL_FOOD' })
   @ApiQuery({
     name: 'gender',
     enum: Gender,

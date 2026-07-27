@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { ERROR_CODE } from '../../../common/errors/error-code';
 import { AppException } from '../../../common/exceptions/app.exception';
 import { CATALOG_REPOSITORY, CatalogRepository } from '../../catalog/domain/catalog.repository';
 import { AttributeSpec } from '../../catalog/domain/entities/attribute-spec.entity';
@@ -137,10 +138,9 @@ export class FilterSchemaService {
 
     const unknown = query.groupKeys.filter((key) => !known.has(key));
     if (unknown.length > 0) {
-      throw AppException.validation(
-        { groupKeys: `Katalogda bunday guruh yo‘q: ${unknown.join(', ')}` },
-        'Noma’lum katalog guruhi',
-      );
+      throw new AppException(ERROR_CODE.UNKNOWN_GROUP, 422, 'Noma’lum katalog guruhi', {
+        groupKeys: `Katalogda bunday guruh yo‘q: ${unknown.join(', ')}`,
+      });
     }
 
     const expanded = query.groupKeys.flatMap((key) => known.get(key) ?? []);
@@ -150,10 +150,9 @@ export class FilterSchemaService {
 
     const outside = query.types.filter((type) => !expanded.includes(type));
     if (outside.length > 0) {
-      throw AppException.validation(
-        { types: `Tanlangan guruhlarga kirmaydigan tur: ${outside.join(', ')}` },
-        'Tur va guruh mos kelmadi',
-      );
+      throw new AppException(ERROR_CODE.TYPE_GROUP_MISMATCH, 422, 'Tur va guruh mos kelmadi', {
+        types: `Tanlangan guruhlarga kirmaydigan tur: ${outside.join(', ')}`,
+      });
     }
     return query.types;
   }

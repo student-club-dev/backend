@@ -44,7 +44,7 @@ export class AdminBusinessTypeController {
 
   @Put(':type')
   @ApiOperation({ summary: 'Update a business type' })
-  @ApiParam({ name: 'type', description: 'Business type key', example: 'GAME_CLUB' })
+  @ApiParam({ name: 'type', description: 'Business type key', example: 'PLAYSTATION' })
   @ApiOkEnvelope(BusinessTypeInfoDto)
   @ApiNotFoundEnvelope(
     ERROR_CODE.BUSINESS_TYPE_NOT_FOUND,
@@ -66,7 +66,7 @@ export class AdminBusinessTypeController {
     summary: 'Delete a business type',
     description: 'Allowed only when no business and no category reference it. `result` is null.',
   })
-  @ApiParam({ name: 'type', description: 'Business type key', example: 'GAME_CLUB' })
+  @ApiParam({ name: 'type', description: 'Business type key', example: 'PLAYSTATION' })
   @ApiOkEnvelope(undefined, 'Deleted; `result` is null.')
   @ApiNotFoundEnvelope(
     ERROR_CODE.BUSINESS_TYPE_NOT_FOUND,

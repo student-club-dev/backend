@@ -16,7 +16,7 @@ import { BusinessContactsDto } from './business-contacts.dto';
 export class CreateBusinessDto {
   @ApiProperty({
     description: 'Business type key (immutable after creation)',
-    example: 'CAFE_RESTAURANT',
+    example: 'NATIONAL_FOOD',
   })
   @IsString()
   @Length(1, 64)

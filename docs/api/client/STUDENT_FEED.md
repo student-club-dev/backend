@@ -101,13 +101,16 @@ qo'shiladi — mavjud `search` ga tiqishtirilmaydi.
 | `POST /v1/discounts/detail` · `suggest` | ✅ |
 | `POST /v1/discounts/favorites/toggle` · `favorites/search` | ✅ |
 
+`filter.availability` (`openNow`, `onDay`+`atTime`, `validAt`, `endingWithinHours`) ham ulandi —
+uchala rejimda (`LIST`/`COUNT`/`MAP`) ishlaydi. `onDay` va `atTime` **birga** yuboriladi, aks holda
+`422`.
+
 ### Hali qurilmagan — mijoz bularni yubormasin
 
 `forbidNonWhitelisted` yoqilgan, ya'ni qo'llab-quvvatlanmagan maydon **jimgina e'tiborsiz qolmaydi, `422` beradi**. Bu ataylab: filtri qo'llanmagan holda to'liq feed qaytarish undan yomonroq.
 
 | Maydon | Sabab |
 |---|---|
-| `filter.availability` (`openNow`, `onDay`, `atTime`, `endingWithinHours`) | Jadval (`branch_working_hours`) qurildi va **karta `isOpenNow` ni to'g'ri qaytaradi**, lekin qidiruv filtri hali ulanmagan |
 | `filter.options` | D13 — `OptionGroup.name` erkin matn, filtr kaliti sifatida ishonchsiz |
 | `filter.tradeCenterIds`, `geo.inTradeCenterOnly` | Hech bir kesim da'vo qilmadi |
 | `attributes[].range.step` | Katalogda bunday maydon yo'q (§0.4) |

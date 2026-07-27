@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import type { GeoBox } from '../../../common/geo/geo-box';
 import type { GeoScope } from '../../../common/geo/geo-scope';
+import type { FeedClock } from '../domain/feed-time';
 import type {
   AttributeFilter,
   SearchFilter,
@@ -23,16 +24,20 @@ export interface SynonymPair {
  * {@link cardSelect} — nothing here touches `bt`, `cat` or the nearest-branch lateral, so the same
  * clause also drives the bare count query.
  *
+ * `clock` is the request's own Tashkent time, passed in rather than read here so the predicate stays
+ * a pure function of its arguments — and so `availability.openNow` and the card's `isOpenNow` badge
+ * answer for the very same instant within one request.
+ *
  * Deliberately NOT supported here (each is another slice, and 422-ing on an unknown body field is
  * louder than silently returning unfiltered rows):
  *   · `filter.options`        — D13, `OptionGroup.name` is free text and unusable as a filter key
- *   · `filter.availability`   — needs the `branch_working_hours` join (openNow/onDay/atTime)
  *   · `tradeCenterIds`, `inTradeCenterOnly` — no slice claims them yet
  */
 export function searchWhere(
   filter: SearchFilter,
   studentId: string | null,
   synonyms: SynonymPair[],
+  clock: FeedClock,
 ): Prisma.Sql {
   const conditions: Prisma.Sql[] = [VISIBLE_LISTING];
 
@@ -75,6 +80,7 @@ export function searchWhere(
   conditions.push(...kindConditions(filter));
   conditions.push(...redemptionConditions(filter));
   conditions.push(...flagConditions(filter, studentId));
+  conditions.push(...availabilityConditions(filter, clock));
 
   const attributes = attributesCondition(filter);
   if (attributes !== null) {
@@ -375,6 +381,72 @@ function flagConditions(filter: SearchFilter, studentId: string | null): Prisma.
     conditions.push(Prisma.sql`l.created_at >= now() - interval '7 days'`);
   }
   return conditions;
+}
+
+/**
+ * §4 `availability` — opening hours and the validity window (D11).
+ *
+ * `openNow` and `onDay`/`atTime` ask two different questions, so both apply when both arrive: "open
+ * right now" AND "open on Saturday at 19:30".
+ *
+ * `validAt` is ANDed onto {@link VISIBLE_LISTING} rather than replacing the `now()` window inside
+ * it: that constant is Q4's single source of truth and is shared with the facet queries, so its
+ * meaning must not shift per request. The result is the intersection — a listing must be visible
+ * now (ACTIVE, APPROVED, live) *and* valid at the instant asked about.
+ */
+function availabilityConditions(filter: SearchFilter, clock: FeedClock): Prisma.Sql[] {
+  const { openNow, openAt, validAt, endingWithinHours } = filter.availability;
+  const conditions: Prisma.Sql[] = [];
+
+  if (openNow) {
+    conditions.push(branchExists(openAtExpr(clock)));
+  }
+  if (openAt !== null) {
+    conditions.push(branchExists(openAtExpr(openAt)));
+  }
+  if (validAt !== null) {
+    conditions.push(Prisma.sql`(l.valid_from <= ${validAt} AND l.valid_to >= ${validAt})`);
+  }
+  if (endingWithinHours !== null) {
+    // Read together with the visibility window above: "still live, but over within N hours".
+    conditions.push(
+      Prisma.sql`l.valid_to <= now() + make_interval(hours => ${endingWithinHours}::int)`,
+    );
+  }
+  return conditions;
+}
+
+/**
+ * Whether the branch aliased `br` is open at `clock`, evaluated against `branch_working_hours`.
+ *
+ * These are literally the three arms of `isOpenNowExpr` in `discount-card.sql.ts`, which computes
+ * the card's `isOpenNow` badge: the same table, the same arms in the same order, the same
+ * open-inclusive / close-exclusive boundaries — only the branch is read as `br.id` instead of the
+ * card's nearest-branch alias. They must not drift: a listing kept by `openNow: true` whose card
+ * then says "yopiq" is the one bug this filter can produce, so `search-filter.sql.spec.ts` compares
+ * the two SQL texts.
+ *
+ * The third arm is the one that is easy to miss: a venue open 20:00–04:00 is still open at 02:00,
+ * but those hours live on the PREVIOUS day's row.
+ */
+function openAtExpr(clock: FeedClock): Prisma.Sql {
+  return Prisma.sql`
+    EXISTS (
+      SELECT 1 FROM branch_working_hours wh
+      WHERE wh.branch_id = br.id
+        AND wh.is_closed = false
+        AND wh.open_minute IS NOT NULL
+        AND wh.close_minute IS NOT NULL
+        AND (
+             (wh.day = ${clock.day}::"DayOfWeek" AND NOT wh.spans_midnight
+                AND ${clock.minuteOfDay} >= wh.open_minute AND ${clock.minuteOfDay} < wh.close_minute)
+          OR (wh.day = ${clock.day}::"DayOfWeek" AND wh.spans_midnight
+                AND ${clock.minuteOfDay} >= wh.open_minute)
+          OR (wh.day = ${clock.previousDay}::"DayOfWeek" AND wh.spans_midnight
+                AND ${clock.minuteOfDay} < wh.close_minute)
+        )
+    )
+  `;
 }
 
 function attributesCondition(filter: SearchFilter): Prisma.Sql | null {

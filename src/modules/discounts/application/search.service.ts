@@ -138,7 +138,7 @@ export class SearchService {
     categories: Map<string, CategoryInfo>,
   ): Promise<SearchResult> {
     const [total, facets] = await Promise.all([
-      this.listings.count(filter, studentId),
+      this.listings.count(filter, studentId, new Date()),
       this.facets.findFacets({
         types: filter.types,
         categoryKeys: filter.categoryKeys,
@@ -166,6 +166,7 @@ export class SearchService {
       filter,
       studentId: query.studentId,
       limit: clusterize ? MAX_MARKERS : maxMarkers,
+      now: new Date(),
     });
 
     const shaped =
