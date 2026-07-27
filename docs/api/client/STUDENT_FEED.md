@@ -170,17 +170,30 @@ bo'lmasa o'tkazadi) va `StudentGuard` (`req.user.type === STUDENT`).
 o'sha faylning §1 jadvaliga zid, va `isDiscount` / `listingKind` maydonlari semantikani
 allaqachon aniq qilib beradi.
 
-**`GET /discounts` olib tashlanadi.** Sabablari:
-1. Hech qachon implement qilinmagan (kodda yo'q).
-2. `elon-uz.json` dagi `DiscountSortDto` = `["DISTANCE","DISCOUNT_DESC","NEWEST","POPULAR"]`
-   — 4 qiymat, yangi spec'da esa **9** ta va nomi ham boshqa (`DISCOUNT_PERCENT` ≠
-   `DISCOUNT_DESC`). Ikkalasini saqlash — bitta ma'lumot ustida ikki sort enum, ikki filtr
-   modeli.
-3. Uni `POST /discounts/search` to'liq qoplaydi.
+**`GET /discounts` hech qachon qurilmaydi** — `POST /discounts/search` uni to'liq qoplaydi.
 
-> ⚠️ **Mobil dev tasdiqlasin:** `elon-uz.json` dan `GET /discounts` va `DiscountSortDto`
-> olib tashlanadi. Agar provider (QS Business) ilovasi `DiscountsApi` ni chaqirmasa —
-> ta'sir yo'q.
+✅ **Hal qilindi** (mobil dev bilan kelishildi, 2026-07-26):
+
+- Mobil dev tomonida `dev/api-client-generator/elon-uz.json` da `/discounts` ham,
+  `DiscountSortDto` ham **allaqachon yo'q**; generatsiya qilingan klientda `DiscountsApi`
+  yaratilmagan. QS Business e'lonlarni `GET /v1/business/{id}/listings` orqali oladi.
+- Klientdagi `DiscountSort` (4 qiymat: `DISTANCE`, `DISCOUNT_DESC`, `NEWEST`, `POPULAR`,
+  `DiscountCard.kt:46`) — **sof domen enum'i**, spec'dan generatsiya qilinmaydi. Talaba feed'i
+  uchun u §6 dagi **9 qiymatga** kengayadi; e'tibor bering: `DISCOUNT_DESC` →
+  **`DISCOUNT_PERCENT`** deb nomlanadi.
+- `elon-uz.json` **ikkala klient uchun umumiy emas** — backend teglar bo'yicha ikkita alohida
+  hujjat chiqaradi (`/docs/business/json` va `/docs/student/json`), shuning uchun feed'ni
+  biznes shartnomasidan chiqarish hech narsani buzmaydi.
+
+**Bajarilgan chora — o'chirish emas, muzlatish.** `elon-uz.json` dagi `GET /discounts`
+`"deprecated": true` bilan belgilanadi va tavsifi `POST /v1/discounts/search` ga yo'naltiradi;
+`ENDPOINTS_CHECKLIST.md` §8 esa uni Level-1 «qurilishi kerak» ro'yxatidan chiqaradi.
+
+> Checklist tuzatilishi **muhimroq**: u `GET /discounts` ni 22 ta Level-1 endpointdan biri deb
+> sanardi, ya'ni tirik «buni qur» ko'rsatmasi edi. Haqiqiy xarajat spec qatorida emas — o'sha
+> ro'yxat bo'yicha ishlab, feed'ning kambag'alroq dublikati qurilishida. GET query-param
+> modeli feed filtrini ko'tara olmaydi (`attributes[]` operatorlar bilan, `bbox`,
+> `attributesMatch`, id massivlari — Q2), ya'ni u abadiy kambag'al qolardi.
 
 ---
 
@@ -418,13 +431,30 @@ Asl spec'da jins uchun **uchta** mexanizm bir vaqtda ishlatilgan edi. Yakuniy ta
 |---|---|---|
 | `businessTypes[].availableForGenders` | `/catalog/types` **ro'yxatini** kesish (D16) | katalogda ✅, feed'da ❌ |
 | `categoriesByGender` (faqat `CLOTHING`) | `CLOTHING` **kategoriya ro'yxati** almashadi | katalogda ✅ |
-| `_regular`-uslubidagi `_gender` atributi | E'lonning **o'z** jins yo'naltirishi | ✅ oddiy atribut kabi |
-| `CLOTHING.gender` SELECT atributi | `_gender` **dublikati** | ❌ — ko'rsatish uchun qoladi |
+| `_gender` texnik kaliti (faqat `CLOTHING`) | E'lonning **o'z** jins yo'naltirishi | ✅ oddiy atribut kabi |
+| `CLOTHING.gender` SELECT atributi | Ko'rsatish maydoni («Kimlar uchun») | ❌ — filtrga kirmaydi |
 
-> ⚠️ **Mobil dev tasdiqlasin:** `CLOTHING` da `gender` (SELECT: Erkaklar/Ayollar/Uniseks/
-> Bolalar) va `_gender` (MALE/FEMALE) bir vaqtda mavjud. Filtrlanadigan yagona manba —
-> `_gender`. `gender` atributi katalogda qoladi (klient formasi uni yozadi), lekin qidiruv
-> unga tayanmaydi.
+✅ **Hal qilindi** (mobil dev bilan kelishildi, 2026-07-26): taqsimot klient bilan **aynan mos**,
+o'zgarish shart emas.
+
+- `_gender` — `attributes` ichidagi texnik kalit, faqat `CLOTHING` uchun yoziladi
+  (`PostListingViewModel.kt:522`). Qiymatlari `MALE` / `FEMALE`. **Filtr manbai.**
+- `gender` — turning ko'rsatish atributi (`ListingCatalog.kt:771`, «Kimlar uchun»):
+  Erkaklar / Ayollar / Uniseks / Bolalar. **Faqat ko'rsatish uchun.**
+- Klient `_gender` ni ko'rsatiladigan atributlar ro'yxatidan chiqarib tashlaydi
+  (`PostListingViewModel.kt:560`), shuning uchun foydalanuvchi bir narsani ikki marta ko'rmaydi.
+
+⚠️ **Backend uchun qoida:** ikkalasi bir-biriga bog'lanmagan — foydalanuvchi `_gender=MALE`
+qo'yib, `gender="Ayollar"` ni tanlashi mumkin va klient buni tekshirmaydi. Shuning uchun
+backend `gender` ni **faqat matn sifatida** saqlaydi va undan hech qanday filtr yoki mantiq
+chiqarmaydi. Ziddiyat xato emas — e'tiborsiz qoldiriladi.
+
+> **Kelajak uchun izoh (hozir hech narsani bloklamaydi).** Ikki lug'atning quvvati bir xil
+> emas: `_gender` da 2 qiymat, `gender` da 4. Ya'ni «uniseks» va «bolalar kiyimi» ni **faqat**
+> `gender` ifodalaydi, `_gender` ularni ko'tara olmaydi. Agar keyinchalik talaba shu bo'yicha
+> filtrlashni so'rasa, `_gender` lug'ati `MALE | FEMALE | UNISEX | KIDS` ga kengayishi kerak
+> bo'ladi. Buni **e'lonlar to'planishidan oldin** qilish arzon — keyin `attributes` jsonb'i
+> uchun data migratsiyasi kerak bo'ladi.
 
 ### D9 / D10 — indekslar haqida halol bayonot
 

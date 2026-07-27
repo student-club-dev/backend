@@ -34,5 +34,5 @@ elon-uz.json  →  provider/BACKEND_PROMPT.md  →  catalog-seed.json  →  STUD
 - §0.3 qarorlar (D1–D20)
 - §0.4 Level 1 dan chiqarilganlar
 
-Tasdiq talab qiladigan ikki band `⚠️ Mobil dev tasdiqlasin` deb belgilangan:
-`GET /discounts` ni olib tashlash (§2) va `CLOTHING.gender` ↔ `_gender` dublikati (§5).
+Ochiq qolgan ikki band mobil dev bilan kelishildi (2026-07-26) va `✅ Hal qilindi` deb
+belgilangan: `GET /discounts` ning taqdiri (§2) va `CLOTHING.gender` ↔ `_gender` taqsimoti (§5).

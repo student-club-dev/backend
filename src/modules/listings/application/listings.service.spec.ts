@@ -75,10 +75,12 @@ function category(key: string, requiresCustomName = false): Category {
 
 function spec(overrides: Partial<AttributeSpec> = {}): AttributeSpec {
   return {
+    businessType: 'CAFE_RESTAURANT',
     key: 'portionGrams',
     label: 'Portion',
     kind: AttributeFieldType.NUMBER,
     required: false,
+    suffix: null,
     options: null,
     ...overrides,
   };
@@ -146,6 +148,8 @@ function draftListing(overrides: Partial<Listing> = {}): Listing {
       finalPrice: 44_000,
       conditions: null,
       appliesToOptions: false,
+      isDiscount: true,
+      percent: 20,
     },
     redemption: {
       method: RedemptionMethod.QR,
@@ -499,7 +503,67 @@ describe('ListingsService', () => {
             finalPrice: 55_000,
             conditions: null,
             appliesToOptions: false,
+            isDiscount: false,
+            percent: null,
           },
+        }),
+      );
+    });
+  });
+
+  describe('create — denormalised discount flags (STUDENT_FEED.md D8)', () => {
+    it('marks a discount listing and stores the normalised percent', async () => {
+      const listings = makeListings();
+      const service = makeService({ listings });
+
+      await service.create(owner, BUSINESS_ID, createInput());
+
+      expect(listings.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          discount: expect.objectContaining({ isDiscount: true, percent: 20 }),
+        }),
+      );
+    });
+
+    it('derives the percent from the price drop, not from the discount value', async () => {
+      const listings = makeListings();
+      const service = makeService({ listings });
+      // 55 000 → 30 000 is a 45% drop even though `value` is the absolute amount.
+      const input = createInput({
+        discount: {
+          type: DiscountType.FIXED_AMOUNT,
+          value: 25_000,
+          conditions: null,
+          appliesToOptions: false,
+        },
+      });
+
+      await service.create(owner, BUSINESS_ID, input);
+
+      expect(listings.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          discount: expect.objectContaining({ isDiscount: true, percent: 45 }),
+        }),
+      );
+    });
+
+    it('gives FREE_ITEM a flat 50 percent — a 1+1 offer has no price drop to measure', async () => {
+      const listings = makeListings();
+      const service = makeService({ listings });
+      const input = createInput({
+        discount: {
+          type: DiscountType.FREE_ITEM,
+          value: 1,
+          conditions: null,
+          appliesToOptions: false,
+        },
+      });
+
+      await service.create(owner, BUSINESS_ID, input);
+
+      expect(listings.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          discount: expect.objectContaining({ isDiscount: true, percent: 50 }),
         }),
       );
     });
@@ -760,6 +824,8 @@ describe('ListingsService', () => {
               finalPrice: 1,
               conditions: null,
               appliesToOptions: false,
+              isDiscount: true,
+              percent: 20,
             },
           }),
         ),
@@ -786,6 +852,8 @@ describe('ListingsService', () => {
               finalPrice: 55_000,
               conditions: null,
               appliesToOptions: false,
+              isDiscount: true,
+              percent: 20,
             },
           }),
         ),
@@ -810,6 +878,8 @@ describe('ListingsService', () => {
               finalPrice: 55_000,
               conditions: null,
               appliesToOptions: false,
+              isDiscount: true,
+              percent: 20,
             },
           }),
         ),

@@ -1,3 +1,4 @@
+import type { GeoScope } from '../../../common/geo/geo-scope';
 import { AttributeSpec } from './entities/attribute-spec.entity';
 import { BusinessType } from './entities/business-type.entity';
 import { CatalogGroup } from './entities/catalog-group.entity';
@@ -21,12 +22,9 @@ export interface BusinessTypeWrite {
   availableForGenders: Gender[];
 }
 
-/** A point + radius used to scope listing counts to what is near the student. */
-export interface GeoScope {
-  lat: number;
-  lng: number;
-  radiusMeters: number;
-}
+// Lives in common/geo so the discounts module can share the exact same type rather than declaring
+// a structurally identical twin. Re-exported here so existing imports keep working.
+export type { GeoScope };
 
 /**
  * Catalog data-access port. The application layer depends on this interface only;

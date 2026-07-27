@@ -1353,8 +1353,9 @@
         "tags": [
           "Discounts"
         ],
-        "summary": "List discounts for a student (geo search)",
-        "description": "ACTIVE listings only. When `lat`/`lng` are supplied, each listing is returned with its nearest branch and the distance to it. The student's coordinates are NOT STORED — they are used only to compute distance for the duration of the request.",
+        "summary": "[DEPRECATED] List discounts for a student (geo search)",
+        "deprecated": true,
+        "description": "**DEPRECATED — do not implement.** Superseded by `POST /v1/discounts/search` (spec: `docs/api/client/STUDENT_FEED.md` §2). This endpoint was never built; the path is kept only so it is not silently re-added. The GET query-param model cannot carry the student feed filter (attribute operators, bbox, attributesMatch, id arrays — ids never travel in a URL), and `DiscountSortDto` has 4 values against the feed's 9 (`DISCOUNT_DESC` is now `DISCOUNT_PERCENT`).\n\nOriginal description: ACTIVE listings only. When `lat`/`lng` are supplied, each listing is returned with its nearest branch and the distance to it. The student's coordinates are NOT STORED — they are used only to compute distance for the duration of the request.",
         "parameters": [
           {
             "name": "lat",

@@ -7,9 +7,13 @@ import { AttributeFieldType } from '../enums/attribute-field-type.enum';
  * `{ value, label }[]` shown in the form.
  */
 export interface AttributeSpec {
+  /** Owning business type — the feed's filter schema reports it as `appliesToTypes`. */
+  businessType: string;
   key: string;
   label: string;
   kind: AttributeFieldType;
   required: boolean;
+  /** Unit shown next to a NUMBER input ("gramm", "daqiqa"). */
+  suffix: string | null;
   options: string[] | null;
 }

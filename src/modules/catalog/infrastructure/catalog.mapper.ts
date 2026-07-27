@@ -135,10 +135,12 @@ export class CatalogMapper {
   /** Prisma row → validation spec (LISTINGS.md §6); `options` normalised to a plain `string[]`. */
   static toAttributeSpec(spec: AttributeSpecRow): AttributeSpec {
     return {
+      businessType: spec.businessType,
       key: spec.key,
       label: spec.label,
       kind: AttributeFieldType[spec.kind],
       required: spec.required,
+      suffix: spec.suffix,
       options: toAttributeSpecOptions(spec.options),
     };
   }

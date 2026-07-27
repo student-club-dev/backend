@@ -59,4 +59,22 @@ export class RedisService implements OnModuleDestroy {
   async del(key: string): Promise<void> {
     await this.client.del(key);
   }
+
+  /**
+   * Deletes every key matching a glob (`catalog:counts:*`). Uses SCAN rather than KEYS so it never
+   * blocks the server. Needed to invalidate a cached aggregate when the data behind it changes —
+   * the cache key encodes the query, so there is no single key to drop.
+   */
+  async delByPattern(pattern: string): Promise<number> {
+    let cursor = '0';
+    let deleted = 0;
+    do {
+      const [next, keys] = await this.client.scan(cursor, 'MATCH', pattern, 'COUNT', 100);
+      cursor = next;
+      if (keys.length > 0) {
+        deleted += await this.client.del(...keys);
+      }
+    } while (cursor !== '0');
+    return deleted;
+  }
 }

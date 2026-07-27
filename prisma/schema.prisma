@@ -507,6 +507,14 @@ model Listing {
   discountConditions String?      @map("discount_conditions")
   appliesToOptions   Boolean      @default(false) @map("applies_to_options")
 
+  // Denormalised from `attributes._regular` (STUDENT_FEED.md D8): a regular listing carries no
+  // discount. Kept as a column so listingKind faceting and NULLS-LAST discount sorting are
+  // indexable instead of probing jsonb on every row.
+  isDiscount      Boolean @default(true) @map("is_discount")
+  // Normalised discount percent for sorting/faceting; NULL for regular listings. FIXED_AMOUNT and
+  // SPECIAL_PRICE are converted to the equivalent percent, FREE_ITEM counts as 50.
+  discountPercent Int?    @map("discount_percent")
+
   // Redemption
   redemptionMethod RedemptionMethod  @map("redemption_method")
   promoCode        String?           @map("promo_code")
@@ -538,6 +546,8 @@ model Listing {
   @@index([categoryKey, status])
   @@index([status, validTo])
   @@index([validFrom, validTo])
+  @@index([isDiscount])
+  @@index([businessId, isDiscount, status])
   @@index([attributes(ops: JsonbPathOps)], type: Gin, map: "listings_attributes_gin") // JSONB attribute-filter index; keep modelled
   @@map("listings")
 }

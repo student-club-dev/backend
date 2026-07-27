@@ -15,6 +15,10 @@ export interface ListingDiscount {
   finalPrice: number;
   conditions: string | null;
   appliesToOptions: boolean;
+  /** false for a plain single-price offer (`attributes._regular === "1"`, STUDENT_FEED.md Q0). */
+  isDiscount: boolean;
+  /** Normalised percent for feed sorting and faceting; null for regular listings. */
+  percent: number | null;
 }
 
 /** A listing's redemption configuration (LISTINGS.md §7). `usedCount` is server-owned. */

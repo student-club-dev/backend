@@ -94,15 +94,28 @@
 - [ ] **`POST /geo/geocode`** — body `GeocodeRequestDto { query*, regionId }` → `200 [GeocodeResultDto]`
 - [ ] **`POST /geo/reverse-geocode`** — body `ReverseGeocodeRequestDto { lat*, lng* }` → `200 ReverseGeocodeResponseDto`
 
-## 8. Chegirma feed — talaba tomoni (`DiscountsApi`)
+## 8. Chegirma feed — talaba tomoni
 
-- [ ] **`GET /discounts`** → `200 DiscountPageDto { items*, page*, size*, total*, hasNext }`
-  - Query (geo qidiruv): `lat, lng, radiusMeters, type, categoryKey, regionId, districtId,
-    isOpenNow, hasDelivery, query, sort, page, size`.
+> ⛔️ **`GET /discounts` qurilmaydi.** U bu yerda Level-1 sifatida sanalgan edi, lekin hech
+> qachon implement qilinmagan va o'rnini `POST /v1/discounts/search` egalladi — spec:
+> `docs/api/client/STUDENT_FEED.md` §2. `elon-uz.json` da yo'l `deprecated` deb belgilangan
+> holda, tarix uchun qoladi.
+>
+> Sabab: GET query-param modeli feed filtrini ko'tara olmaydi (`attributes[]` operatorlar
+> bilan, `bbox`, `attributesMatch`, id massivlari — id hech qachon URL'da bo'lmaydi), va ikki
+> yo'lni saqlash bir ma'lumot ustida ikki sort lug'ati (4 va 9 qiymat) demakdir.
+
+- [ ] **`POST /v1/discounts/search`** → `200 { items*, page*, size*, total*, hasNext }`
+  - Tana: `mode` (LIST | MAP | COUNT) + `filter` + `sort` + `page`. To'liq model —
+    `STUDENT_FEED.md` §4.
+  - Talaba tomonining qolgan endpointlari (`/catalog/groups`, `/catalog/types`,
+    `/catalog/filter-schema`, `/discounts/suggest`, `/discounts/detail`,
+    `/discounts/favorites/*`) ham o'sha hujjatda — ular bu checklistning qamrovidan tashqarida.
 
 ---
 
-## ✅ 1-daraja yakuni: **22 endpoint** — ilovaning hozirgi funksiyalari uchun shart.
+## ✅ 1-daraja yakuni: **21 endpoint** (`GET /discounts` chiqarilgandan keyin) — ilovaning
+hozirgi funksiyalari uchun shart. Talaba feed'i alohida yo'l xaritasi bo'yicha quriladi.
 
 ---
 

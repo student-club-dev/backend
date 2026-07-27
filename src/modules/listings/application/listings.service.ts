@@ -391,6 +391,8 @@ export class ListingsService {
         finalPrice: input.originalPrice,
         conditions: null,
         appliesToOptions: false,
+        isDiscount: false,
+        percent: null,
       };
     }
 
@@ -424,6 +426,8 @@ export class ListingsService {
       finalPrice,
       conditions: discount.conditions,
       appliesToOptions: discount.appliesToOptions,
+      isDiscount: true,
+      percent: normalisedPercent(discount.type, originalPrice, finalPrice),
     };
   }
 
@@ -508,4 +512,19 @@ export class ListingsService {
       throw AppException.validation({ branchIds: 'Filial ushbu biznesga tegishli emas' });
     }
   }
+}
+
+/**
+ * Discount percent used for feed sorting and faceting (STUDENT_FEED.md §6). FIXED_AMOUNT and
+ * SPECIAL_PRICE are expressed as the equivalent percent so the three are comparable; FREE_ITEM
+ * (1+1) has no price drop at all, so it takes the flat 50 the sort rule assigns it.
+ */
+function normalisedPercent(type: DiscountType, originalPrice: number, finalPrice: number): number {
+  if (type === DiscountType.FREE_ITEM) {
+    return 50;
+  }
+  if (originalPrice <= 0) {
+    return 0;
+  }
+  return Math.max(0, Math.round(((originalPrice - finalPrice) * 100) / originalPrice));
 }
