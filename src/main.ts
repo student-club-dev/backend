@@ -11,6 +11,7 @@ import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 import { swaggerBasicAuth } from './common/middleware/swagger-basic-auth.middleware';
+import { RedisIoAdapter } from './infrastructure/websocket/redis-io.adapter';
 import { filterOpenApiByTags } from './common/swagger/filter-openapi-by-tags';
 import { validationExceptionFactory } from './common/validation/validation-exception.factory';
 import type { Env } from './config/env';
@@ -41,6 +42,7 @@ const STUDENT_DOC_TAGS = [
   'Catalog (student feed)',
   'Discounts (student feed)',
   'Connections',
+  'Chat',
   'Profiles',
   'Geo',
   'Media',
@@ -62,6 +64,11 @@ async function bootstrap(): Promise<void> {
   const swaggerUser = config.get('SWAGGER_USER', { infer: true });
   const swaggerPassword = config.get('SWAGGER_PASSWORD', { infer: true });
   const isProd = config.get('NODE_ENV', { infer: true }) === 'production';
+
+  // Real-time chat (`/chat`): fan Socket.IO events out across instances via the Redis adapter.
+  const redisIoAdapter = new RedisIoAdapter(app, config.get('REDIS_URL', { infer: true }));
+  redisIoAdapter.connect();
+  app.useWebSocketAdapter(redisIoAdapter);
 
   // Serve uploaded media from disk in dev (prod serves the same /uploads path via Nginx). Kept
   // OUTSIDE the global `/v1` prefix — useStaticAssets is not affected by setGlobalPrefix.
@@ -127,6 +134,7 @@ async function bootstrap(): Promise<void> {
     .addTag('Catalog (student feed)', 'Student app: catalog groups and their business types')
     .addTag('Discounts (student feed)', 'Student app: the offers feed — search, detail, favourites')
     .addTag('Connections', 'Student app: connections, requests, blocks and reports (chat gate)')
+    .addTag('Chat', 'Student app: conversations, messages and real-time chat (`/chat` WS)')
     .addTag('Branches', 'Branches of a business: location, working hours, delivery')
     .addTag('Trade Centers', 'Trade centres a branch can be placed in')
     .addTag('Listings', 'Discounted and regular offers')

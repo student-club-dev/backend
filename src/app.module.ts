@@ -11,6 +11,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { BranchesModule } from './modules/branches/branches.module';
 import { BusinessModule } from './modules/business/business.module';
 import { CatalogModule } from './modules/catalog/catalog.module';
+import { ChatModule } from './modules/chat/chat.module';
 import { ConnectionsModule } from './modules/connections/connections.module';
 import { DiscountsModule } from './modules/discounts/discounts.module';
 import { GeoModule } from './modules/geo/geo.module';
@@ -58,6 +59,7 @@ import { TradeCentersModule } from './modules/trade-centers/trade-centers.module
     TradeCentersModule,
     ListingsModule,
     ConnectionsModule,
+    ChatModule,
     MediaModule,
   ],
 })

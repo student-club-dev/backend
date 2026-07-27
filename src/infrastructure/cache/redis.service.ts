@@ -49,6 +49,10 @@ export class RedisService implements OnModuleDestroy {
     return this.client.incr(key);
   }
 
+  decr(key: string): Promise<number> {
+    return this.client.decr(key);
+  }
+
   async expire(key: string, ttlSeconds: number): Promise<void> {
     await this.client.expire(key, ttlSeconds);
   }

@@ -46,4 +46,10 @@ export interface ChatRepository {
     cursor: 'read' | 'delivered',
     seq: number,
   ): Promise<void>;
+
+  /** Persists `students.lastSeenAt = now` (on true-offline). Returns the timestamp written. */
+  touchLastSeen(studentId: string): Promise<Date>;
+
+  /** Distinct other-member ids across the student's conversations (for presence fan-out). */
+  partnerIds(studentId: string): Promise<string[]>;
 }
