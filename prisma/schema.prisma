@@ -628,15 +628,24 @@ model Option {
 // BACKEND_PROMPT §4: id, listingId, studentUserId, branchId?, amount?, redeemedAt.
 // NOTE: DISCOUNTS_BUSINESS_API §9 also lists `code` and a status enum
 // (PENDING|CONFIRMED|EXPIRED); those are NOT modelled here — flagged for the orchestrator.
+enum RedemptionStatus {
+  PENDING
+  CONFIRMED
+  EXPIRED
+}
+
 model Redemption {
-  id         String   @id @default(cuid())
-  listingId  String   @map("listing_id")
-  studentId  String   @map("student_id")
-  branchId   String?  @map("branch_id")
+  id         String           @id @default(cuid())
+  listingId  String           @map("listing_id")
+  studentId  String           @map("student_id")
+  branchId   String?          @map("branch_id")
+  code       String           @unique
+  status     RedemptionStatus @default(PENDING)
   amount     BigInt? // money
-  redeemedAt DateTime @default(now()) @map("redeemed_at")
-  createdAt  DateTime @default(now()) @map("created_at")
-  updatedAt  DateTime @updatedAt @map("updated_at")
+  expiresAt  DateTime?        @map("expires_at")
+  redeemedAt DateTime?        @map("redeemed_at")
+  createdAt  DateTime         @default(now()) @map("created_at")
+  updatedAt  DateTime         @updatedAt @map("updated_at")
 
   listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)

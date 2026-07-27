@@ -28,6 +28,7 @@ const BUSINESS_DOC_TAGS = [
   'Business',
   'Branches',
   'Listings',
+  'Redemptions',
   'Catalog',
   'Trade Centers',
   'Profiles',
@@ -138,6 +139,7 @@ async function bootstrap(): Promise<void> {
     .addTag('Branches', 'Branches of a business: location, working hours, delivery')
     .addTag('Trade Centers', 'Trade centres a branch can be placed in')
     .addTag('Listings', 'Discounted and regular offers')
+    .addTag('Redemptions', 'Cashier: verify/confirm a code; owner: redemption history')
     .addTag('Geo', 'Regions, districts and geocoding')
     .addTag('Media', 'Image upload')
     .addTag('Admin — Business Types', 'Admin-only catalog maintenance (`X-Admin-Key`)')

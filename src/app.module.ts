@@ -19,6 +19,7 @@ import { HealthModule } from './modules/health/health.module';
 import { ListingsModule } from './modules/listings/listings.module';
 import { MediaModule } from './modules/media/media.module';
 import { ProfileModule } from './modules/profiles/profile.module';
+import { RedemptionsModule } from './modules/redemptions/redemptions.module';
 import { TradeCentersModule } from './modules/trade-centers/trade-centers.module';
 
 @Module({
@@ -58,6 +59,7 @@ import { TradeCentersModule } from './modules/trade-centers/trade-centers.module
     BranchesModule,
     TradeCentersModule,
     ListingsModule,
+    RedemptionsModule,
     ConnectionsModule,
     ChatModule,
     MediaModule,
