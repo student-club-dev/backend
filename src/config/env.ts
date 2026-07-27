@@ -32,7 +32,9 @@ export const envSchema = z
 
     // Comma-separated Google OAuth client ids (Business/Student × Android/iOS/web).
     GOOGLE_ALLOWED_CLIENT_IDS: z.string().optional(),
-    APPLE_OAUTH_CLIENT_ID: z.string().optional(),
+    // Comma-separated Apple client ids the identity token's `aud` must match — the native apps'
+    // bundle ids (Business/Student) and any Services id used for web sign-in.
+    APPLE_ALLOWED_CLIENT_IDS: z.string().optional(),
 
     // SMS provider: `dev` logs the code (never in prod), `eskiz` sends real SMS. Env-only switch.
     SMS_PROVIDER: z.enum(['dev', 'eskiz']).default('dev'),

@@ -82,10 +82,10 @@ export class BusinessAuthController {
   @ApiOkEnvelope(AuthTokensDto)
   @ApiValidationEnvelope('Invalid body — idToken missing.')
   @ApiErrorEnvelope(
-    501,
-    ERROR_CODE.NOT_IMPLEMENTED,
-    'Apple sign-in is not yet implemented — always returns this error.',
-    "Apple bilan kirish hali qo'llab-quvvatlanmaydi",
+    401,
+    ERROR_CODE.INVALID_OAUTH_TOKEN,
+    'The Apple ID token failed verification (bad signature, issuer, audience, or expiry).',
+    'Apple token yaroqsiz',
   )
   async appleOAuth(@Body() dto: OAuthLoginDto, @Req() request: Request): Promise<AuthTokensDto> {
     const tokens = await this.authService.oauthLogin(

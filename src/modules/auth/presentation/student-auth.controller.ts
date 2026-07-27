@@ -79,10 +79,10 @@ export class StudentAuthController {
   @ApiOperation({ summary: 'Log a student in with Apple (verifies the ID token)' })
   @ApiOkEnvelope(AuthTokensDto)
   @ApiErrorEnvelope(
-    501,
-    ERROR_CODE.NOT_IMPLEMENTED,
-    'Apple sign-in is not implemented yet — this route currently always fails.',
-    "Apple bilan kirish hali qo'llab-quvvatlanmaydi",
+    401,
+    ERROR_CODE.INVALID_OAUTH_TOKEN,
+    'The Apple ID token failed verification (bad signature, issuer, audience, or expiry).',
+    'Apple token yaroqsiz',
   )
   @ApiValidationEnvelope()
   async appleOAuth(@Body() dto: OAuthLoginDto, @Req() request: Request): Promise<AuthTokensDto> {

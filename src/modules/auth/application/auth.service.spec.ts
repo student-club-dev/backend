@@ -353,7 +353,11 @@ describe('AuthService', () => {
 
       expect(result).toEqual({ accessToken: 'access-token', refreshToken: 'plain-refresh' });
       expect(accounts.findByEmail).toHaveBeenCalledWith('oauth@b.com');
-      expect(oauthAccounts.link).toHaveBeenCalledWith('acc-email', AuthProvider.GOOGLE, 'google-sub-1');
+      expect(oauthAccounts.link).toHaveBeenCalledWith(
+        'acc-email',
+        AuthProvider.GOOGLE,
+        'google-sub-1',
+      );
       expect(accounts.createFromOAuth).not.toHaveBeenCalled();
       expect(refreshTokens.create).toHaveBeenCalledTimes(1);
     });
@@ -376,7 +380,11 @@ describe('AuthService', () => {
 
       expect(accounts.findByEmail).not.toHaveBeenCalled();
       expect(accounts.createFromOAuth).toHaveBeenCalledTimes(1);
-      expect(oauthAccounts.link).toHaveBeenCalledWith('acc-new', AuthProvider.GOOGLE, 'google-sub-1');
+      expect(oauthAccounts.link).toHaveBeenCalledWith(
+        'acc-new',
+        AuthProvider.GOOGLE,
+        'google-sub-1',
+      );
     });
 
     it('creates a new account from the identity and links it (branch c)', async () => {
@@ -401,17 +409,23 @@ describe('AuthService', () => {
         lastName: 'Valiev',
         avatarUrl: null,
       });
-      expect(oauthAccounts.link).toHaveBeenCalledWith('acc-new', AuthProvider.GOOGLE, 'google-sub-1');
+      expect(oauthAccounts.link).toHaveBeenCalledWith(
+        'acc-new',
+        AuthProvider.GOOGLE,
+        'google-sub-1',
+      );
       expect(refreshTokens.create).toHaveBeenCalledTimes(1);
     });
 
-    it('surfaces the provider error (e.g. the Apple stub 501) without touching repositories', async () => {
+    it('surfaces the provider error (e.g. an invalid Apple token) without touching repositories', async () => {
       const accounts = makeAccountRepository();
       const oauthAccounts = makeOAuthAccountRepository();
       const failing: OAuthProvider = {
         verify: jest
           .fn()
-          .mockRejectedValue(new AppException(ERROR_CODE.NOT_IMPLEMENTED, 501, 'nope')),
+          .mockRejectedValue(
+            new AppException(ERROR_CODE.INVALID_OAUTH_TOKEN, 401, 'Apple token yaroqsiz'),
+          ),
       };
       const registry: OAuthProviderRegistry = new Map([[AuthProvider.APPLE, failing]]);
       const service = makeService(
@@ -424,7 +438,7 @@ describe('AuthService', () => {
 
       await expect(
         service.oauthLogin(AuthProvider.APPLE, 'id-token', noDevice),
-      ).rejects.toMatchObject({ code: ERROR_CODE.NOT_IMPLEMENTED, status: 501 });
+      ).rejects.toMatchObject({ code: ERROR_CODE.INVALID_OAUTH_TOKEN, status: 401 });
       expect(oauthAccounts.findAccountIdByProvider).not.toHaveBeenCalled();
       expect(accounts.createFromOAuth).not.toHaveBeenCalled();
     });

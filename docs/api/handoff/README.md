@@ -9,9 +9,11 @@ kodlari, kafolatlar va ekran oqimi bor.
 | 1 | `Catalog (student feed)` | Student | [`catalog-student-feed.md`](./catalog-student-feed.md) | 3 | ✅ tayyor |
 | 2 | `Discounts (student feed)` | Student | [`discounts-student-feed.md`](./discounts-student-feed.md) | 6 | ✅ tayyor |
 | 3 | `Connections` | Student | [`connections.md`](./connections.md) | 10 | ✅ tayyor |
+| 4 | `Chat` | Student | [`chat.md`](./chat.md) | 5 REST + WS | ✅ tayyor |
 
 > 1 va 2 juft ishlaydi: katalog filtr ekranini chizadi, discounts uni qo'llaydi.
-> 3 — chat'ning eshigi: bog'lanmagan talabalar yozisha olmaydi.
+> 3 → 4 zanjir: bog'lanmagan talabalar yozisha olmaydi (`403 NOT_CONNECTED`).
+> **`Chat` ning WebSocket qismi Swagger'da yo'q** — yagona manba `chat.md` §7–§9.
 
 > Qolgan sectionlar navbat bilan qo'shiladi.
 
