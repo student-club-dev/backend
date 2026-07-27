@@ -22,6 +22,15 @@ export class UpdateProfileDto {
   @IsString()
   lastName?: string;
 
+  @ApiPropertyOptional({
+    nullable: true,
+    description: 'Unique handle for discovery (students only): 3–20 of a–z, 0–9, _',
+    example: 'quvonchbek',
+  })
+  @IsOptional()
+  @Matches(/^[a-zA-Z0-9_]{3,20}$/, { message: 'username 3–20 belgi: harf, raqam yoki _' })
+  username?: string;
+
   @ApiPropertyOptional({ nullable: true, description: 'E.164 format', example: '+998901234567' })
   @IsOptional()
   @Matches(/^\+[1-9]\d{1,14}$/, { message: 'phoneNumber E.164 formatida bo‘lishi kerak' })
@@ -67,6 +76,7 @@ export class UpdateProfileDto {
     return {
       firstName: this.firstName ?? undefined,
       lastName: this.lastName ?? undefined,
+      username: this.username?.toLowerCase(),
       phoneNumber: this.phoneNumber ?? undefined,
       gender: this.gender ?? undefined,
       universityId: this.universityId ?? undefined,

@@ -16,6 +16,13 @@ export class UserProfileDto {
   @ApiProperty({ nullable: true, example: "G'afurov" })
   lastName!: string | null;
 
+  @ApiProperty({
+    nullable: true,
+    description: 'Unique handle (students only)',
+    example: 'quvonchbek',
+  })
+  username!: string | null;
+
   @ApiProperty({ nullable: true, description: 'E.164 format', example: '+998901234567' })
   phoneNumber!: string | null;
 
@@ -48,6 +55,7 @@ export class UserProfileDto {
     const dto = new UserProfileDto();
     dto.firstName = profile.firstName;
     dto.lastName = profile.lastName;
+    dto.username = profile.username;
     dto.phoneNumber = profile.phoneNumber;
     dto.gender = profile.gender;
     dto.role = profile.role;

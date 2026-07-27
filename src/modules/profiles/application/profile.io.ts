@@ -9,6 +9,7 @@ import { Gender } from '../domain/enums/gender.enum';
 export interface UpdateProfileInput {
   firstName?: string;
   lastName?: string;
+  username?: string;
   phoneNumber?: string;
   gender?: Gender;
   universityId?: string;

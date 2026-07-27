@@ -15,5 +15,7 @@ export interface ProfileRepository {
   findById(id: string): Promise<Profile | null>;
   /** Used to detect an already-taken phone number when it changes (→ 409). */
   findByPhone(phoneNumber: string): Promise<Profile | null>;
+  /** Used to detect an already-taken username (students only; always `null` for business). */
+  findByUsername(username: string): Promise<Profile | null>;
   update(id: string, patch: ProfilePatch): Promise<Profile>;
 }

@@ -45,6 +45,7 @@ export function toStudentProfile(row: Student): Profile {
     role: ProfileRole.STUDENT,
     firstName: row.firstName,
     lastName: row.lastName,
+    username: row.username,
     phoneNumber: row.phoneNumber,
     avatarUrl: row.avatarUrl,
     gender: row.gender === null ? null : GENDER_TO_DOMAIN[row.gender],
@@ -66,6 +67,7 @@ export function toBusinessProfile(row: BusinessOwner): Profile {
     role: ProfileRole.BUSINESS,
     firstName: row.firstName,
     lastName: row.lastName,
+    username: null,
     phoneNumber: row.phoneNumber,
     avatarUrl: row.avatarUrl,
     gender: row.gender === null ? null : GENDER_TO_DOMAIN[row.gender],
@@ -79,6 +81,9 @@ export function toBusinessProfile(row: BusinessOwner): Profile {
 /** Builds the Prisma update payload for a Student from a domain patch (only present keys). */
 export function toStudentUpdateData(patch: ProfilePatch): Prisma.StudentUpdateInput {
   const data: Prisma.StudentUpdateInput = { ...toSharedUpdateData(patch) };
+  if (patch.username !== undefined) {
+    data.username = patch.username;
+  }
   if (patch.gender !== undefined) {
     data.gender = GENDER_TO_PRISMA[patch.gender];
   }

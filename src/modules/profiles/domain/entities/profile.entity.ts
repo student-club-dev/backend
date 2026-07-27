@@ -13,6 +13,8 @@ export interface Profile {
   role: ProfileRole;
   firstName: string | null;
   lastName: string | null;
+  /** Unique handle for discovery (students only; always `null` for a business owner). */
+  username: string | null;
   phoneNumber: string | null;
   avatarUrl: string | null;
   gender: Gender | null;
@@ -29,6 +31,7 @@ export interface Profile {
 export interface ProfilePatch {
   firstName?: string;
   lastName?: string;
+  username?: string;
   phoneNumber?: string;
   avatarUrl?: string;
   gender?: Gender;

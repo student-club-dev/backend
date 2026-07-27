@@ -19,6 +19,11 @@ export class StudentProfilePrismaRepository implements ProfileRepository {
     return row === null ? null : toStudentProfile(row);
   }
 
+  async findByUsername(username: string): Promise<Profile | null> {
+    const row = await this.prisma.student.findUnique({ where: { username } });
+    return row === null ? null : toStudentProfile(row);
+  }
+
   async update(id: string, patch: ProfilePatch): Promise<Profile> {
     const row = await this.prisma.student.update({
       where: { id },

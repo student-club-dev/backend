@@ -47,6 +47,9 @@ export class ProfileService {
     if (patch.phoneNumber !== undefined) {
       await this.ensurePhoneAvailable(repository, patch.phoneNumber, current.id);
     }
+    if (patch.username !== undefined) {
+      await this.ensureUsernameAvailable(repository, patch.username, current.id);
+    }
     return repository.update(current.id, patch);
   }
 
@@ -74,8 +77,11 @@ export class ProfileService {
     if (input.gender !== undefined) {
       patch.gender = input.gender;
     }
-    // University/course fields — student-only, silently ignored for a business owner (no error).
+    // University/course fields + username — student-only, silently ignored for a business owner.
     if (type === AccountType.STUDENT) {
+      if (input.username !== undefined) {
+        patch.username = input.username;
+      }
       if (input.universityId !== undefined) {
         patch.universityId = input.universityId;
       }
@@ -103,6 +109,17 @@ export class ProfileService {
         ERROR_CODE.ACCOUNT_EXISTS,
         'Bu telefon bilan hisob allaqachon mavjud',
       );
+    }
+  }
+
+  private async ensureUsernameAvailable(
+    repository: ProfileRepository,
+    username: string,
+    selfId: string,
+  ): Promise<void> {
+    const existing = await repository.findByUsername(username);
+    if (existing !== null && existing.id !== selfId) {
+      throw AppException.conflict(ERROR_CODE.USERNAME_TAKEN, 'Bu username band');
     }
   }
 

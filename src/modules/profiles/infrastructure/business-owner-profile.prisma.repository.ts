@@ -19,6 +19,11 @@ export class BusinessOwnerProfilePrismaRepository implements ProfileRepository {
     return row === null ? null : toBusinessProfile(row);
   }
 
+  /** Business owners have no username column — nothing to collide with. */
+  async findByUsername(): Promise<Profile | null> {
+    return null;
+  }
+
   async update(id: string, patch: ProfilePatch): Promise<Profile> {
     const row = await this.prisma.businessOwner.update({
       where: { id },

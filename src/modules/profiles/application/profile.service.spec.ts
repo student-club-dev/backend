@@ -15,6 +15,7 @@ function studentProfile(overrides: Partial<Profile> = {}): Profile {
     role: ProfileRole.STUDENT,
     firstName: 'Ali',
     lastName: 'Valiyev',
+    username: 'ali_v',
     phoneNumber: '+998900000000',
     avatarUrl: null,
     gender: Gender.MALE,
@@ -32,6 +33,7 @@ function businessProfile(overrides: Partial<Profile> = {}): Profile {
     role: ProfileRole.BUSINESS,
     firstName: 'Bek',
     lastName: 'Karimov',
+    username: null,
     phoneNumber: '+998911111111',
     avatarUrl: null,
     gender: null,
@@ -47,6 +49,7 @@ function makeRepository(overrides: Partial<ProfileRepository> = {}): ProfileRepo
   return {
     findById: jest.fn().mockResolvedValue(null),
     findByPhone: jest.fn().mockResolvedValue(null),
+    findByUsername: jest.fn().mockResolvedValue(null),
     update: jest.fn(async (_id: string, patch) => ({ ...studentProfile(), ...patch })),
     ...overrides,
   };
@@ -208,6 +211,43 @@ describe('ProfileService', () => {
       await expect(service.updateMyProfile(studentUser, { firstName: 'X' })).rejects.toBeInstanceOf(
         AppException,
       );
+    });
+
+    it('checks availability and applies a new username for a student', async () => {
+      const students = makeRepository({
+        findById: jest.fn().mockResolvedValue(studentProfile()),
+      });
+      const service = new ProfileService(students, makeRepository());
+
+      await service.updateMyProfile(studentUser, { username: 'newhandle' });
+
+      expect(students.findByUsername).toHaveBeenCalledWith('newhandle');
+      expect(students.update).toHaveBeenCalledWith('stu-1', { username: 'newhandle' });
+    });
+
+    it('throws USERNAME_TAKEN (409) when the username belongs to another account', async () => {
+      const students = makeRepository({
+        findById: jest.fn().mockResolvedValue(studentProfile()),
+        findByUsername: jest.fn().mockResolvedValue(studentProfile({ id: 'other' })),
+      });
+      const service = new ProfileService(students, makeRepository());
+
+      await expect(
+        service.updateMyProfile(studentUser, { username: 'taken' }),
+      ).rejects.toMatchObject({ code: ERROR_CODE.USERNAME_TAKEN, status: 409 });
+      expect(students.update).not.toHaveBeenCalled();
+    });
+
+    it('ignores username for a business owner', async () => {
+      const business = makeRepository({
+        findById: jest.fn().mockResolvedValue(businessProfile()),
+      });
+      const service = new ProfileService(makeRepository(), business);
+
+      await service.updateMyProfile(businessUser, { firstName: 'Bek', username: 'bek' });
+
+      expect(business.update).toHaveBeenCalledWith('biz-1', { firstName: 'Bek' });
+      expect(business.findByUsername).not.toHaveBeenCalled();
     });
   });
 });
