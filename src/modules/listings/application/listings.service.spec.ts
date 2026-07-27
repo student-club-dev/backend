@@ -601,6 +601,93 @@ describe('ListingsService', () => {
     });
   });
 
+  describe('create — search haystack (STUDENT_FEED.md §7)', () => {
+    /** The `searchText` the service handed to the repository on the first `create` call. */
+    function searchTextOf(listings: ListingRepository): string {
+      const [data] = (listings.create as jest.Mock).mock.calls[0] as [CreateListingData];
+      return data.searchText;
+    }
+
+    it('collects the title, description, category label and a TEXT attribute value', async () => {
+      const listings = makeListings();
+      const service = makeService({
+        listings,
+        catalog: makeCatalog(
+          [{ ...category('PIZZA'), nameUz: 'Pitsa' }],
+          [spec({ key: 'brand', kind: AttributeFieldType.TEXT })],
+        ),
+      });
+
+      await service.create(
+        owner,
+        BUSINESS_ID,
+        createInput({ description: 'Yangi issiq taom', attributes: { brand: 'Bella Napoli' } }),
+      );
+
+      const searchText = searchTextOf(listings);
+      expect(searchText).toContain('Katta pizza chegirma');
+      expect(searchText).toContain('Yangi issiq taom');
+      expect(searchText).toContain('PIZZA');
+      expect(searchText).toContain('Pitsa');
+      expect(searchText).toContain('Bella Napoli');
+    });
+
+    it('excludes the reserved keys — `_phone` is contact data and `_regular` a flag', async () => {
+      const listings = makeListings();
+      const service = makeService({
+        listings,
+        catalog: makeCatalog(
+          [{ ...category('PIZZA'), nameUz: 'Pitsa' }],
+          [spec({ key: 'brand', kind: AttributeFieldType.TEXT })],
+        ),
+      });
+
+      await service.create(
+        owner,
+        BUSINESS_ID,
+        createInput({
+          attributes: { _phone: '+998901234567', _regular: '1', brand: 'Bella' },
+        }),
+      );
+
+      const searchText = searchTextOf(listings);
+      expect(searchText).not.toContain('998901234567');
+      expect(searchText.split(' ')).not.toContain('1');
+      expect(searchText).toContain('Bella');
+    });
+
+    it('collects the option group names and every option name', async () => {
+      const listings = makeListings();
+      const service = makeService({ listings });
+
+      await service.create(
+        owner,
+        BUSINESS_ID,
+        createInput({
+          optionGroups: [
+            {
+              name: 'Hajmi',
+              selectionType: SelectionType.SINGLE,
+              isRequired: false,
+              minSelect: null,
+              maxSelect: null,
+              sortOrder: null,
+              options: [
+                { name: 'Yarim porsiya', priceDelta: 0, isAvailable: true, sortOrder: null },
+                { name: 'To‘liq porsiya', priceDelta: 12_000, isAvailable: true, sortOrder: null },
+              ],
+            },
+          ],
+        }),
+      );
+
+      const searchText = searchTextOf(listings);
+      expect(searchText).toContain('Hajmi');
+      expect(searchText).toContain('Yarim porsiya');
+      expect(searchText).toContain('To‘liq porsiya');
+    });
+  });
+
   describe('create — redemption (§7)', () => {
     it('requires promoCode for the PROMO_CODE method', async () => {
       const service = makeService();

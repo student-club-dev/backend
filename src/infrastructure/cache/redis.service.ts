@@ -36,6 +36,15 @@ export class RedisService implements OnModuleDestroy {
     return (await this.client.exists(key)) > 0;
   }
 
+  /**
+   * Sets the key only if it is absent, returning whether this call was the one that set it.
+   * `SET NX EX` is a single atomic command — unlike `exists` followed by `set`, two concurrent
+   * callers cannot both come back true, which is what makes it usable as a claim/once-guard.
+   */
+  async setIfAbsent(key: string, value: string, ttlSeconds: number): Promise<boolean> {
+    return (await this.client.set(key, value, 'EX', ttlSeconds, 'NX')) === 'OK';
+  }
+
   incr(key: string): Promise<number> {
     return this.client.incr(key);
   }

@@ -90,6 +90,37 @@ qo'shiladi — mavjud `search` ga tiqishtirilmaydi.
 
 ---
 
+## 0.5. Bajarilish holati — 2026-07-27
+
+**Sakkizta endpointning hammasi ishlaydi** va student OpenAPI hujjatida (`/docs/student/json`).
+
+| Endpoint | Holat |
+|---|---|
+| `POST /v1/catalog/groups` · `types` · `filter-schema` | ✅ |
+| `POST /v1/discounts/search` — `LIST` · `COUNT` · `MAP` | ✅ |
+| `POST /v1/discounts/detail` · `suggest` | ✅ |
+| `POST /v1/discounts/favorites/toggle` · `favorites/search` | ✅ |
+
+### Hali qurilmagan — mijoz bularni yubormasin
+
+`forbidNonWhitelisted` yoqilgan, ya'ni qo'llab-quvvatlanmagan maydon **jimgina e'tiborsiz qolmaydi, `422` beradi**. Bu ataylab: filtri qo'llanmagan holda to'liq feed qaytarish undan yomonroq.
+
+| Maydon | Sabab |
+|---|---|
+| `filter.availability` (`openNow`, `onDay`, `atTime`, `endingWithinHours`) | Jadval (`branch_working_hours`) qurildi va **karta `isOpenNow` ni to'g'ri qaytaradi**, lekin qidiruv filtri hali ulanmagan |
+| `filter.options` | D13 — `OptionGroup.name` erkin matn, filtr kaliti sifatida ishonchsiz |
+| `filter.tradeCenterIds`, `geo.inTradeCenterOnly` | Hech bir kesim da'vo qilmadi |
+| `attributes[].range.step` | Katalogda bunday maydon yo'q (§0.4) |
+| `locale` | Faqat `uz` xizmat qiladi |
+
+### Amalga oshirishda aniqlangan ikki tuzatish
+
+**`ENDING_SOON` odatiy yo'nalishi — `ASC`, `DESC` emas.** §6 dagi «qolganlari→DESC» qoidasi bu sortga nisbatan noto'g'ri: u «tez orada tugaydi» deb nomlanib turib, **eng kech** tugaydiganlarni tepaga chiqarardi. Mijoz aniq `direction: "DESC"` yubora oladi.
+
+**`COUNT` javobidagi `facets` to'liq filtr bo'yicha toraymaydi.** `total` LIST bilan aynan bir xil (§12.15 bajarildi), lekin facet'lar tur / kategoriya / joylashuv bo'yicha sanaladi — narx, atribut yoki matn filtri qo'yilganda facet bakiti `total` dan katta bo'lishi mumkin. Ular filtr ekranini **belgilash** uchun, qo'shish uchun emas.
+
+---
+
 ## 1. Qat'iy qoidalar
 
 **Q1. Yagona endpoint.** Filtr, qidiruv, saralash, sahifalash va xarita — bitta

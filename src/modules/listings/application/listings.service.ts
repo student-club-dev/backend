@@ -10,6 +10,7 @@ import {
 } from '../../business/domain/business-read.repository';
 import { BusinessStatus } from '../../business/domain/enums/business-status.enum';
 import { CATALOG_REPOSITORY, CatalogRepository } from '../../catalog/domain/catalog.repository';
+import { Category } from '../../catalog/domain/entities/category.entity';
 import { Listing, ListingDiscount } from '../domain/entities/listing.entity';
 import { DiscountType } from '../domain/enums/discount-type.enum';
 import { ListingStatus } from '../domain/enums/listing-status.enum';
@@ -22,7 +23,11 @@ import {
   ListingRepository,
 } from '../domain/listing.repository';
 import { computeFinalPrice } from '../domain/pricing/final-price';
-import { REGULAR_KEY, REGULAR_VALUE } from '../domain/reserved-attribute-keys';
+import {
+  REGULAR_KEY,
+  REGULAR_VALUE,
+  RESERVED_ATTRIBUTE_KEYS,
+} from '../domain/reserved-attribute-keys';
 import { validateAttributes } from './attribute-validation';
 import {
   CreateListingInput,
@@ -65,8 +70,8 @@ export class ListingsService {
     //    created before the business is APPROVED.
     const summary = await this.assertBusinessOwned(user, businessId);
 
-    // 2. Shared create/edit validation (§10) → normalised discount + option groups.
-    const { discount, optionGroups } = await this.validateAndResolve(summary, input);
+    // 2. Shared create/edit validation (§10) → normalised discount + option groups + haystack.
+    const { discount, optionGroups, searchText } = await this.validateAndResolve(summary, input);
 
     // 3. Persist the whole aggregate atomically as DRAFT.
     return this.listings.create({
@@ -86,6 +91,7 @@ export class ListingsService {
       validTo: input.validTo,
       attributes: input.attributes,
       optionGroups,
+      searchText,
       status: ListingStatus.DRAFT,
     });
   }
@@ -131,7 +137,7 @@ export class ListingsService {
     input: UpdateListingInput,
   ): Promise<Listing> {
     const { summary } = await this.loadOwnedListing(user, listingId);
-    const { discount, optionGroups } = await this.validateAndResolve(summary, input);
+    const { discount, optionGroups, searchText } = await this.validateAndResolve(summary, input);
     return this.listings.update(listingId, {
       branchIds: input.branchIds,
       categoryKey: input.categoryKey,
@@ -147,6 +153,7 @@ export class ListingsService {
       validTo: input.validTo,
       attributes: input.attributes,
       optionGroups,
+      searchText,
     });
   }
 
@@ -182,14 +189,18 @@ export class ListingsService {
   /**
    * Shared create/edit validation (LISTINGS.md §10): category + custom-name, scalar rules, pricing
    * (§4/§5), attributes against the catalog schema (§6), redemption (§7), option groups (§8) and
-   * branchIds ownership (§9). Returns the normalised discount (with the server-computed finalPrice)
-   * and the option groups to persist.
+   * branchIds ownership (§9). Returns the normalised discount (with the server-computed finalPrice),
+   * the option groups to persist and the search haystack (§7 of STUDENT_FEED.md).
    */
   private async validateAndResolve(
     summary: BusinessSummary,
     input: UpdateListingInput,
-  ): Promise<{ discount: ListingDiscount; optionGroups: CreateOptionGroupData[] }> {
-    await this.assertCategory(summary.type, input);
+  ): Promise<{
+    discount: ListingDiscount;
+    optionGroups: CreateOptionGroupData[];
+    searchText: string;
+  }> {
+    const category = await this.assertCategory(summary.type, input);
     this.assertScalars(input);
     const isRegular = input.attributes?.[REGULAR_KEY] === REGULAR_VALUE;
     const discount = this.resolveDiscount(input, isRegular);
@@ -198,7 +209,7 @@ export class ListingsService {
     this.assertRedemption(input.redemption);
     const optionGroups = this.resolveOptionGroups(input.optionGroups);
     await this.assertBranchIds(summary.id, input.branchIds);
-    return { discount, optionGroups };
+    return { discount, optionGroups, searchText: buildSearchText(input, category.nameUz) };
   }
 
   /**
@@ -328,11 +339,14 @@ export class ListingsService {
     }
   }
 
-  /** §10 gate 6 (submit): the category must still exist in the catalog for the business type. */
-  private async assertCategoryInCatalog(type: string, categoryKey: string): Promise<void> {
+  /**
+   * §10 gate 6 (submit): the category must still exist in the catalog for the business type.
+   * Returns it, so callers that need its label (the search haystack) get it without a second lookup.
+   */
+  private async assertCategoryInCatalog(type: string, categoryKey: string): Promise<Category> {
     const categories = await this.catalog.findCategoriesByType(type);
-    const keys = categories?.map((category) => category.key) ?? [];
-    if (!keys.includes(categoryKey)) {
+    const found = categories?.find((category) => category.key === categoryKey);
+    if (found === undefined) {
       throw new AppException(
         ERROR_CODE.INVALID_CATEGORY_FOR_TYPE,
         422,
@@ -340,17 +354,19 @@ export class ListingsService {
         { categoryKey: 'Kategoriya katalogda topilmadi' },
       );
     }
+    return found;
   }
 
   /** §10: `categoryKey` must be in the catalog for the type; OTHER requires `customCategoryName`. */
-  private async assertCategory(type: string, input: UpdateListingInput): Promise<void> {
-    await this.assertCategoryInCatalog(type, input.categoryKey);
+  private async assertCategory(type: string, input: UpdateListingInput): Promise<Category> {
+    const category = await this.assertCategoryInCatalog(type, input.categoryKey);
     if (
       input.categoryKey === OTHER_CATEGORY_KEY &&
       (input.customCategoryName === null || input.customCategoryName.trim() === '')
     ) {
       throw AppException.validation({ customCategoryName: 'OTHER uchun nom majburiy' });
     }
+    return category;
   }
 
   /** §10: title length, positive price, image count and the validity window. */
@@ -512,6 +528,35 @@ export class ListingsService {
       throw AppException.validation({ branchIds: 'Filial ushbu biznesga tegishli emas' });
     }
   }
+}
+
+/**
+ * The search haystack persisted as `listing.search_text` (STUDENT_FEED.md §7) — everything a student
+ * might type to find this listing: its title and description, the category (key + label) or the
+ * custom name, the non-reserved attribute values and every option group / option name. Reserved keys
+ * are left out on purpose: `_phone` is contact data and `_regular` / `_gender` are flags — none is
+ * something anybody searches for. The DB trigger derives `search_vector` from the result.
+ *
+ * Category synonyms are deliberately NOT baked in: they belong to the catalog and are joined at
+ * query time, so a copy here would go stale the moment an admin edits them.
+ */
+function buildSearchText(input: UpdateListingInput, categoryLabel: string): string {
+  const parts: Array<string | null> = [
+    input.title,
+    input.description,
+    input.categoryKey,
+    categoryLabel,
+    input.customCategoryName,
+  ];
+  for (const [key, value] of Object.entries(input.attributes ?? {})) {
+    if (!RESERVED_ATTRIBUTE_KEYS.includes(key)) {
+      parts.push(value);
+    }
+  }
+  for (const group of input.optionGroups) {
+    parts.push(group.name, ...group.options.map((option) => option.name));
+  }
+  return parts.filter((part): part is string => part !== null && part.trim() !== '').join(' ');
 }
 
 /**

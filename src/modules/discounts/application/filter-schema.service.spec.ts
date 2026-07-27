@@ -158,6 +158,56 @@ describe('FilterSchemaService', () => {
     ]);
   });
 
+  it('keeps a category that exists only in a per-gender list', async () => {
+    // CLOTHING's DRESSES/SKIRTS/BLOUSES/SHIRTS/PANTS/SUITS are declared ONLY under
+    // categoriesByGender — filtering to `gender === null` would drop them from the filter screen
+    // even though listings use them.
+    const service = new FilterSchemaService(
+      makeCatalog({
+        findCategoriesByType: jest.fn().mockResolvedValue([
+          {
+            key: 'OUTERWEAR',
+            businessType: 'CLOTHING',
+            nameUz: 'Ustki kiyim',
+            nameRu: null,
+            iconUrl: null,
+            sortOrder: 0,
+            requiresCustomName: false,
+            fields: [],
+            gender: null,
+          },
+          {
+            key: 'DRESSES',
+            businessType: 'CLOTHING',
+            nameUz: "Ko'ylak / libos",
+            nameRu: null,
+            iconUrl: null,
+            sortOrder: 1,
+            requiresCustomName: false,
+            fields: [],
+            gender: 'FEMALE',
+          },
+        ]),
+      }),
+      makeFacets({
+        categories: [
+          { key: 'OUTERWEAR', count: 3 },
+          { key: 'DRESSES', count: 7 },
+        ],
+      }),
+    );
+
+    const schema = await service.getSchema(QUERY);
+
+    expect(schema.categories.map((category) => category.key).sort()).toEqual([
+      'DRESSES',
+      'OUTERWEAR',
+    ]);
+    expect(schema.categories.find((category) => category.key === 'DRESSES')?.label).toBe(
+      "Ko'ylak / libos",
+    );
+  });
+
   it('always offers the sorts, marking the one that needs coordinates', async () => {
     const service = new FilterSchemaService(makeCatalog(), makeFacets());
 

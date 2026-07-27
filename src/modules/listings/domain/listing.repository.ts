@@ -47,6 +47,8 @@ export interface CreateListingData {
   validTo: Date;
   attributes: Record<string, string> | null;
   optionGroups: CreateOptionGroupData[];
+  /** Search haystack built by the service (STUDENT_FEED.md §7); the DB derives `search_vector`. */
+  searchText: string;
   status: ListingStatus;
 }
 
@@ -82,6 +84,8 @@ export interface UpdateListingData {
   validTo: Date;
   attributes: Record<string, string> | null;
   optionGroups: CreateOptionGroupData[];
+  /** Search haystack rebuilt by the service (STUDENT_FEED.md §7); the DB derives `search_vector`. */
+  searchText: string;
 }
 
 /**

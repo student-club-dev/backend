@@ -41,6 +41,12 @@ interface SeedGroup {
   sortOrder: number;
 }
 
+interface SeedSynonym {
+  businessType: string;
+  categoryKey: string;
+  terms: string[];
+}
+
 interface SeedBusinessType {
   type: string;
   groupKey: string;
@@ -155,6 +161,7 @@ interface CatalogSeed {
   version: string;
   constants: Record<string, string>;
   groups: SeedGroup[];
+  synonyms: SeedSynonym[];
   businessTypes: SeedBusinessType[];
   categories: Record<string, SeedCategory[]>;
   categoriesByGender: Record<string, Record<string, SeedCategory[]>>;
@@ -304,6 +311,15 @@ async function main(): Promise<void> {
     }
   }
 
+  // Flatten { businessType, categoryKey, terms[] } into one row per term (D2's natural key).
+  const synonymRows: Prisma.CatalogSynonymCreateManyInput[] = seed.synonyms.flatMap((entry) =>
+    entry.terms.map((term) => ({
+      businessType: entry.businessType,
+      categoryKey: entry.categoryKey,
+      term,
+    })),
+  );
+
   const geo = loadGeo();
 
   await prisma.$transaction(async (tx) => {
@@ -353,6 +369,10 @@ async function main(): Promise<void> {
     // 3. Attribute specs — replace wholesale (nullable categoryKey in the unique key).
     await tx.attributeSpec.deleteMany();
     await tx.attributeSpec.createMany({ data: attributeRows });
+
+    // 3b. Search synonyms — replace wholesale; pure reference data with no dependents.
+    await tx.catalogSynonym.deleteMany();
+    await tx.catalogSynonym.createMany({ data: synonymRows });
 
     // 4. Geo — regions first (District.regionId FK -> Region). Upsert by id: idempotent and
     //    FK-safe (deleteMany would fail once Branches reference regions/districts).
@@ -413,6 +433,7 @@ async function main(): Promise<void> {
   console.log('Catalog seed complete:');
   console.log(`  business types:        ${seed.businessTypes.length}`);
   console.log(`  categories:            ${categoryRows.length} (base ${baseCategoryCount}, per-gender ${perGenderCategoryCount})`);
+  console.log(`  synonyms:              ${synonymRows.length}`);
   console.log(`  attribute specs:       ${attributeRows.length} (type-level ${typeLevelAttrCount}, category-level ${categoryLevelAttrCount})`);
   console.log(`  regions:               ${geo.regions.length}`);
   console.log(`  districts:             ${geo.districts.length}`);

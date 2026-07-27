@@ -6,7 +6,12 @@ import {
   CreateBranchData,
   UpdateBranchData,
 } from '../domain/branches.repository';
-import { Branch, BranchTradeCenterFieldInput } from '../domain/entities/branch.entity';
+import {
+  Branch,
+  BranchTradeCenterFieldInput,
+  WorkingHours,
+} from '../domain/entities/branch.entity';
+import { toWorkingHourRows } from './branch-working-hours.mapper';
 import { BRANCH_INCLUDE, BranchMapper } from './branch.mapper';
 
 /** Prisma implementation of the branch repository port. Prisma is used ONLY here. */
@@ -15,13 +20,14 @@ export class BranchPrismaRepository implements BranchRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Creates the branch and its trade-center field values in one transaction. `geo_point` is
-   * populated from lat/lng by the DB trigger `branches_set_geo_point`.
+   * Creates the branch, its trade-center field values and its working-hour rows in one transaction.
+   * `geo_point` is populated from lat/lng by the DB trigger `branches_set_geo_point`.
    */
   async create(data: CreateBranchData): Promise<Branch> {
     const row = await this.prisma.$transaction(async (tx) => {
       const created = await tx.branch.create({ data: BranchMapper.toCreateData(data) });
       await this.writeFieldValues(tx, created.id, data.tradeCenterId, data.tradeCenterFields);
+      await this.writeWorkingHours(tx, created.id, data.workingHours);
       return tx.branch.findUniqueOrThrow({ where: { id: created.id }, include: BRANCH_INCLUDE });
     });
     return BranchMapper.toDomain(row);
@@ -42,15 +48,16 @@ export class BranchPrismaRepository implements BranchRepository {
   }
 
   /**
-   * Full-replace update of the branch and its trade-center field values in one transaction.
-   * Existing field values are deleted and the submitted set re-created; clearing `tradeCenterId`
-   * (null) leaves no values behind. `geo_point` is refreshed by the DB trigger.
+   * Full-replace update of the branch, its trade-center field values and its working-hour rows in
+   * one transaction. Existing field values are deleted and the submitted set re-created; clearing
+   * `tradeCenterId` (null) leaves no values behind. `geo_point` is refreshed by the DB trigger.
    */
   async update(id: string, data: UpdateBranchData): Promise<Branch> {
     const row = await this.prisma.$transaction(async (tx) => {
       await tx.branch.update({ where: { id }, data: BranchMapper.toUpdateData(data) });
       await tx.branchTradeCenterFieldValue.deleteMany({ where: { branchId: id } });
       await this.writeFieldValues(tx, id, data.tradeCenterId, data.tradeCenterFields);
+      await this.writeWorkingHours(tx, id, data.workingHours);
       return tx.branch.findUniqueOrThrow({ where: { id }, include: BRANCH_INCLUDE });
     });
     return BranchMapper.toDomain(row);
@@ -68,6 +75,26 @@ export class BranchPrismaRepository implements BranchRepository {
     }
     await tx.branchTradeCenterFieldValue.createMany({
       data: fields.map((field) => ({ branchId, fieldId: field.fieldId, value: field.value })),
+    });
+  }
+
+  /**
+   * Rewrites the branch's `branch_working_hours` rows from the `working_hours` JSON (STUDENT_FEED.md
+   * D11) — replace-all, so the side table cannot drift from the JSON the client sent. Repeated days
+   * are skipped rather than breaking the write on the (branch, day) unique constraint.
+   */
+  private async writeWorkingHours(
+    tx: Prisma.TransactionClient,
+    branchId: string,
+    workingHours: WorkingHours[],
+  ): Promise<void> {
+    await tx.branchWorkingHour.deleteMany({ where: { branchId } });
+    if (workingHours.length === 0) {
+      return;
+    }
+    await tx.branchWorkingHour.createMany({
+      data: toWorkingHourRows(branchId, workingHours),
+      skipDuplicates: true,
     });
   }
 

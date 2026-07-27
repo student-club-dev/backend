@@ -9,6 +9,13 @@ import { ShapedAttributeFacet, shapeAttributeFacets } from './attribute-facet.sh
 /** The type-wide category every business type declares; used to pull the type-level specs. */
 const ALL_CATEGORY_KEY = 'ALL';
 
+/** A category's display label, and whether it was only found in a per-gender list. */
+interface CategoryLabel {
+  nameUz: string;
+  typeKey: string;
+  fromGenderedList: boolean;
+}
+
 /** What the client asked to build a filter screen for. */
 export interface FilterSchemaQuery {
   groupKeys: string[];
@@ -159,17 +166,27 @@ export class FilterSchemaService {
     return perType.flat();
   }
 
-  /** Category key → its label and owning type, for every selected type. */
-  private async collectCategoryLabels(
-    types: string[],
-  ): Promise<Map<string, { nameUz: string; typeKey: string }>> {
+  /**
+   * Category key → its label and owning type, for every selected type.
+   *
+   * A key can appear in both the base list and a per-gender one (CLOTHING). The base row is the
+   * canonical label, but it cannot be the *filter* — six CLOTHING categories (DRESSES, SKIRTS,
+   * BLOUSES, SHIRTS, PANTS, SUITS) exist ONLY under `categoriesByGender`. Keeping just
+   * `gender === null` rows would drop them from the filter screen even though listings use them.
+   */
+  private async collectCategoryLabels(types: string[]): Promise<Map<string, CategoryLabel>> {
     const perType = await Promise.all(types.map((type) => this.catalog.findCategoriesByType(type)));
-    const labels = new Map<string, { nameUz: string; typeKey: string }>();
+    const labels = new Map<string, CategoryLabel>();
     perType.forEach((categories, index) => {
       for (const category of categories ?? []) {
-        // Gender-specific lists (CLOTHING) duplicate keys — the base list is the canonical label.
-        if (category.gender === null && !labels.has(category.key)) {
-          labels.set(category.key, { nameUz: category.nameUz, typeKey: types[index] });
+        const existing = labels.get(category.key);
+        const isBase = category.gender === null;
+        if (existing === undefined || (existing.fromGenderedList && isBase)) {
+          labels.set(category.key, {
+            nameUz: category.nameUz,
+            typeKey: types[index],
+            fromGenderedList: !isBase,
+          });
         }
       }
     });

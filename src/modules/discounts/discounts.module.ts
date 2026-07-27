@@ -1,11 +1,31 @@
 import { Module } from '@nestjs/common';
+import { JwtModule } from '@nestjs/jwt';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../../common/guards/optional-jwt-auth.guard';
+import { StudentGuard } from '../../common/guards/student.guard';
 import { RedisModule } from '../../infrastructure/cache/redis.module';
 import { PrismaModule } from '../../infrastructure/database/prisma.module';
 import { CatalogModule } from '../catalog/catalog.module';
+import { DetailService } from './application/detail.service';
+import { FavoritesService } from './application/favorites.service';
 import { FilterSchemaService } from './application/filter-schema.service';
+import { SearchService } from './application/search.service';
+import { SuggestService } from './application/suggest.service';
+import { DETAIL_REPOSITORY } from './domain/detail.repository';
 import { FACET_REPOSITORY } from './domain/facet.repository';
+import { FAVORITES_REPOSITORY } from './domain/favorites.repository';
+import { SEARCH_REPOSITORY } from './domain/search.repository';
+import { SUGGEST_REPOSITORY } from './domain/suggest.repository';
+import { DetailPrismaRepository } from './infrastructure/detail.prisma.repository';
 import { FacetPrismaRepository } from './infrastructure/facet.prisma.repository';
+import { FavoritesPrismaRepository } from './infrastructure/favorites.prisma.repository';
+import { SearchPrismaRepository } from './infrastructure/search.prisma.repository';
+import { SuggestPrismaRepository } from './infrastructure/suggest.prisma.repository';
+import { DetailController } from './presentation/detail.controller';
+import { FavoritesController } from './presentation/favorites.controller';
 import { FilterSchemaController } from './presentation/filter-schema.controller';
+import { SearchController } from './presentation/search.controller';
+import { SuggestController } from './presentation/suggest.controller';
 
 /**
  * Student feed aggregation. Owns every read that counts or searches listings — the filter schema
@@ -16,8 +36,30 @@ import { FilterSchemaController } from './presentation/filter-schema.controller'
  * this module measures what actually *is*.
  */
 @Module({
-  imports: [PrismaModule, RedisModule, CatalogModule],
-  controllers: [FilterSchemaController],
-  providers: [FilterSchemaService, { provide: FACET_REPOSITORY, useClass: FacetPrismaRepository }],
+  // `JwtModule.register({})` mirrors ProfileModule/BusinessModule: the guards verify the access
+  // token with an explicit secret pulled from config, so no module-level signing options are needed.
+  imports: [PrismaModule, RedisModule, CatalogModule, JwtModule.register({})],
+  controllers: [
+    FilterSchemaController,
+    FavoritesController,
+    DetailController,
+    SuggestController,
+    SearchController,
+  ],
+  providers: [
+    FilterSchemaService,
+    FavoritesService,
+    DetailService,
+    SuggestService,
+    SearchService,
+    JwtAuthGuard,
+    OptionalJwtAuthGuard,
+    StudentGuard,
+    { provide: FACET_REPOSITORY, useClass: FacetPrismaRepository },
+    { provide: FAVORITES_REPOSITORY, useClass: FavoritesPrismaRepository },
+    { provide: DETAIL_REPOSITORY, useClass: DetailPrismaRepository },
+    { provide: SUGGEST_REPOSITORY, useClass: SuggestPrismaRepository },
+    { provide: SEARCH_REPOSITORY, useClass: SearchPrismaRepository },
+  ],
 })
 export class DiscountsModule {}

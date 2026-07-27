@@ -25,6 +25,17 @@
     { "key": "SHOPPING", "nameUz": "Savdo va xizmat", "emoji": "🛍", "icon": "cart", "accentColor": "#06B6D4", "sortOrder": 7 },
     { "key": "HOUSING", "nameUz": "Ijara", "emoji": "🏠", "icon": "home", "accentColor": "#14B8A6", "sortOrder": 8 }
   ],
+  "synonyms": [
+    { "businessType": "NATIONAL_FOOD", "categoryKey": "PALOV", "terms": ["osh", "palov", "plov", "o'sh"] },
+    { "businessType": "NATIONAL_FOOD", "categoryKey": "LAGMON", "terms": ["lag'mon", "lagmon", "laghmon"] },
+    { "businessType": "NATIONAL_FOOD", "categoryKey": "MANTI_CHUCHVARA", "terms": ["manti", "chuchvara", "pelmen"] },
+    { "businessType": "NATIONAL_FOOD", "categoryKey": "KABOB", "terms": ["kabob", "shashlik", "kebab"] },
+    { "businessType": "NATIONAL_FOOD", "categoryKey": "SHORVA", "terms": ["sho'rva", "shurpa", "sup"] },
+    { "businessType": "SOMSA", "categoryKey": "MEAT_SOMSA", "terms": ["somsa", "\u0441\u0430\u043c\u0441\u0430"] },
+    { "businessType": "FAST_FOOD", "categoryKey": "LAVASH_SHAWARMA", "terms": ["lavash", "shaurma", "shawarma", "\u0434\u043e\u043d\u0435\u0440"] },
+    { "businessType": "FAST_FOOD", "categoryKey": "PIZZA", "terms": ["pitsa", "pizza"] },
+    { "businessType": "FAST_FOOD", "categoryKey": "BURGER", "terms": ["burger", "gamburger"] }
+  ],
   "businessTypes": [
     { "type": "TENNIS", "groupKey": "SPORT", "nameUz": "Katta tennis", "emoji": "🎾", "accentColor": "#16A34A", "defaultPriceUnit": "PER_HOUR", "priceUnits": ["PER_HOUR", "PER_SESSION", "PER_PERSON"], "availableForGenders": ["MALE", "FEMALE"], "allCategoryLabel": "Barcha kortlar", "optionGroupHint": "Kort turi, qoplama" },
     { "type": "TABLE_TENNIS", "groupKey": "SPORT", "nameUz": "Stol tennis", "emoji": "🏓", "accentColor": "#0EA5E9", "defaultPriceUnit": "PER_HOUR", "priceUnits": ["PER_HOUR", "PER_SESSION"], "availableForGenders": ["MALE", "FEMALE"], "allCategoryLabel": "Barcha stollar", "optionGroupHint": "Stollar soni" },

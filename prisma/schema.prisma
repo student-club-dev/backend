@@ -177,6 +177,7 @@ model Student {
   oauthAccounts StudentOAuthAccount[]
   refreshTokens StudentRefreshToken[]
   redemptions   Redemption[]
+  favorites     StudentFavorite[]
 
   @@map("students")
 }
@@ -472,11 +473,12 @@ model Branch {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  business        Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
-  region          Region          @relation(fields: [regionId], references: [id], onDelete: Restrict)
-  district        District        @relation(fields: [districtId], references: [id], onDelete: Restrict)
+  business        Business            @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  region          Region              @relation(fields: [regionId], references: [id], onDelete: Restrict)
+  district        District            @relation(fields: [districtId], references: [id], onDelete: Restrict)
   listingBranches ListingBranch[]
   redemptions     Redemption[]
+  workingHourRows BranchWorkingHour[]
 
   tradeCenter            TradeCenter?                  @relation(fields: [tradeCenterId], references: [id], onDelete: SetNull)
   tradeCenterFieldValues BranchTradeCenterFieldValue[]
@@ -515,6 +517,12 @@ model Listing {
   // SPECIAL_PRICE are converted to the equivalent percent, FREE_ITEM counts as 50.
   discountPercent Int?    @map("discount_percent")
 
+  // Search haystack (title, description, category label, text attributes, option names) written by
+  // the service. `searchVector` is derived from it by a DB trigger — modelled as Unsupported so
+  // Prisma keeps the column, like Branch.geoPoint.
+  searchText   String?                  @map("search_text")
+  searchVector Unsupported("tsvector")? @map("search_vector")
+
   // Redemption
   redemptionMethod RedemptionMethod  @map("redemption_method")
   promoCode        String?           @map("promo_code")
@@ -534,10 +542,11 @@ model Listing {
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @updatedAt @map("updated_at")
 
-  business        Business        @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  business        Business          @relation(fields: [businessId], references: [id], onDelete: Cascade)
   listingBranches ListingBranch[]
   optionGroups    OptionGroup[]
   redemptions     Redemption[]
+  favorites       StudentFavorite[]
 
   @@index([businessId])
   @@index([status])
@@ -548,6 +557,7 @@ model Listing {
   @@index([validFrom, validTo])
   @@index([isDiscount])
   @@index([businessId, isDiscount, status])
+  @@index([searchVector], type: Gin, map: "listings_search_vector_gin") // full-text search; keep modelled
   @@index([attributes(ops: JsonbPathOps)], type: Gin, map: "listings_attributes_gin") // JSONB attribute-filter index; keep modelled
   @@map("listings")
 }
@@ -703,3 +713,57 @@ model BranchTradeCenterFieldValue {
 // (A STORED generated column is an alternative to the trigger, but Prisma cannot
 //  represent generated columns on Unsupported types, so the trigger is recommended.)
 // ============================================================================
+
+// ============================================================================
+// STUDENT FEED (STUDENT_FEED.md §11)
+// ============================================================================
+
+// Search synonyms per catalog category. `category_key` alone is NOT unique — ALL and OTHER exist
+// under every business type — so the natural key includes the type (STUDENT_FEED.md D2).
+model CatalogSynonym {
+  id           String   @id @default(cuid())
+  businessType String   @map("business_type")
+  categoryKey  String   @map("category_key")
+  term         String
+  weight       Int      @default(1)
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@unique([businessType, categoryKey, term])
+  @@index([term])
+  @@map("catalog_synonyms")
+}
+
+// Branch opening hours flattened out of `branches.working_hours` (the JSON stays the wire
+// contract). Minutes since midnight make `openNow` an indexable comparison instead of JSON
+// arithmetic (STUDENT_FEED.md D11).
+model BranchWorkingHour {
+  id            String    @id @default(cuid())
+  branchId      String    @map("branch_id")
+  day           DayOfWeek
+  openMinute    Int?      @map("open_minute")
+  closeMinute   Int?      @map("close_minute")
+  // true when close <= open, i.e. the venue stays open past midnight (20:00-04:00).
+  spansMidnight Boolean   @default(false) @map("spans_midnight")
+  isClosed      Boolean   @default(false) @map("is_closed")
+
+  branch Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@unique([branchId, day])
+  @@index([day, openMinute, closeMinute])
+  @@map("branch_working_hours")
+}
+
+// A student's saved listings.
+model StudentFavorite {
+  studentId String   @map("student_id")
+  listingId String   @map("listing_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  listing Listing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@id([studentId, listingId])
+  @@index([listingId])
+  @@index([studentId, createdAt])
+  @@map("student_favorites")
+}

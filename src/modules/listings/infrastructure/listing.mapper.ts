@@ -112,6 +112,7 @@ export class ListingMapper {
       totalLimit: data.redemption.totalLimit,
       usedCount: data.redemption.usedCount,
       attributes: attributesToJson(data.attributes),
+      searchText: data.searchText,
       validFrom: data.validFrom,
       validTo: data.validTo,
       status: PrismaListingStatus[data.status],
@@ -157,6 +158,7 @@ export class ListingMapper {
           : PrismaRedemptionPeriod[data.redemption.perUserPeriod],
       totalLimit: data.redemption.totalLimit,
       attributes: attributesToJson(data.attributes),
+      searchText: data.searchText,
       validFrom: data.validFrom,
       validTo: data.validTo,
       listingBranches: {

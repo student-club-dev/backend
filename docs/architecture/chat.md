@@ -60,6 +60,12 @@ The doc describes the **full vision**; implementation ships **v1 first**.
 - **`GET /v1/students/search?q=`** matches `q` against **username** (prefix) **or** **full name** (`firstName`/`lastName`, case-insensitive contains). Results exclude blocked users and the caller, and carry the connection status per result (`NONE | PENDING_OUT | PENDING_IN | CONNECTED`) so the app can render the right button.
 - **Student summary** (the shape returned wherever a person appears — search, connections, conversation members): `{ id, username, fullName, avatarUrl, online, lastSeenAt }`. `online`/`lastSeenAt` are only populated for connections (C7 privacy).
 
+### C12 — Reporting: report a user or a message (anti-scam)  ✅ *decided*
+- Block (C1) hides one person; **Report** feeds moderation and catches repeat offenders. Companion to block — a user can both block **and** report in one action.
+- **`POST /v1/reports`** `{ targetStudentId? , messageId? , reason, note? }` — exactly one target (a student **or** a message). `reason` ∈ `SPAM | SCAM | HARASSMENT | INAPPROPRIATE | OTHER`. Rate-limited; duplicate open reports by the same reporter against the same target are coalesced.
+- Stored in a **`Report`** table (`reporterId`, target, `reason`, `note`, `status = OPEN | REVIEWED | ACTIONED | DISMISSED`, `createdAt`). Reporting a message snapshots its content so a later delete can't hide evidence.
+- **v1 = capture only** (submit + persist). The moderation dashboard + auto-flag on a report threshold live in the `admin` module (later). The connection-gate already stops unsolicited DMs; block + report complete the safety story.
+
 ---
 
 ## Connections subsystem
@@ -113,6 +119,7 @@ Block {
 | `GET`  | `/v1/connections` | My accepted connections (paginated) |
 | `DELETE` | `/v1/connections/{studentId}` | Disconnect |
 | `POST` | `/v1/blocks` `{ studentId }` · `DELETE /v1/blocks/{studentId}` | Block / unblock |
+| `POST` | `/v1/reports` `{ targetStudentId? , messageId? , reason, note? }` | Report a user or a message (C12) — feeds moderation |
 
 ---
 
@@ -225,7 +232,7 @@ REST follows the project envelope (`BaseResponse`, `{ items, page, size, total, 
 
 | Phase | Features |
 |-------|----------|
-| **v1 — core** | Connections (request/accept/decline/remove/block, discovery search) · 1:1 text over WS · delivery/read receipts · typing · online + last-seen presence · unread counts · conversation list · history pagination |
+| **v1 — core** | Connections (request/accept/decline/remove/block/**report**, discovery search) · 1:1 text over WS · delivery/read receipts · typing · online + last-seen presence · unread counts · conversation list · history pagination |
 | **v2 — rich** | Media (image → file → voice; reuses `media/upload`) · reply/quote · edit · delete (me / everyone) · emoji reactions · message search · pin · mute |
 | **v3 — advanced** | **Group chats** (create, members, roles, add/remove) · forward · stickers/GIF · polls |
 | **Out of scope (separate project / maybe never)** | Voice/video calls (WebRTC + TURN) · channels · bots |
@@ -236,7 +243,7 @@ REST follows the project envelope (`BaseResponse`, `{ items, page, size, total, 
 
 - **Modules:** `src/modules/connections/` (new) and `src/modules/chat/` (fill the scaffold), each DDD-layered (`domain` / `application` / `infrastructure` / `presentation`). The WS gateway is a `presentation` adapter of `chat`.
 - **Packages to add:** `@nestjs/websockets`, `@nestjs/platform-socket.io`, `socket.io`, `@socket.io/redis-adapter`. `ioredis` + `RedisService` already exist.
-- **Prisma additions to existing models** (one migration): `Student.username` (unique, nullable) and `Student.lastSeenAt`. New tables: `Connection`, `Block`, `Conversation`, `ConversationMember`, `Message` (+ `MessageReaction` in v2).
+- **Prisma additions to existing models** (one migration): `Student.username` (unique, nullable) and `Student.lastSeenAt`. New tables: `Connection`, `Block`, `Report`, `Conversation`, `ConversationMember`, `Message` (+ `MessageReaction` in v2).
 - **Scaling:** the Redis adapter fans out `message:new` etc. across app instances so multi-device / multi-replica delivery works. Presence lives in Redis.
 - **Auth:** reuse the JWT + `AccountType.STUDENT` guard on both REST and the socket handshake. Ownership/connection checks in the application layer.
 
@@ -248,4 +255,4 @@ REST follows the project envelope (`BaseResponse`, `{ items, page, size, total, 
 2. **Discovery (C11):** ✅ search by **username *and* full name**; `Student` gains a unique `username` (editable in profile).
 3. **Offline push (C8):** ✅ v1 = unread counts only; real FCM/APNs push is a later task.
 
-**Deferred (specced when the phase starts):** group ownership/roles and add/remove rules (v3); media storage specifics for voice/file (v2, reuses `media/upload`).
+**Deferred (specced when the phase starts):** group ownership/roles and add/remove rules (v3); media storage specifics for voice/file (v2, reuses `media/upload`); report moderation dashboard + auto-flag on a report threshold (`admin` module, later — v1 only captures reports).
