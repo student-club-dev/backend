@@ -1,9 +1,21 @@
-import { Body, Controller, Delete, HttpCode, Param, Put, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  Post,
+  Put,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { ERROR_CODE } from '../../../common/errors/error-code';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import {
+  ApiCreatedEnvelope,
+  ApiErrorEnvelope,
   ApiForbiddenEnvelope,
   ApiNotFoundEnvelope,
   ApiOkEnvelope,
@@ -14,6 +26,7 @@ import type { AuthenticatedUser } from '../../../common/types/authenticated-user
 import { BusinessAccountGuard } from '../../business/presentation/guards/business-account.guard';
 import { ListingsService } from '../application/listings.service';
 import { ListingDto } from './dto/listing.dto';
+import { ListingStatsDto } from './dto/listing-stats.dto';
 import { UpdateListingRequestDto } from './dto/update-listing-request.dto';
 
 /**
@@ -69,5 +82,97 @@ export class ListingController {
     @Param('listingId') listingId: string,
   ): Promise<void> {
     await this.listingsService.archive(user, listingId);
+  }
+
+  @Post(':listingId/pause')
+  @HttpCode(200)
+  @ApiOperation({ summary: 'Pause a listing (ACTIVE → PAUSED)' })
+  @ApiOkEnvelope(ListingDto)
+  @ApiNotFoundEnvelope(ERROR_CODE.LISTING_NOT_FOUND, 'No listing with this id.', 'E’lon topilmadi')
+  @ApiErrorEnvelope(
+    409,
+    ERROR_CODE.INVALID_STATUS_TRANSITION,
+    'The listing is not ACTIVE.',
+    'E’lon holatini o‘zgartirib bo‘lmaydi',
+  )
+  async pause(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('listingId') listingId: string,
+  ): Promise<ListingDto> {
+    const listing = await this.listingsService.pause(user, listingId);
+    return ListingDto.fromDomain(listing);
+  }
+
+  @Post(':listingId/activate')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Resume a listing (PAUSED → ACTIVE)',
+    description: 'Goes to SCHEDULED instead when `validFrom` is still in the future.',
+  })
+  @ApiOkEnvelope(ListingDto)
+  @ApiNotFoundEnvelope(ERROR_CODE.LISTING_NOT_FOUND, 'No listing with this id.', 'E’lon topilmadi')
+  @ApiErrorEnvelope(
+    409,
+    ERROR_CODE.INVALID_STATUS_TRANSITION,
+    'The listing is not PAUSED.',
+    'E’lon holatini o‘zgartirib bo‘lmaydi',
+  )
+  async activate(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('listingId') listingId: string,
+  ): Promise<ListingDto> {
+    const listing = await this.listingsService.activate(user, listingId);
+    return ListingDto.fromDomain(listing);
+  }
+
+  @Post(':listingId/withdraw')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Withdraw a listing from review (PENDING_REVIEW → DRAFT)',
+    description: 'Returns the listing to a draft so the owner can edit and resubmit it.',
+  })
+  @ApiOkEnvelope(ListingDto)
+  @ApiNotFoundEnvelope(ERROR_CODE.LISTING_NOT_FOUND, 'No listing with this id.', 'E’lon topilmadi')
+  @ApiErrorEnvelope(
+    409,
+    ERROR_CODE.INVALID_STATUS_TRANSITION,
+    'The listing is not PENDING_REVIEW.',
+    'E’lon holatini o‘zgartirib bo‘lmaydi',
+  )
+  async withdraw(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('listingId') listingId: string,
+  ): Promise<ListingDto> {
+    const listing = await this.listingsService.withdraw(user, listingId);
+    return ListingDto.fromDomain(listing);
+  }
+
+  @Post(':listingId/duplicate')
+  @ApiOperation({
+    summary: 'Duplicate a listing',
+    description:
+      'Clones the content into a fresh DRAFT (`usedCount`/`viewsCount` reset). Used to re-publish an ' +
+      'EXPIRED/SOLD_OUT offer.',
+  })
+  @ApiCreatedEnvelope(ListingDto, 'The new draft copy.')
+  @ApiNotFoundEnvelope(ERROR_CODE.LISTING_NOT_FOUND, 'No listing with this id.', 'E’lon topilmadi')
+  async duplicate(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('listingId') listingId: string,
+  ): Promise<ListingDto> {
+    const listing = await this.listingsService.duplicate(user, listingId);
+    return ListingDto.fromDomain(listing);
+  }
+
+  @Get(':listingId/stats')
+  @ApiOperation({ summary: 'Get listing statistics (owner only)' })
+  @ApiOkEnvelope(ListingStatsDto)
+  @ApiNotFoundEnvelope(ERROR_CODE.LISTING_NOT_FOUND, 'No listing with this id.', 'E’lon topilmadi')
+  async stats(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('listingId') listingId: string,
+  ): Promise<ListingStatsDto> {
+    const result = await this.listingsService.stats(user, listingId);
+    return ListingStatsDto.fromResult(result);
   }
 }

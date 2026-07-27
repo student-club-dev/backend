@@ -171,6 +171,56 @@ export class ListingMapper {
       },
     };
   }
+
+  /**
+   * A listing row → Prisma nested-create payload that clones its content as a fresh DRAFT
+   * (LISTINGS.md duplicate). Every content column is copied straight through — including
+   * `searchText`, so the DB re-derives `search_vector` — while ownership stays the same business, the
+   * counters (`usedCount`, `viewsCount`) reset to their defaults, and the branch + option-group rows
+   * are recreated from the source.
+   */
+  static toDuplicateData(row: ListingRowWithRelations): Prisma.ListingUncheckedCreateInput {
+    return {
+      businessId: row.businessId,
+      categoryKey: row.categoryKey,
+      customCategoryName: row.customCategoryName,
+      title: row.title,
+      description: row.description,
+      images: row.images,
+      priceUnit: row.priceUnit,
+      originalPrice: row.originalPrice,
+      currency: row.currency,
+      discountType: row.discountType,
+      discountValue: row.discountValue,
+      finalPrice: row.finalPrice,
+      isDiscount: row.isDiscount,
+      discountPercent: row.discountPercent,
+      discountConditions: row.discountConditions,
+      appliesToOptions: row.appliesToOptions,
+      redemptionMethod: row.redemptionMethod,
+      promoCode: row.promoCode,
+      redemptionUrl: row.redemptionUrl,
+      perUserLimit: row.perUserLimit,
+      perUserPeriod: row.perUserPeriod,
+      totalLimit: row.totalLimit,
+      attributes:
+        row.attributes === null ? Prisma.DbNull : (row.attributes as Prisma.InputJsonValue),
+      searchText: row.searchText,
+      validFrom: row.validFrom,
+      validTo: row.validTo,
+      status: PrismaListingStatus.DRAFT,
+      listingBranches:
+        row.listingBranches.length === 0
+          ? undefined
+          : {
+              create: row.listingBranches.map((association) => ({
+                branchId: association.branchId,
+              })),
+            },
+      optionGroups:
+        row.optionGroups.length === 0 ? undefined : { create: optionGroupsClone(row.optionGroups) },
+    };
+  }
 }
 
 /** Prisma nested-create payload for a listing's option groups (each with its options). */
@@ -188,6 +238,28 @@ function optionGroupsCreate(
       create: group.options.map((option) => ({
         name: option.name,
         priceDelta: BigInt(option.priceDelta),
+        isAvailable: option.isAvailable,
+        sortOrder: option.sortOrder,
+      })),
+    },
+  }));
+}
+
+/** Prisma nested-create payload cloning a listing's option groups (and options) from existing rows. */
+function optionGroupsClone(
+  groups: OptionGroupRow[],
+): Prisma.OptionGroupCreateWithoutListingInput[] {
+  return groups.map((group) => ({
+    name: group.name,
+    selectionType: group.selectionType,
+    isRequired: group.isRequired,
+    minSelect: group.minSelect,
+    maxSelect: group.maxSelect,
+    sortOrder: group.sortOrder,
+    options: {
+      create: group.options.map((option) => ({
+        name: option.name,
+        priceDelta: option.priceDelta,
         isAvailable: option.isAvailable,
         sortOrder: option.sortOrder,
       })),

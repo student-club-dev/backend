@@ -28,6 +28,6 @@ import { ListingsController } from './presentation/listings.controller';
     BusinessAccountGuard,
     { provide: LISTING_REPOSITORY, useClass: ListingPrismaRepository },
   ],
-  exports: [LISTING_REPOSITORY],
+  exports: [LISTING_REPOSITORY, ListingsService],
 })
 export class ListingsModule {}

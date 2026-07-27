@@ -21,6 +21,7 @@ import {
   ListingPage,
   ListingPageQuery,
   ListingRepository,
+  StatusTransitionCounts,
 } from '../domain/listing.repository';
 import { computeFinalPrice } from '../domain/pricing/final-price';
 import {
@@ -31,6 +32,7 @@ import {
 import { validateAttributes } from './attribute-validation';
 import {
   CreateListingInput,
+  ListingStatsResult,
   OptionGroupInput,
   RedemptionInput,
   UpdateListingInput,
@@ -161,6 +163,89 @@ export class ListingsService {
   async archive(user: AuthenticatedUser, listingId: string): Promise<void> {
     await this.loadOwnedListing(user, listingId);
     await this.listings.archive(listingId);
+  }
+
+  /**
+   * Pauses a live listing (ACTIVE → PAUSED). Any other status is an invalid transition (409) — only a
+   * live listing can be paused. Returns the updated listing.
+   */
+  async pause(user: AuthenticatedUser, listingId: string): Promise<Listing> {
+    const { listing } = await this.loadOwnedListing(user, listingId);
+    if (listing.status !== ListingStatus.ACTIVE) {
+      throw AppException.conflict(
+        ERROR_CODE.INVALID_STATUS_TRANSITION,
+        'Faqat faol e’lonni to‘xtatib turish mumkin',
+      );
+    }
+    return this.listings.setStatus(listingId, ListingStatus.PAUSED);
+  }
+
+  /**
+   * Resumes a paused listing. It goes back to ACTIVE, or to SCHEDULED when its `validFrom` is still in
+   * the future (the cron starts it on time — mirroring submit). Any other status is an invalid
+   * transition (409). Returns the updated listing.
+   */
+  async activate(user: AuthenticatedUser, listingId: string): Promise<Listing> {
+    const { listing } = await this.loadOwnedListing(user, listingId);
+    if (listing.status !== ListingStatus.PAUSED) {
+      throw AppException.conflict(
+        ERROR_CODE.INVALID_STATUS_TRANSITION,
+        'Faqat to‘xtatilgan e’lonni qayta faollashtirish mumkin',
+      );
+    }
+    const target = listing.validFrom > new Date() ? ListingStatus.SCHEDULED : ListingStatus.ACTIVE;
+    return this.listings.setStatus(listingId, target);
+  }
+
+  /**
+   * Withdraws a listing from review back to a draft (PENDING_REVIEW → DRAFT) so the owner can edit and
+   * resubmit. Any other status is an invalid transition (409). Returns the updated listing.
+   */
+  async withdraw(user: AuthenticatedUser, listingId: string): Promise<Listing> {
+    const { listing } = await this.loadOwnedListing(user, listingId);
+    if (listing.status !== ListingStatus.PENDING_REVIEW) {
+      throw AppException.conflict(
+        ERROR_CODE.INVALID_STATUS_TRANSITION,
+        'Faqat ko‘rib chiqishdagi e’lonni qaytarib olish mumkin',
+      );
+    }
+    return this.listings.setStatus(listingId, ListingStatus.DRAFT);
+  }
+
+  /**
+   * Clones a listing the caller owns into a fresh DRAFT (content, branches and option groups copied;
+   * `usedCount`/`viewsCount` reset). Used to re-publish an EXPIRED/SOLD_OUT offer; the owner edits and
+   * submits the copy independently. Returns the new listing.
+   */
+  async duplicate(user: AuthenticatedUser, listingId: string): Promise<Listing> {
+    await this.loadOwnedListing(user, listingId);
+    return this.listings.duplicate(listingId);
+  }
+
+  /**
+   * Owner analytics for a listing the caller owns (ListingStatsDto): views, favourites, confirmed
+   * redemptions and their revenue, plus the derived `conversionRate` (0 when there are no views).
+   */
+  async stats(user: AuthenticatedUser, listingId: string): Promise<ListingStatsResult> {
+    await this.loadOwnedListing(user, listingId);
+    const stats = await this.listings.stats(listingId);
+    return {
+      listingId,
+      viewsCount: stats.viewsCount,
+      favoritesCount: stats.favoritesCount,
+      redemptionsCount: stats.redemptionsCount,
+      conversionRate: stats.viewsCount === 0 ? 0 : stats.redemptionsCount / stats.viewsCount,
+      totalRevenue: stats.totalRevenue,
+    };
+  }
+
+  /**
+   * Applies the scheduled status transitions (BACKEND_PROMPT §7) as of now. Invoked by the cron, not
+   * by any request — no ownership check: it is a system-wide sweep. Returns the per-transition counts
+   * for the caller to log.
+   */
+  runStatusTransitions(): Promise<StatusTransitionCounts> {
+    return this.listings.applyStatusTransitions(new Date());
   }
 
   /**

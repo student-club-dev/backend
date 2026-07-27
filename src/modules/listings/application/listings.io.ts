@@ -68,3 +68,16 @@ export interface CreateListingInput {
  * `currency` — currency is immutable on edit; the stored value is kept.
  */
 export type UpdateListingInput = Omit<CreateListingInput, 'currency'>;
+
+/**
+ * Owner analytics for a listing (ListingStatsDto). Aggregated by the repository; `conversionRate`
+ * (`redemptionsCount / viewsCount`, 0 when there are no views) is derived by the service.
+ */
+export interface ListingStatsResult {
+  listingId: string;
+  viewsCount: number;
+  favoritesCount: number;
+  redemptionsCount: number;
+  conversionRate: number;
+  totalRevenue: number;
+}

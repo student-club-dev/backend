@@ -1,9 +1,11 @@
 import { randomUUID } from 'crypto';
 import { Module } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
 import { LoggerModule } from 'nestjs-pino';
 import { ThrottlerModule } from '@nestjs/throttler';
 import type { IncomingMessage, ServerResponse } from 'http';
 import { AppConfigModule } from './config/config.module';
+import { CronModule } from './cron/cron.module';
 import { RedisModule } from './infrastructure/cache/redis.module';
 import { PrismaModule } from './infrastructure/database/prisma.module';
 import { PushModule } from './infrastructure/push/push.module';
@@ -48,6 +50,8 @@ import { TradeCentersModule } from './modules/trade-centers/trade-centers.module
     }),
     // Default IP throttler config; applied only where ThrottlerGuard is used (OTP endpoints).
     ThrottlerModule.forRoot([{ ttl: 60_000, limit: 10 }]),
+    // Powers @Cron (listing status transitions — see CronModule).
+    ScheduleModule.forRoot(),
     PrismaModule,
     RedisModule,
     StorageModule,
@@ -67,6 +71,7 @@ import { TradeCentersModule } from './modules/trade-centers/trade-centers.module
     ChatModule,
     NotificationsModule,
     MediaModule,
+    CronModule,
   ],
 })
 export class AppModule {}

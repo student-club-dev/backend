@@ -125,6 +125,10 @@ function makeListings(): ListingRepository {
     submitTransition: jest.fn(),
     update: jest.fn(),
     archive: jest.fn().mockResolvedValue(undefined),
+    setStatus: jest.fn(),
+    duplicate: jest.fn(),
+    stats: jest.fn(),
+    applyStatusTransitions: jest.fn(),
   };
 }
 
@@ -188,6 +192,10 @@ function makeSubmitListings(listing: Listing | null): ListingRepository {
     })),
     update: jest.fn(),
     archive: jest.fn().mockResolvedValue(undefined),
+    setStatus: jest.fn(),
+    duplicate: jest.fn(),
+    stats: jest.fn(),
+    applyStatusTransitions: jest.fn(),
   };
 }
 
@@ -204,6 +212,23 @@ function makeByIdListings(listing: Listing | null): ListingRepository {
       discount: data.discount,
     })),
     archive: jest.fn().mockResolvedValue(undefined),
+    setStatus: jest.fn(async (_id: string, status: ListingStatus) => ({
+      ...(listing as Listing),
+      status,
+    })),
+    duplicate: jest.fn(async () => ({
+      ...(listing as Listing),
+      id: 'lst-copy',
+      status: ListingStatus.DRAFT,
+      viewsCount: 0,
+    })),
+    stats: jest.fn().mockResolvedValue({
+      viewsCount: 0,
+      favoritesCount: 0,
+      redemptionsCount: 0,
+      totalRevenue: 0,
+    }),
+    applyStatusTransitions: jest.fn().mockResolvedValue({ expired: 0, activated: 0, soldOut: 0 }),
   };
 }
 
@@ -1213,6 +1238,198 @@ describe('ListingsService', () => {
         status: 403,
       });
       expect(listings.archive).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('pause', () => {
+    it('pauses an ACTIVE listing (ACTIVE → PAUSED)', async () => {
+      const listings = makeByIdListings(draftListing({ status: ListingStatus.ACTIVE }));
+      const service = makeService({ listings });
+
+      const result = await service.pause(owner, 'lst-1');
+
+      expect(listings.setStatus).toHaveBeenCalledWith('lst-1', ListingStatus.PAUSED);
+      expect(result.status).toBe(ListingStatus.PAUSED);
+    });
+
+    it('throws 409 INVALID_STATUS_TRANSITION when the listing is not ACTIVE', async () => {
+      const listings = makeByIdListings(draftListing({ status: ListingStatus.DRAFT }));
+      const service = makeService({ listings });
+
+      await expect(service.pause(owner, 'lst-1')).rejects.toMatchObject({
+        code: ERROR_CODE.INVALID_STATUS_TRANSITION,
+        status: 409,
+      });
+      expect(listings.setStatus).not.toHaveBeenCalled();
+    });
+
+    it('throws 403 FORBIDDEN for another owner’s listing', async () => {
+      const listings = makeByIdListings(draftListing({ status: ListingStatus.ACTIVE }));
+      const service = makeService({ listings, businesses: makeBusinesses('other-owner') });
+
+      await expect(service.pause(owner, 'lst-1')).rejects.toMatchObject({
+        code: ERROR_CODE.FORBIDDEN,
+        status: 403,
+      });
+      expect(listings.setStatus).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('activate', () => {
+    it('resumes a PAUSED listing whose validFrom has passed → ACTIVE', async () => {
+      const listings = makeByIdListings(
+        draftListing({
+          status: ListingStatus.PAUSED,
+          validFrom: new Date(Date.now() - 86_400_000),
+        }),
+      );
+      const service = makeService({ listings });
+
+      const result = await service.activate(owner, 'lst-1');
+
+      expect(listings.setStatus).toHaveBeenCalledWith('lst-1', ListingStatus.ACTIVE);
+      expect(result.status).toBe(ListingStatus.ACTIVE);
+    });
+
+    it('resumes a PAUSED listing whose validFrom is in the future → SCHEDULED', async () => {
+      const listings = makeByIdListings(
+        draftListing({
+          status: ListingStatus.PAUSED,
+          validFrom: new Date(Date.now() + 7 * 86_400_000),
+        }),
+      );
+      const service = makeService({ listings });
+
+      const result = await service.activate(owner, 'lst-1');
+
+      expect(listings.setStatus).toHaveBeenCalledWith('lst-1', ListingStatus.SCHEDULED);
+      expect(result.status).toBe(ListingStatus.SCHEDULED);
+    });
+
+    it('throws 409 INVALID_STATUS_TRANSITION when the listing is not PAUSED', async () => {
+      const listings = makeByIdListings(draftListing({ status: ListingStatus.ACTIVE }));
+      const service = makeService({ listings });
+
+      await expect(service.activate(owner, 'lst-1')).rejects.toMatchObject({
+        code: ERROR_CODE.INVALID_STATUS_TRANSITION,
+        status: 409,
+      });
+      expect(listings.setStatus).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('withdraw', () => {
+    it('withdraws a PENDING_REVIEW listing → DRAFT', async () => {
+      const listings = makeByIdListings(draftListing({ status: ListingStatus.PENDING_REVIEW }));
+      const service = makeService({ listings });
+
+      const result = await service.withdraw(owner, 'lst-1');
+
+      expect(listings.setStatus).toHaveBeenCalledWith('lst-1', ListingStatus.DRAFT);
+      expect(result.status).toBe(ListingStatus.DRAFT);
+    });
+
+    it('throws 409 INVALID_STATUS_TRANSITION when the listing is not PENDING_REVIEW', async () => {
+      const listings = makeByIdListings(draftListing({ status: ListingStatus.ACTIVE }));
+      const service = makeService({ listings });
+
+      await expect(service.withdraw(owner, 'lst-1')).rejects.toMatchObject({
+        code: ERROR_CODE.INVALID_STATUS_TRANSITION,
+        status: 409,
+      });
+      expect(listings.setStatus).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('duplicate', () => {
+    it('clones a listing the caller owns into a DRAFT copy', async () => {
+      const listings = makeByIdListings(draftListing({ status: ListingStatus.EXPIRED }));
+      const service = makeService({ listings });
+
+      const result = await service.duplicate(owner, 'lst-1');
+
+      expect(listings.duplicate).toHaveBeenCalledWith('lst-1');
+      expect(result.id).toBe('lst-copy');
+      expect(result.status).toBe(ListingStatus.DRAFT);
+    });
+
+    it('throws 404 LISTING_NOT_FOUND when the listing is ARCHIVED', async () => {
+      const listings = makeByIdListings(draftListing({ status: ListingStatus.ARCHIVED }));
+      const service = makeService({ listings });
+
+      await expect(service.duplicate(owner, 'lst-1')).rejects.toMatchObject({
+        code: ERROR_CODE.LISTING_NOT_FOUND,
+        status: 404,
+      });
+      expect(listings.duplicate).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('stats', () => {
+    it('returns the aggregates with the derived conversionRate', async () => {
+      const listings = makeByIdListings(draftListing({ status: ListingStatus.ACTIVE }));
+      (listings.stats as jest.Mock).mockResolvedValue({
+        viewsCount: 200,
+        favoritesCount: 15,
+        redemptionsCount: 40,
+        totalRevenue: 1_760_000,
+      });
+      const service = makeService({ listings });
+
+      const result = await service.stats(owner, 'lst-1');
+
+      expect(listings.stats).toHaveBeenCalledWith('lst-1');
+      expect(result).toEqual({
+        listingId: 'lst-1',
+        viewsCount: 200,
+        favoritesCount: 15,
+        redemptionsCount: 40,
+        conversionRate: 0.2,
+        totalRevenue: 1_760_000,
+      });
+    });
+
+    it('reports a 0 conversionRate when there are no views (no divide-by-zero)', async () => {
+      const listings = makeByIdListings(draftListing({ status: ListingStatus.ACTIVE }));
+      (listings.stats as jest.Mock).mockResolvedValue({
+        viewsCount: 0,
+        favoritesCount: 0,
+        redemptionsCount: 0,
+        totalRevenue: 0,
+      });
+      const service = makeService({ listings });
+
+      const result = await service.stats(owner, 'lst-1');
+
+      expect(result.conversionRate).toBe(0);
+    });
+
+    it('throws 403 FORBIDDEN for another owner’s listing', async () => {
+      const listings = makeByIdListings(draftListing({ status: ListingStatus.ACTIVE }));
+      const service = makeService({ listings, businesses: makeBusinesses('other-owner') });
+
+      await expect(service.stats(owner, 'lst-1')).rejects.toMatchObject({
+        code: ERROR_CODE.FORBIDDEN,
+        status: 403,
+      });
+      expect(listings.stats).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('runStatusTransitions', () => {
+    it('delegates the sweep to the repository (as of now) and returns the counts', async () => {
+      const listings = makeListings();
+      (listings.applyStatusTransitions as jest.Mock).mockResolvedValue({
+        expired: 3,
+        activated: 2,
+        soldOut: 1,
+      });
+      const service = makeService({ listings });
+
+      const result = await service.runStatusTransitions();
+
+      expect(listings.applyStatusTransitions).toHaveBeenCalledWith(expect.any(Date));
+      expect(result).toEqual({ expired: 3, activated: 2, soldOut: 1 });
     });
   });
 });

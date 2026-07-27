@@ -109,6 +109,21 @@ export interface ListingPage {
   total: number;
 }
 
+/** Owner analytics for a listing (`conversionRate` is derived by the service). */
+export interface ListingStats {
+  viewsCount: number;
+  favoritesCount: number;
+  redemptionsCount: number;
+  totalRevenue: number;
+}
+
+/** How many listings each cron status transition moved on this run (BACKEND_PROMPT §7). */
+export interface StatusTransitionCounts {
+  expired: number;
+  activated: number;
+  soldOut: number;
+}
+
 /**
  * Listing data-access port. The application layer depends on this interface only; the Prisma
  * implementation lives in infrastructure.
@@ -141,4 +156,29 @@ export interface ListingRepository {
 
   /** Soft-delete: set the listing to ARCHIVED. */
   archive(id: string): Promise<void>;
+
+  /**
+   * Sets the listing's status directly (pause/activate/withdraw). The service decides and validates
+   * the target status; the repository only persists it. Returns the updated aggregate.
+   */
+  setStatus(id: string, status: ListingStatus): Promise<Listing>;
+
+  /**
+   * Clones the listing's content (scalars + branches + option groups) into a fresh DRAFT and returns
+   * the new aggregate. Counters (`usedCount`, `viewsCount`) reset to 0; `search_text` is copied so
+   * the DB re-derives `search_vector`.
+   */
+  duplicate(id: string): Promise<Listing>;
+
+  /** Owner analytics for the listing (views, favourites, confirmed redemptions and their revenue). */
+  stats(id: string): Promise<ListingStats>;
+
+  /**
+   * Applies the time/limit-driven status transitions in one pass (BACKEND_PROMPT §7), as of `now`:
+   * a closed window (`validTo <= now`) expires an ACTIVE/PAUSED/SCHEDULED listing; a SCHEDULED one
+   * whose `validFrom` has arrived (and window still open) goes ACTIVE; an ACTIVE one that reached its
+   * `totalLimit` goes SOLD_OUT. Idempotent — each sweep is guarded by the source status. Returns the
+   * per-transition counts.
+   */
+  applyStatusTransitions(now: Date): Promise<StatusTransitionCounts>;
 }
