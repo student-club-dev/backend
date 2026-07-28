@@ -1,3 +1,5 @@
+import { CourseYear } from '../../profiles/domain/enums/course-year.enum';
+import { Gender } from '../../profiles/domain/enums/gender.enum';
 import { StudentSummary } from './entities/student-summary.entity';
 
 /** Injection token for the student-directory read port (bound to the Prisma impl). */
@@ -7,6 +9,29 @@ export const STUDENT_DIRECTORY = Symbol('STUDENT_DIRECTORY');
 export interface StudentSummaryPage {
   items: StudentSummary[];
   total: number;
+}
+
+/** Result order for the student list. */
+export enum StudentSort {
+  /** Newest accounts first — the default. */
+  RECENT = 'RECENT',
+  /** Alphabetical by username, then first name. */
+  NAME = 'NAME',
+}
+
+/**
+ * Filters for the student list (`GET /v1/students`). Every field is a narrowing AND; the array
+ * fields are ORs within themselves. An empty array means "no constraint on this column".
+ */
+export interface StudentListFilter {
+  /** Free text: username prefix OR firstName/lastName contains (case-insensitive). */
+  q: string | null;
+  universityIds: string[];
+  genders: Gender[];
+  courseYears: CourseYear[];
+  birthYearFrom: number | null;
+  birthYearTo: number | null;
+  sort: StudentSort;
 }
 
 /**
@@ -24,12 +49,14 @@ export interface StudentDirectoryRepository {
   findSummaries(ids: string[]): Promise<StudentSummary[]>;
 
   /**
-   * Search by username prefix OR full-name contains (case-insensitive), excluding `excludeIds`
-   * (self + blocked). Newest students last is not required; order by relevance/name.
+   * The filtered, paginated student list. `excludeIds` drops rows (self + blocked); `restrictToIds`,
+   * when non-null, keeps only those rows — that is how the caller narrows by `connectionStatus`.
+   * A non-null but empty `restrictToIds` therefore yields an empty page.
    */
-  search(
-    query: string,
+  list(
+    filter: StudentListFilter,
     excludeIds: string[],
+    restrictToIds: string[] | null,
     page: number,
     size: number,
   ): Promise<StudentSummaryPage>;

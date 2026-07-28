@@ -2,12 +2,13 @@ import { ApiProperty } from '@nestjs/swagger';
 import { Profile } from '../../domain/entities/profile.entity';
 import { CourseYear } from '../../domain/enums/course-year.enum';
 import { Gender } from '../../domain/enums/gender.enum';
+import { LastSeenVisibility } from '../../domain/enums/last-seen-visibility.enum';
 import { ProfileRole } from '../../domain/enums/profile-role.enum';
 
 /**
  * UserProfileDto — the authenticated account's profile (matches elon-uz.json). The
- * university/course fields (universityId, universityEmail, birthYear, courseYear) are `null`
- * for a business owner; `gender` is carried by both account types.
+ * university/course fields (universityId, universityEmail, birthYear, courseYear) and
+ * `lastSeenVisibility` are `null` for a business owner; `gender` is carried by both account types.
  */
 export class UserProfileDto {
   @ApiProperty({ nullable: true, example: 'Quvonchbek' })
@@ -45,6 +46,16 @@ export class UserProfileDto {
   courseYear!: CourseYear | null;
 
   @ApiProperty({
+    enum: LastSeenVisibility,
+    enumName: 'LastSeenVisibilityDto',
+    nullable: true,
+    description:
+      'Students only — who may see your `online` / `lastSeenAt`. `NOBODY` also hides `online` ' +
+      'and suppresses your `presence:update` events. Defaults to `CONNECTIONS`.',
+  })
+  lastSeenVisibility!: LastSeenVisibility | null;
+
+  @ApiProperty({
     nullable: true,
     description: 'Public URL of the profile picture',
     example: 'https://cdn.elon.uz/avatars/abc123.jpg',
@@ -63,6 +74,7 @@ export class UserProfileDto {
     dto.universityEmail = profile.universityEmail;
     dto.birthYear = profile.birthYear;
     dto.courseYear = profile.courseYear;
+    dto.lastSeenVisibility = profile.lastSeenVisibility;
     dto.avatarUrl = profile.avatarUrl;
     return dto;
   }

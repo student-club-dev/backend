@@ -4,6 +4,7 @@ import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { ConnectionPage, ConnectionsRepository } from '../domain/connections.repository';
 import { Connection } from '../domain/entities/connection.entity';
 import { ConnectionStatus } from '../domain/enums/connection-status.enum';
+import { ConnectionView } from '../domain/enums/connection-view.enum';
 import { ConnectionMapper } from './connection.mapper';
 
 /** Prisma implementation of the connections + blocks port. Prisma is used ONLY here. */
@@ -25,6 +26,44 @@ export class ConnectionPrismaRepository implements ConnectionsRepository {
       where: ConnectionPrismaRepository.pair(a, b),
     });
     return row === null ? null : ConnectionMapper.toDomain(row);
+  }
+
+  async findEdges(selfId: string, otherIds: string[]): Promise<Connection[]> {
+    if (otherIds.length === 0) {
+      return [];
+    }
+    const rows = await this.prisma.connection.findMany({
+      where: {
+        OR: [
+          { requesterId: selfId, addresseeId: { in: otherIds } },
+          { addresseeId: selfId, requesterId: { in: otherIds } },
+        ],
+      },
+    });
+    return rows.map(ConnectionMapper.toDomain);
+  }
+
+  async idsByView(
+    selfId: string,
+    view: ConnectionView.CONNECTED | ConnectionView.PENDING_OUT | ConnectionView.PENDING_IN,
+  ): Promise<string[]> {
+    const where: Prisma.ConnectionWhereInput =
+      view === ConnectionView.CONNECTED
+        ? {
+            status: PrismaConnectionStatus.ACCEPTED,
+            OR: [{ requesterId: selfId }, { addresseeId: selfId }],
+          }
+        : {
+            status: PrismaConnectionStatus.PENDING,
+            ...(view === ConnectionView.PENDING_OUT
+              ? { requesterId: selfId }
+              : { addresseeId: selfId }),
+          };
+    const rows = await this.prisma.connection.findMany({
+      where,
+      select: { requesterId: true, addresseeId: true },
+    });
+    return rows.map((row) => (row.requesterId === selfId ? row.addresseeId : row.requesterId));
   }
 
   async findById(id: string): Promise<Connection | null> {

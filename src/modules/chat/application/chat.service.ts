@@ -2,12 +2,17 @@ import { Inject, Injectable } from '@nestjs/common';
 import { ERROR_CODE } from '../../../common/errors/error-code';
 import { AppException } from '../../../common/exceptions/app.exception';
 import type { AuthenticatedUser } from '../../../common/types/authenticated-user';
+import {
+  PRESENCE_REPOSITORY,
+  PresenceRepository,
+} from '../../../infrastructure/presence/presence.repository';
+import { applyPresenceVisibility } from '../../connections/domain/presence-visibility';
+import { LastSeenVisibility } from '../../profiles/domain/enums/last-seen-visibility.enum';
 import { CHAT_REPOSITORY, ChatRepository } from '../domain/chat.repository';
 import { CONNECTION_CHECK, ConnectionCheckRepository } from '../domain/connection-check.repository';
 import { Conversation } from '../domain/entities/conversation.entity';
 import { ConversationListItem } from '../domain/entities/conversation-view.entity';
 import { Message } from '../domain/entities/message.entity';
-import { PRESENCE_REPOSITORY, PresenceRepository } from '../domain/presence.repository';
 import { directKeyOf, Page } from './chat.io';
 
 /**
@@ -91,19 +96,30 @@ export class ChatService {
     await this.chat.advanceCursor(conversationId, user.id, 'delivered', seq);
   }
 
-  /** The caller's conversation list, with each other member's live `online` status. */
+  /**
+   * The caller's conversation list, with each other member's live `online` status — masked by that
+   * member's `lastSeenVisibility` (C7). History outlives a disconnect (C9), so being a chat partner
+   * is not proof of being a connection: the connected set is loaded and checked per row.
+   */
   async listConversations(
     user: AuthenticatedUser,
     page: number,
     size: number,
   ): Promise<Page<ConversationListItem>> {
     const result = await this.chat.listConversations(user.id, page, size);
-    const items = await Promise.all(
-      result.items.map(async (item): Promise<ConversationListItem> => {
-        const online = await this.presence.isOnline(item.other.id);
-        return { ...item, other: { ...item.other, online } };
-      }),
-    );
+    const [connected, online] = await Promise.all([
+      this.connectionCheck.connectedIds(user.id),
+      this.presence.onlineAmong(result.items.map((item) => item.other.id)),
+    ]);
+    const connectedSet = new Set(connected);
+    const items = result.items.map((item): ConversationListItem => {
+      const other = applyPresenceVisibility(
+        item.other,
+        connectedSet.has(item.other.id),
+        online.has(item.other.id),
+      );
+      return { ...item, other };
+    });
     return { items, total: result.total };
   }
 
@@ -127,9 +143,17 @@ export class ChatService {
     return this.chat.otherMemberId(conversationId, selfId);
   }
 
-  /** Distinct conversation partners of a student — presence fan-out targets. */
-  partnerIds(studentId: string): Promise<string[]> {
-    return this.chat.partnerIds(studentId);
+  /**
+   * Who should be told this student's presence changed: their accepted connections (C7) — not
+   * every past chat partner, since a disconnect keeps the history but revokes presence (C9).
+   * Empty when the student hid their presence, which suppresses the broadcast entirely.
+   */
+  async presenceAudience(studentId: string): Promise<string[]> {
+    const visibility = await this.chat.lastSeenVisibilityOf(studentId);
+    if (visibility === LastSeenVisibility.NOBODY) {
+      return [];
+    }
+    return this.connectionCheck.connectedIds(studentId);
   }
 
   /** Whether a student currently has an open socket (⇒ deliver over WS, not push). */

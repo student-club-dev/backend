@@ -1,6 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { MessageType as PrismaMessageType, Prisma } from '@prisma/client';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
+import { LastSeenVisibility } from '../../profiles/domain/enums/last-seen-visibility.enum';
+import { LAST_SEEN_VISIBILITY_TO_DOMAIN } from '../../profiles/infrastructure/profile-enums.mapper';
 import { ChatRepository, ConversationPage } from '../domain/chat.repository';
 import { Conversation, ConversationMember } from '../domain/entities/conversation.entity';
 import { ConversationListItem } from '../domain/entities/conversation-view.entity';
@@ -13,8 +15,26 @@ const SUMMARY_SELECT = {
   firstName: true,
   lastName: true,
   avatarUrl: true,
+  universityId: true,
+  gender: true,
+  courseYear: true,
   lastSeenAt: true,
+  lastSeenVisibility: true,
 } as const;
+
+/** The other member has left the conversation (or the row is corrupt) — render an empty person. */
+const MISSING_MEMBER: ConversationListItem['other'] = {
+  id: '',
+  username: null,
+  fullName: null,
+  avatarUrl: null,
+  universityId: null,
+  gender: null,
+  courseYear: null,
+  online: false,
+  lastSeenAt: null,
+  lastSeenVisibility: LastSeenVisibility.NOBODY,
+};
 
 /** Prisma implementation of the chat repository port. Prisma is used ONLY here. */
 @Injectable()
@@ -160,7 +180,8 @@ export class ChatPrismaRepository implements ChatRepository {
 
     const items = await Promise.all(
       memberships.map(async (membership): Promise<ConversationListItem> => {
-        const otherRow = membership.conversation.members[0]?.student as ChatSummaryRow | undefined;
+        const otherMember = membership.conversation.members[0];
+        const otherRow = otherMember?.student as ChatSummaryRow | undefined;
         const [lastRow, unreadCount] = await Promise.all([
           this.prisma.message.findFirst({
             where: { conversationId: membership.conversationId },
@@ -176,19 +197,12 @@ export class ChatPrismaRepository implements ChatRepository {
         ]);
         return {
           conversation: ChatMapper.toConversation(membership.conversation),
-          other:
-            otherRow === undefined
-              ? {
-                  id: '',
-                  username: null,
-                  fullName: null,
-                  avatarUrl: null,
-                  online: false,
-                  lastSeenAt: null,
-                }
-              : ChatMapper.toSummary(otherRow),
+          other: otherRow === undefined ? MISSING_MEMBER : ChatMapper.toSummary(otherRow),
           lastMessage: lastRow === null ? null : ChatMapper.toMessage(lastRow),
           unreadCount,
+          myReadSeq: membership.lastReadSeq,
+          peerReadSeq: otherMember?.lastReadSeq ?? 0,
+          peerDeliveredSeq: otherMember?.lastDeliveredSeq ?? 0,
         };
       }),
     );
@@ -220,19 +234,13 @@ export class ChatPrismaRepository implements ChatRepository {
     return now;
   }
 
-  async partnerIds(studentId: string): Promise<string[]> {
-    const mine = await this.prisma.conversationMember.findMany({
-      where: { studentId },
-      select: { conversationId: true },
+  async lastSeenVisibilityOf(studentId: string): Promise<LastSeenVisibility> {
+    const row = await this.prisma.student.findUnique({
+      where: { id: studentId },
+      select: { lastSeenVisibility: true },
     });
-    const conversationIds = mine.map((row) => row.conversationId);
-    if (conversationIds.length === 0) {
-      return [];
-    }
-    const others = await this.prisma.conversationMember.findMany({
-      where: { conversationId: { in: conversationIds }, studentId: { not: studentId } },
-      select: { studentId: true },
-    });
-    return [...new Set(others.map((row) => row.studentId))];
+    return row === null
+      ? LastSeenVisibility.NOBODY
+      : LAST_SEEN_VISIBILITY_TO_DOMAIN[row.lastSeenVisibility];
   }
 }

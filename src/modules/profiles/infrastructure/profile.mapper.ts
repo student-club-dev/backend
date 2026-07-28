@@ -1,42 +1,14 @@
-import {
-  CourseYear as PrismaCourseYear,
-  Gender as PrismaGender,
-  Prisma,
-  type BusinessOwner,
-  type Student,
-} from '@prisma/client';
+import { Prisma, type BusinessOwner, type Student } from '@prisma/client';
 import { Profile, ProfilePatch } from '../domain/entities/profile.entity';
-import { CourseYear } from '../domain/enums/course-year.enum';
-import { Gender } from '../domain/enums/gender.enum';
 import { ProfileRole } from '../domain/enums/profile-role.enum';
-
-// The Prisma enums carry different values from the wire (Gender matches, CourseYear does not:
-// YEAR_1 <-> "1"), so both directions are mapped explicitly.
-const GENDER_TO_DOMAIN: Record<PrismaGender, Gender> = {
-  MALE: Gender.MALE,
-  FEMALE: Gender.FEMALE,
-};
-
-const GENDER_TO_PRISMA: Record<Gender, PrismaGender> = {
-  [Gender.MALE]: PrismaGender.MALE,
-  [Gender.FEMALE]: PrismaGender.FEMALE,
-};
-
-const COURSE_YEAR_TO_DOMAIN: Record<PrismaCourseYear, CourseYear> = {
-  YEAR_1: CourseYear.YEAR_1,
-  YEAR_2: CourseYear.YEAR_2,
-  YEAR_3: CourseYear.YEAR_3,
-  YEAR_4: CourseYear.YEAR_4,
-  MASTER: CourseYear.MASTER,
-};
-
-const COURSE_YEAR_TO_PRISMA: Record<CourseYear, PrismaCourseYear> = {
-  [CourseYear.YEAR_1]: PrismaCourseYear.YEAR_1,
-  [CourseYear.YEAR_2]: PrismaCourseYear.YEAR_2,
-  [CourseYear.YEAR_3]: PrismaCourseYear.YEAR_3,
-  [CourseYear.YEAR_4]: PrismaCourseYear.YEAR_4,
-  [CourseYear.MASTER]: PrismaCourseYear.MASTER,
-};
+import {
+  COURSE_YEAR_TO_DOMAIN,
+  COURSE_YEAR_TO_PRISMA,
+  GENDER_TO_DOMAIN,
+  GENDER_TO_PRISMA,
+  LAST_SEEN_VISIBILITY_TO_DOMAIN,
+  LAST_SEEN_VISIBILITY_TO_PRISMA,
+} from './profile-enums.mapper';
 
 /** Maps a Student Prisma row to the profile domain type (role = STUDENT, all fields populated). */
 export function toStudentProfile(row: Student): Profile {
@@ -53,6 +25,7 @@ export function toStudentProfile(row: Student): Profile {
     universityEmail: row.universityEmail,
     birthYear: row.birthYear,
     courseYear: row.courseYear === null ? null : COURSE_YEAR_TO_DOMAIN[row.courseYear],
+    lastSeenVisibility: LAST_SEEN_VISIBILITY_TO_DOMAIN[row.lastSeenVisibility],
   };
 }
 
@@ -75,6 +48,7 @@ export function toBusinessProfile(row: BusinessOwner): Profile {
     universityEmail: null,
     birthYear: null,
     courseYear: null,
+    lastSeenVisibility: null,
   };
 }
 
@@ -98,6 +72,9 @@ export function toStudentUpdateData(patch: ProfilePatch): Prisma.StudentUpdateIn
   }
   if (patch.courseYear !== undefined) {
     data.courseYear = COURSE_YEAR_TO_PRISMA[patch.courseYear];
+  }
+  if (patch.lastSeenVisibility !== undefined) {
+    data.lastSeenVisibility = LAST_SEEN_VISIBILITY_TO_PRISMA[patch.lastSeenVisibility];
   }
   return data;
 }

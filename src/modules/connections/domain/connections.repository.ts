@@ -1,5 +1,6 @@
 import { Connection } from './entities/connection.entity';
 import { ConnectionStatus } from './enums/connection-status.enum';
+import { ConnectionView } from './enums/connection-view.enum';
 
 /** Injection token for the connections + blocks repository port (bound to the Prisma impl). */
 export const CONNECTIONS_REPOSITORY = Symbol('CONNECTIONS_REPOSITORY');
@@ -17,6 +18,22 @@ export interface ConnectionPage {
 export interface ConnectionsRepository {
   /** The single edge between `a` and `b` in either direction, or `null`. */
   findEdge(a: string, b: string): Promise<Connection | null>;
+
+  /**
+   * Every edge between `selfId` and any of `otherIds`, in one query — annotating a page of students
+   * with their `connectionStatus` without a per-row `findEdge`.
+   */
+  findEdges(selfId: string, otherIds: string[]): Promise<Connection[]>;
+
+  /**
+   * The ids `selfId` stands in `view` with: CONNECTED (accepted), PENDING_OUT (they were asked by
+   * `selfId`) or PENDING_IN (they asked `selfId`). `NONE` has no finite id set — the caller
+   * inverts the other three instead.
+   */
+  idsByView(
+    selfId: string,
+    view: ConnectionView.CONNECTED | ConnectionView.PENDING_OUT | ConnectionView.PENDING_IN,
+  ): Promise<string[]>;
 
   /** By edge id, or `null`. */
   findById(id: string): Promise<Connection | null>;

@@ -1,3 +1,4 @@
+import { LastSeenVisibility } from '../../profiles/domain/enums/last-seen-visibility.enum';
 import { Conversation, ConversationMember } from './entities/conversation.entity';
 import { ConversationListItem } from './entities/conversation-view.entity';
 import { Message } from './entities/message.entity';
@@ -62,6 +63,6 @@ export interface ChatRepository {
   /** Persists `students.lastSeenAt = now` (on true-offline). Returns the timestamp written. */
   touchLastSeen(studentId: string): Promise<Date>;
 
-  /** Distinct other-member ids across the student's conversations (for presence fan-out). */
-  partnerIds(studentId: string): Promise<string[]>;
+  /** The student's own presence-privacy setting — decides whether to emit `presence:update` at all. */
+  lastSeenVisibilityOf(studentId: string): Promise<LastSeenVisibility>;
 }

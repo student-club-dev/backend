@@ -38,8 +38,28 @@ export class ConversationListItemDto {
   @ApiProperty({ type: MessageDto, nullable: true })
   lastMessage!: MessageDto | null;
 
-  @ApiProperty()
+  @ApiProperty({ description: 'Messages from the other member with `seq > myReadSeq`.' })
   unreadCount!: number;
+
+  @ApiProperty({
+    description:
+      'How far you have read (`ConversationMember.lastReadSeq`). The persisted counterpart of ' +
+      '`unreadCount` — advanced by `POST /v1/conversations/{id}/read` or the `message:read` event.',
+  })
+  myReadSeq!: number;
+
+  @ApiProperty({
+    description:
+      'How far the other member has read. Every message you sent with `seq <= peerReadSeq` is ' +
+      'read (✓✓). Restores receipt state after a restart, when the live `message:read` event is gone.',
+  })
+  peerReadSeq!: number;
+
+  @ApiProperty({
+    description:
+      'How far the other member’s device has received. `seq <= peerDeliveredSeq` is delivered (✓).',
+  })
+  peerDeliveredSeq!: number;
 
   static fromItem(item: ConversationListItem): ConversationListItemDto {
     const dto = new ConversationListItemDto();
@@ -47,6 +67,9 @@ export class ConversationListItemDto {
     dto.other = StudentSummaryDto.fromDomain(item.other);
     dto.lastMessage = item.lastMessage === null ? null : MessageDto.fromDomain(item.lastMessage);
     dto.unreadCount = item.unreadCount;
+    dto.myReadSeq = item.myReadSeq;
+    dto.peerReadSeq = item.peerReadSeq;
+    dto.peerDeliveredSeq = item.peerDeliveredSeq;
     return dto;
   }
 }

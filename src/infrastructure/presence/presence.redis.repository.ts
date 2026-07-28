@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { RedisService } from '../../../infrastructure/cache/redis.service';
-import { PresenceRepository } from '../domain/presence.repository';
+import { RedisService } from '../cache/redis.service';
+import { PresenceRepository } from './presence.repository';
 
 /** Seconds a presence key lives without a refresh — a safety net if a disconnect is missed. */
 const PRESENCE_TTL_SECONDS = 90;
@@ -32,5 +32,14 @@ export class PresenceRedisRepository implements PresenceRepository {
 
   isOnline(studentId: string): Promise<boolean> {
     return this.redis.exists(key(studentId));
+  }
+
+  /** One round-trip per id, issued together — keeps list endpoints off a per-row await chain. */
+  async onlineAmong(studentIds: string[]): Promise<Set<string>> {
+    if (studentIds.length === 0) {
+      return new Set();
+    }
+    const flags = await Promise.all(studentIds.map((id) => this.redis.exists(key(id))));
+    return new Set(studentIds.filter((_, index) => flags[index]));
   }
 }

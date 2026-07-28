@@ -94,6 +94,9 @@ export class ProfileService {
       if (input.courseYear !== undefined) {
         patch.courseYear = input.courseYear;
       }
+      if (input.lastSeenVisibility !== undefined) {
+        patch.lastSeenVisibility = input.lastSeenVisibility;
+      }
     }
     return patch;
   }

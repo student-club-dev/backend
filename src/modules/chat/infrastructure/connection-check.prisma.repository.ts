@@ -33,4 +33,27 @@ export class ConnectionCheckPrismaRepository implements ConnectionCheckRepositor
     ]);
     return accepted > 0 && blocked === 0;
   }
+
+  async connectedIds(studentId: string): Promise<string[]> {
+    const [edges, blocks] = await this.prisma.$transaction([
+      this.prisma.connection.findMany({
+        where: {
+          status: ConnectionStatus.ACCEPTED,
+          OR: [{ requesterId: studentId }, { addresseeId: studentId }],
+        },
+        select: { requesterId: true, addresseeId: true },
+      }),
+      this.prisma.block.findMany({
+        where: { OR: [{ blockerId: studentId }, { blockedId: studentId }] },
+        select: { blockerId: true, blockedId: true },
+      }),
+    ]);
+    const blocked = new Set(
+      blocks.map((row) => (row.blockerId === studentId ? row.blockedId : row.blockerId)),
+    );
+    const ids = new Set(
+      edges.map((row) => (row.requesterId === studentId ? row.addresseeId : row.requesterId)),
+    );
+    return [...ids].filter((id) => !blocked.has(id));
+  }
 }

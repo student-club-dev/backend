@@ -39,6 +39,13 @@ enum Gender {
   FEMALE
 }
 
+// Who may see a student's `online` / `lastSeenAt` (Telegram-style last-seen privacy, C7).
+enum LastSeenVisibility {
+  EVERYONE
+  CONNECTIONS
+  NOBODY
+}
+
 enum BusinessStatus {
   DRAFT
   PENDING_REVIEW
@@ -172,9 +179,11 @@ model Student {
   birthYear       Int?        @map("birth_year")
   courseYear      CourseYear? @map("course_year")
 
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-  lastSeenAt DateTime? @map("last_seen_at")
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+  lastSeenAt         DateTime?          @map("last_seen_at")
+  // Who may see `lastSeenAt`/`online` (C7 privacy). CONNECTIONS matches the pre-existing behaviour.
+  lastSeenVisibility LastSeenVisibility @default(CONNECTIONS) @map("last_seen_visibility")
 
   oauthAccounts StudentOAuthAccount[]
   refreshTokens StudentRefreshToken[]
@@ -194,6 +203,13 @@ model Student {
   messagesSent            Message[]
   deviceTokens            DeviceToken[]
 
+  // Discovery filters on GET /v1/students — one index per column so Postgres can bitmap-AND any
+  // combination of them; `createdAt` backs the RECENT sort.
+  @@index([universityId])
+  @@index([courseYear])
+  @@index([gender])
+  @@index([birthYear])
+  @@index([createdAt])
   @@map("students")
 }
 

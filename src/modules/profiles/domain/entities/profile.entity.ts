@@ -1,12 +1,13 @@
 import { CourseYear } from '../enums/course-year.enum';
 import { Gender } from '../enums/gender.enum';
+import { LastSeenVisibility } from '../enums/last-seen-visibility.enum';
 import { ProfileRole } from '../enums/profile-role.enum';
 
 /**
  * The authenticated account's own profile. One shape for both account types (D6): the
- * university/course fields (universityId, universityEmail, birthYear, courseYear) are
- * always `null` for a business owner. `gender` is carried by both. `role` is derived from
- * the account type by the mapper.
+ * university/course fields (universityId, universityEmail, birthYear, courseYear) and
+ * `lastSeenVisibility` are always `null` for a business owner. `gender` is carried by both.
+ * `role` is derived from the account type by the mapper.
  */
 export interface Profile {
   id: string;
@@ -22,6 +23,8 @@ export interface Profile {
   universityEmail: string | null;
   birthYear: number | null;
   courseYear: CourseYear | null;
+  /** Students only — who may see this student's presence (C7). `null` for a business owner. */
+  lastSeenVisibility: LastSeenVisibility | null;
 }
 
 /**
@@ -39,5 +42,6 @@ export interface ProfilePatch {
   universityEmail?: string;
   birthYear?: number;
   courseYear?: CourseYear;
+  lastSeenVisibility?: LastSeenVisibility;
   phoneVerified?: boolean;
 }

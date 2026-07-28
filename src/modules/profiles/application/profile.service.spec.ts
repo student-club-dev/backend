@@ -6,6 +6,7 @@ import { Profile } from '../domain/entities/profile.entity';
 import { ProfileRepository } from '../domain/profile.repository';
 import { CourseYear } from '../domain/enums/course-year.enum';
 import { Gender } from '../domain/enums/gender.enum';
+import { LastSeenVisibility } from '../domain/enums/last-seen-visibility.enum';
 import { ProfileRole } from '../domain/enums/profile-role.enum';
 import { ProfileService } from './profile.service';
 
@@ -23,6 +24,7 @@ function studentProfile(overrides: Partial<Profile> = {}): Profile {
     universityEmail: 'ali@tatu.uz',
     birthYear: 2004,
     courseYear: CourseYear.YEAR_2,
+    lastSeenVisibility: LastSeenVisibility.CONNECTIONS,
     ...overrides,
   };
 }
@@ -41,6 +43,7 @@ function businessProfile(overrides: Partial<Profile> = {}): Profile {
     universityEmail: null,
     birthYear: null,
     courseYear: null,
+    lastSeenVisibility: null,
     ...overrides,
   };
 }

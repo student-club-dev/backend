@@ -2,15 +2,28 @@ import { Inject, Injectable } from '@nestjs/common';
 import { ERROR_CODE } from '../../../common/errors/error-code';
 import { AppException } from '../../../common/exceptions/app.exception';
 import type { AuthenticatedUser } from '../../../common/types/authenticated-user';
+import {
+  PRESENCE_REPOSITORY,
+  PresenceRepository,
+} from '../../../infrastructure/presence/presence.repository';
 import { CONNECTIONS_REPOSITORY, ConnectionsRepository } from '../domain/connections.repository';
 import { Connection } from '../domain/entities/connection.entity';
+import { StudentSummary } from '../domain/entities/student-summary.entity';
 import { ConnectionStatus } from '../domain/enums/connection-status.enum';
 import { ConnectionView } from '../domain/enums/connection-view.enum';
+import { applyPresenceVisibility } from '../domain/presence-visibility';
 import {
   STUDENT_DIRECTORY,
   StudentDirectoryRepository,
+  StudentSort,
 } from '../domain/student-directory.repository';
-import { ConnectionListItem, Page, RequestListItem, SearchResult } from './connections.io';
+import {
+  ConnectionListItem,
+  Page,
+  RequestListItem,
+  SearchResult,
+  StudentListQuery,
+} from './connections.io';
 
 /** After a decline, this long must pass before the same pair may re-request (C10 anti-spam). */
 const DECLINE_COOLDOWN_MS = 24 * 60 * 60 * 1000;
@@ -25,6 +38,7 @@ export class ConnectionsService {
   constructor(
     @Inject(CONNECTIONS_REPOSITORY) private readonly connections: ConnectionsRepository,
     @Inject(STUDENT_DIRECTORY) private readonly directory: StudentDirectoryRepository,
+    @Inject(PRESENCE_REPOSITORY) private readonly presence: PresenceRepository,
   ) {}
 
   /**
@@ -120,22 +134,84 @@ export class ConnectionsService {
     await this.connections.unblock(user.id, studentId);
   }
 
-  /** Discovery search by username/full-name, excluding self + blocked, annotated with the view. */
-  async search(
+  /**
+   * The filtered student directory (`GET /v1/students`), excluding self + blocked, each row
+   * annotated with the caller's `connectionStatus` and presence.
+   */
+  async listStudents(
     user: AuthenticatedUser,
-    query: string,
+    query: StudentListQuery,
     page: number,
     size: number,
   ): Promise<Page<SearchResult>> {
     const blocked = await this.connections.blockedIds(user.id);
-    const { items, total } = await this.directory.search(query, [user.id, ...blocked], page, size);
-    const results = await Promise.all(
-      items.map(async (student): Promise<SearchResult> => {
-        const edge = await this.connections.findEdge(user.id, student.id);
-        return { student, view: this.viewFor(edge, user.id) };
-      }),
+    const excludeIds = [user.id, ...blocked];
+    const restrictToIds = await this.resolveRelationshipNarrowing(user.id, query.connectionStatus);
+    // NONE has no id list of its own — it is "everyone except every relationship I already have".
+    if (query.connectionStatus === ConnectionView.NONE) {
+      excludeIds.push(...(restrictToIds ?? []));
+    }
+    const { items, total } = await this.directory.list(
+      query,
+      excludeIds,
+      query.connectionStatus === ConnectionView.NONE ? null : restrictToIds,
+      page,
+      size,
     );
+
+    // One query for the whole page's edges, then the view per row — never a per-row findEdge.
+    const edges = await this.connections.findEdges(
+      user.id,
+      items.map((student) => student.id),
+    );
+    const edgeByOtherId = new Map(
+      edges.map((edge) => [
+        edge.requesterId === user.id ? edge.addresseeId : edge.requesterId,
+        edge,
+      ]),
+    );
+    const viewById = new Map(
+      items.map((student) => [
+        student.id,
+        this.viewFor(edgeByOtherId.get(student.id) ?? null, user.id),
+      ]),
+    );
+    const students = await this.withPresence(
+      items,
+      (student) => viewById.get(student.id) === ConnectionView.CONNECTED,
+    );
+    const results = students.map((student): SearchResult => ({
+      student,
+      view: viewById.get(student.id) ?? ConnectionView.NONE,
+    }));
     return { items: results, total };
+  }
+
+  /**
+   * Discovery search by username/full-name (`GET /v1/students/search`, deprecated). A thin alias
+   * over `listStudents` so the two endpoints can never drift apart.
+   */
+  search(
+    user: AuthenticatedUser,
+    query: string | null,
+    page: number,
+    size: number,
+  ): Promise<Page<SearchResult>> {
+    return this.listStudents(
+      user,
+      {
+        q: query,
+        universityIds: [],
+        genders: [],
+        courseYears: [],
+        birthYearFrom: null,
+        birthYearTo: null,
+        sort: StudentSort.NAME,
+        connectionStatus: null,
+      },
+      page,
+      size,
+    );
   }
 
   /** The caller's accepted connections (the other student + when connected). */
@@ -148,7 +224,9 @@ export class ConnectionsService {
     const summaries = await this.directory.findSummaries(
       edges.map((edge) => this.otherId(edge, user.id)),
     );
-    const byId = new Map(summaries.map((summary) => [summary.id, summary]));
+    // Everyone in this list is by definition an accepted connection.
+    const withPresence = await this.withPresence(summaries, () => true);
+    const byId = new Map(withPresence.map((summary) => [summary.id, summary]));
     const items = edges.flatMap((edge): ConnectionListItem[] => {
       const student = byId.get(this.otherId(edge, user.id));
       return student === undefined
@@ -174,7 +252,9 @@ export class ConnectionsService {
     const otherOf = (edge: Connection): string =>
       direction === 'incoming' ? edge.requesterId : edge.addresseeId;
     const summaries = await this.directory.findSummaries(edges.map(otherOf));
-    const byId = new Map(summaries.map((summary) => [summary.id, summary]));
+    // A pending request is not yet a connection — only EVERYONE exposes presence here.
+    const withPresence = await this.withPresence(summaries, () => false);
+    const byId = new Map(withPresence.map((summary) => [summary.id, summary]));
     const items = edges.flatMap((edge): RequestListItem[] => {
       const student = byId.get(otherOf(edge));
       return student === undefined
@@ -182,6 +262,43 @@ export class ConnectionsService {
         : [{ connectionId: edge.id, student, createdAt: edge.createdAt }];
     });
     return { items, total };
+  }
+
+  /**
+   * Fills `online` from live presence and masks both presence fields per each student's
+   * `lastSeenVisibility` (C7). `isConnected` says whether the viewer is an accepted connection of
+   * that student — the deciding input for `CONNECTIONS` visibility.
+   */
+  private async withPresence(
+    students: StudentSummary[],
+    isConnected: (student: StudentSummary) => boolean,
+  ): Promise<StudentSummary[]> {
+    const online = await this.presence.onlineAmong(students.map((student) => student.id));
+    return students.map((student) =>
+      applyPresenceVisibility(student, isConnected(student), online.has(student.id)),
+    );
+  }
+
+  /**
+   * The id set a `connectionStatus` filter narrows to, or `null` when unfiltered. For `NONE` it
+   * returns every id the caller already has any relationship with — the caller excludes those.
+   */
+  private async resolveRelationshipNarrowing(
+    selfId: string,
+    view: ConnectionView | null,
+  ): Promise<string[] | null> {
+    if (view === null) {
+      return null;
+    }
+    if (view === ConnectionView.NONE) {
+      const [connected, out, incoming] = await Promise.all([
+        this.connections.idsByView(selfId, ConnectionView.CONNECTED),
+        this.connections.idsByView(selfId, ConnectionView.PENDING_OUT),
+        this.connections.idsByView(selfId, ConnectionView.PENDING_IN),
+      ]);
+      return [...new Set([...connected, ...out, ...incoming])];
+    }
+    return this.connections.idsByView(selfId, view);
   }
 
   /** Loads a request that must be PENDING and addressed to the caller, else 404. */

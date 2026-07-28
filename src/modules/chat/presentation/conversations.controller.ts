@@ -93,7 +93,7 @@ export class ConversationsController {
     @Body() dto: SendMessageDto,
   ): Promise<MessageDto> {
     const message = await this.chat.sendMessage(user, id, dto.body, dto.clientMsgId ?? null);
-    this.gateway.broadcastMessage(message);
+    await this.gateway.broadcastMessage(message);
     return MessageDto.fromDomain(message);
   }
 

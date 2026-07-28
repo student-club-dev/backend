@@ -3,6 +3,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { StudentGuard } from '../../common/guards/student.guard';
 import { PrismaModule } from '../../infrastructure/database/prisma.module';
+import { PresenceModule } from '../../infrastructure/presence/presence.module';
 import { ConnectionsService } from './application/connections.service';
 import { ReportsService } from './application/reports.service';
 import { CONNECTIONS_REPOSITORY } from './domain/connections.repository';
@@ -21,7 +22,7 @@ import { StudentSearchController } from './presentation/student-search.controlle
  * Students-only (JwtAuthGuard + StudentGuard). Repository ports are bound to their Prisma impls.
  */
 @Module({
-  imports: [PrismaModule, JwtModule.register({})],
+  imports: [PrismaModule, PresenceModule, JwtModule.register({})],
   controllers: [
     StudentSearchController,
     ConnectionsController,

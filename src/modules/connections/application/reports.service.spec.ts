@@ -38,7 +38,7 @@ function makeDirectory(exists = true): StudentDirectoryRepository {
     exists: jest.fn().mockResolvedValue(exists),
     findSummary: jest.fn(),
     findSummaries: jest.fn(),
-    search: jest.fn(),
+    list: jest.fn(),
   };
 }
 

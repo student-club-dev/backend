@@ -9,4 +9,10 @@ export interface ConversationListItem {
   other: StudentSummary;
   lastMessage: Message | null;
   unreadCount: number;
+  /** How far the caller has read — the persisted counterpart of `unreadCount`. */
+  myReadSeq: number;
+  /** How far the other member has read the caller's messages — drives ✓✓ after a restart (C5). */
+  peerReadSeq: number;
+  /** How far the other member's device has received — drives ✓. */
+  peerDeliveredSeq: number;
 }

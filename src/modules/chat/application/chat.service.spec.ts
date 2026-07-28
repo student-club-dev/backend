@@ -1,6 +1,8 @@
 import { AccountType } from '../../../common/enums/account-type.enum';
 import { ERROR_CODE } from '../../../common/errors/error-code';
 import type { AuthenticatedUser } from '../../../common/types/authenticated-user';
+import { PresenceRepository } from '../../../infrastructure/presence/presence.repository';
+import { LastSeenVisibility } from '../../profiles/domain/enums/last-seen-visibility.enum';
 import { ChatRepository } from '../domain/chat.repository';
 import { ConnectionCheckRepository } from '../domain/connection-check.repository';
 import { Conversation, ConversationMember } from '../domain/entities/conversation.entity';
@@ -8,7 +10,6 @@ import { ConversationListItem } from '../domain/entities/conversation-view.entit
 import { Message } from '../domain/entities/message.entity';
 import { ConversationType } from '../domain/enums/conversation-type.enum';
 import { MessageType } from '../domain/enums/message-type.enum';
-import { PresenceRepository } from '../domain/presence.repository';
 import { ChatService } from './chat.service';
 
 const me: AuthenticatedUser = { id: 'me', type: AccountType.STUDENT };
@@ -46,8 +47,36 @@ function member(overrides: Partial<ConversationMember> = {}): ConversationMember
   };
 }
 
-function summary(id: string, online = false): ConversationListItem['other'] {
-  return { id, username: id, fullName: id, avatarUrl: null, online, lastSeenAt: null };
+function summary(
+  id: string,
+  overrides: Partial<ConversationListItem['other']> = {},
+): ConversationListItem['other'] {
+  return {
+    id,
+    username: id,
+    fullName: id,
+    avatarUrl: null,
+    universityId: null,
+    gender: null,
+    courseYear: null,
+    online: false,
+    lastSeenAt: null,
+    lastSeenVisibility: LastSeenVisibility.CONNECTIONS,
+    ...overrides,
+  };
+}
+
+function listItem(overrides: Partial<ConversationListItem> = {}): ConversationListItem {
+  return {
+    conversation: conversation(),
+    other: summary('other'),
+    lastMessage: message(),
+    unreadCount: 2,
+    myReadSeq: 3,
+    peerReadSeq: 4,
+    peerDeliveredSeq: 5,
+    ...overrides,
+  };
 }
 
 function makeChat(overrides: Partial<ChatRepository> = {}): ChatRepository {
@@ -67,13 +96,19 @@ function makeChat(overrides: Partial<ChatRepository> = {}): ChatRepository {
     listConversations: jest.fn().mockResolvedValue({ items: [], total: 0 }),
     advanceCursor: jest.fn().mockResolvedValue(undefined),
     touchLastSeen: jest.fn().mockResolvedValue(new Date('2026-07-27T00:00:00Z')),
-    partnerIds: jest.fn().mockResolvedValue([]),
+    lastSeenVisibilityOf: jest.fn().mockResolvedValue(LastSeenVisibility.CONNECTIONS),
     ...overrides,
   };
 }
 
-function makeConnectionCheck(connected = true): ConnectionCheckRepository {
-  return { areConnected: jest.fn().mockResolvedValue(connected) };
+function makeConnectionCheck(
+  connected = true,
+  connectedIds: string[] = ['other'],
+): ConnectionCheckRepository {
+  return {
+    areConnected: jest.fn().mockResolvedValue(connected),
+    connectedIds: jest.fn().mockResolvedValue(connectedIds),
+  };
 }
 
 function makePresence(overrides: Partial<PresenceRepository> = {}): PresenceRepository {
@@ -81,6 +116,7 @@ function makePresence(overrides: Partial<PresenceRepository> = {}): PresenceRepo
     online: jest.fn().mockResolvedValue(undefined),
     offline: jest.fn().mockResolvedValue(true),
     isOnline: jest.fn().mockResolvedValue(false),
+    onlineAmong: jest.fn().mockResolvedValue(new Set<string>()),
     ...overrides,
   };
 }
@@ -204,24 +240,70 @@ describe('ChatService', () => {
 
   describe('listConversations', () => {
     it('enriches each other member with live online status', async () => {
-      const item: ConversationListItem = {
-        conversation: conversation(),
-        other: summary('other'),
-        lastMessage: message(),
-        unreadCount: 2,
-      };
       const chat = makeChat({
-        listConversations: jest.fn().mockResolvedValue({ items: [item], total: 1 }),
+        listConversations: jest.fn().mockResolvedValue({ items: [listItem()], total: 1 }),
       });
-      const presence = makePresence({ isOnline: jest.fn().mockResolvedValue(true) });
+      const presence = makePresence({
+        onlineAmong: jest.fn().mockResolvedValue(new Set(['other'])),
+      });
       const result = await makeService(chat, makeConnectionCheck(), presence).listConversations(
         me,
         1,
         20,
       );
-      expect(presence.isOnline).toHaveBeenCalledWith('other');
       expect(result.items[0].other.online).toBe(true);
       expect(result.items[0].unreadCount).toBe(2);
+    });
+
+    it('carries the read cursors through so ✓✓ survives a restart', async () => {
+      const chat = makeChat({
+        listConversations: jest.fn().mockResolvedValue({ items: [listItem()], total: 1 }),
+      });
+      const result = await makeService(chat).listConversations(me, 1, 20);
+      expect(result.items[0]).toMatchObject({
+        myReadSeq: 3,
+        peerReadSeq: 4,
+        peerDeliveredSeq: 5,
+      });
+    });
+
+    it('hides presence from a former connection (history outlives the connection, C9)', async () => {
+      const seen = new Date('2026-07-20T10:00:00Z');
+      const chat = makeChat({
+        listConversations: jest.fn().mockResolvedValue({
+          items: [listItem({ other: summary('other', { lastSeenAt: seen }) })],
+          total: 1,
+        }),
+      });
+      const presence = makePresence({
+        onlineAmong: jest.fn().mockResolvedValue(new Set(['other'])),
+      });
+      // No longer connected — CONNECTIONS visibility must now hide both fields.
+      const result = await makeService(
+        chat,
+        makeConnectionCheck(false, []),
+        presence,
+      ).listConversations(me, 1, 20);
+      expect(result.items[0].other).toMatchObject({ online: false, lastSeenAt: null });
+    });
+  });
+
+  describe('presenceAudience', () => {
+    it('targets the connections, not every past chat partner', async () => {
+      const connectionCheck = makeConnectionCheck(true, ['a', 'b']);
+      const audience = await makeService(makeChat(), connectionCheck).presenceAudience('me');
+      expect(connectionCheck.connectedIds).toHaveBeenCalledWith('me');
+      expect(audience).toEqual(['a', 'b']);
+    });
+
+    it('is empty when the student hid their presence (NOBODY)', async () => {
+      const chat = makeChat({
+        lastSeenVisibilityOf: jest.fn().mockResolvedValue(LastSeenVisibility.NOBODY),
+      });
+      const connectionCheck = makeConnectionCheck(true, ['a', 'b']);
+      const audience = await makeService(chat, connectionCheck).presenceAudience('me');
+      expect(audience).toEqual([]);
+      expect(connectionCheck.connectedIds).not.toHaveBeenCalled();
     });
   });
 

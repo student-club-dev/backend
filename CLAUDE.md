@@ -214,9 +214,24 @@ Invoke the matching skill before starting the task:
 | Designing a new feature / gathering requirements | `brainstorming` → `writing-plans` |
 | Any bug / test failure / unexpected behavior | `systematic-debugging` |
 | Building a feature test-first | `tdd` |
-| Security review / auth / vulnerability check | `security-review`, `owasp-security` |
-| Reviewing a diff before merge | `requesting-code-review` / `code-review` |
+| **Reviewing a diff before commit / merge** | **`senior-code-review`** |
+| **Touching auth, RBAC, OTP, uploads, or any user input** | **`security-review`** (audit an existing diff) · `owasp-security` (while writing new code) |
+| **Any `schema.prisma` or migration change** | `prisma-migration` (make the change) → **`db-review`** (review it before it ships) |
 | Before claiming work done / committing | `verification-before-completion` |
+
+**The three review skills are mandatory, not optional**, and they are not interchangeable — a diff that
+touches auth *and* the schema gets all three passes:
+
+1. `senior-code-review` — correctness, layering (`presentation → application → domain ← infrastructure`),
+   `BaseResponse` envelope, no `any`, no Prisma outside `infrastructure/`, thin controllers, scope creep.
+2. `security-review` — JWT/refresh rotation, argon2, OTP rate limits, ownership checks (403 not 404),
+   IDOR, secrets/PII in logs. Skip only if the diff touches no auth, no input, and no user data.
+3. `db-review` — FK indexes, PostGIS GiST index for the proximity feed, `BigInt` money, ISO/`timestamptz`
+   dates, and above all **migration safety**: read the generated `migration.sql`, never just the schema.
+
+Run them yourself. For a second opinion on the same diff, hand it to the `reviewer`, `security-engineer`,
+or `database-architect` subagent — the skill defines the standard, the agent is just another pair of eyes.
+`/code-review` is a built-in slash command (user-triggered), not a skill — don't try to invoke it.
 
 ### Custom project skills
 

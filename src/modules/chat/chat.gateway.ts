@@ -212,17 +212,18 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
+  /** Fans a presence change out to the student's connections; a no-op when they hid it (C7). */
   private async emitPresence(
     studentId: string,
     online: boolean,
     lastSeenAt: string | null,
   ): Promise<void> {
-    const partners = await this.chat.partnerIds(studentId);
-    if (partners.length === 0) {
+    const audience = await this.chat.presenceAudience(studentId);
+    if (audience.length === 0) {
       return;
     }
     this.server
-      .to(partners.map(personalRoom))
+      .to(audience.map(personalRoom))
       .emit(CHAT_EVENT.PRESENCE_UPDATE, { studentId, online, lastSeenAt });
   }
 }

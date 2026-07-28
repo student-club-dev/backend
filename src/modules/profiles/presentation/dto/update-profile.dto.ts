@@ -3,6 +3,7 @@ import { IsEmail, IsEnum, IsInt, IsOptional, IsString, Matches } from 'class-val
 import { UpdateProfileInput } from '../../application/profile.io';
 import { CourseYear } from '../../domain/enums/course-year.enum';
 import { Gender } from '../../domain/enums/gender.enum';
+import { LastSeenVisibility } from '../../domain/enums/last-seen-visibility.enum';
 import { ProfileRole } from '../../domain/enums/profile-role.enum';
 
 /**
@@ -66,6 +67,18 @@ export class UpdateProfileDto {
   @IsEnum(CourseYear)
   courseYear?: CourseYear;
 
+  @ApiPropertyOptional({
+    enum: LastSeenVisibility,
+    enumName: 'LastSeenVisibilityDto',
+    nullable: true,
+    description:
+      'Students only — who may see your `online` / `lastSeenAt`. `NOBODY` also hides `online` ' +
+      'and suppresses your `presence:update` events.',
+  })
+  @IsOptional()
+  @IsEnum(LastSeenVisibility)
+  lastSeenVisibility?: LastSeenVisibility;
+
   @ApiPropertyOptional({ nullable: true })
   @IsOptional()
   @IsString()
@@ -83,6 +96,7 @@ export class UpdateProfileDto {
       universityEmail: this.universityEmail ?? undefined,
       birthYear: this.birthYear ?? undefined,
       courseYear: this.courseYear ?? undefined,
+      lastSeenVisibility: this.lastSeenVisibility ?? undefined,
       avatarUrl: this.avatarUrl ?? undefined,
     };
   }
