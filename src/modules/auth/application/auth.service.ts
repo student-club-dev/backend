@@ -273,11 +273,7 @@ export class AuthService {
   private resolveProvider(provider: AuthProvider): OAuthProvider {
     const impl = this.oauthProviders.get(provider);
     if (impl === undefined) {
-      throw new AppException(
-        ERROR_CODE.INTERNAL_ERROR,
-        500,
-        'OAuth provayder sozlanmagan',
-      );
+      throw new AppException(ERROR_CODE.INTERNAL_ERROR, 500, 'OAuth provayder sozlanmagan');
     }
     return impl;
   }

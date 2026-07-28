@@ -20,10 +20,7 @@ import { GoogleOAuthProvider } from './infrastructure/oauth/google-oauth.provide
     {
       provide: OAUTH_PROVIDER_REGISTRY,
       inject: [GoogleOAuthProvider, AppleOAuthProvider],
-      useFactory: (
-        google: GoogleOAuthProvider,
-        apple: AppleOAuthProvider,
-      ): OAuthProviderRegistry =>
+      useFactory: (google: GoogleOAuthProvider, apple: AppleOAuthProvider): OAuthProviderRegistry =>
         new Map<AuthProvider, OAuthProvider>([
           [AuthProvider.GOOGLE, google],
           [AuthProvider.APPLE, apple],

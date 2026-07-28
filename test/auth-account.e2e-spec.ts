@@ -9,10 +9,7 @@ import { ResponseInterceptor } from '../src/common/interceptors/response.interce
 import type { Env } from '../src/config/env';
 import { RedisService } from '../src/infrastructure/cache/redis.service';
 import { PrismaService } from '../src/infrastructure/database/prisma.service';
-import {
-  OAuthIdentity,
-  OAuthProvider,
-} from '../src/modules/auth/domain/oauth/oauth-provider';
+import { OAuthIdentity, OAuthProvider } from '../src/modules/auth/domain/oauth/oauth-provider';
 import { GoogleOAuthProvider } from '../src/modules/auth/infrastructure/oauth/google-oauth.provider';
 
 /**
@@ -65,7 +62,9 @@ describe('Auth account (student) — sessions, set/reset password — e2e', () =
       await redis.del(key);
     }
     await prisma.student.deleteMany({
-      where: { OR: [{ email: { in: [EMAIL_SESSIONS, EMAIL_OAUTH] } }, { phoneNumber: PHONE_RESET }] },
+      where: {
+        OR: [{ email: { in: [EMAIL_SESSIONS, EMAIL_OAUTH] } }, { phoneNumber: PHONE_RESET }],
+      },
     });
   };
 

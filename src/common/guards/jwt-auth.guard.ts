@@ -33,7 +33,10 @@ export class JwtAuthGuard implements CanActivate {
     } catch (error) {
       // Expired access token → TOKEN_EXPIRED so the client refreshes instead of logging out.
       if (error instanceof Error && error.name === 'TokenExpiredError') {
-        throw AppException.unauthorized('Sessiya tugagan, qaytadan urinib ko‘ring', ERROR_CODE.TOKEN_EXPIRED);
+        throw AppException.unauthorized(
+          'Sessiya tugagan, qaytadan urinib ko‘ring',
+          ERROR_CODE.TOKEN_EXPIRED,
+        );
       }
       throw AppException.unauthorized();
     }

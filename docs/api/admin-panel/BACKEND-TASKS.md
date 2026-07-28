@@ -12,7 +12,7 @@ Bu ro'yxat — admin panel **to'liq** ishlashi uchun backend qurishi kerak bo'lg
 
 > **Admin auth uchun DB jadvali kerak EMAS** — admin login/parol **env**da (Faza 0). Faqat quyidagilar:
 
-- [ ] **`AccountType`** enum'ga `ADMIN = "admin"` qo'shish (JWT `type`).
+- [x] **`AccountType`** enum'ga `ADMIN = "admin"` qo'shish (JWT `type`). ✅
 - [ ] **`students`** jadvaliga ban maydonlari: `status(StudentStatus: ACTIVE|BANNED, default ACTIVE)`, `bannedAt?`, `banReason?`.
 - [ ] **`business_owners`** jadvaliga ban maydonlari: `status(BusinessOwnerStatus: ACTIVE|BANNED)`, `bannedAt?`, `banReason?`.
 
@@ -24,27 +24,27 @@ Bu ro'yxat — admin panel **to'liq** ishlashi uchun backend qurishi kerak bo'lg
 
 ---
 
-## Faza 0 — Admin auth (env-based) + RBAC (old shart) 🔴
+## Faza 0 — Admin auth (env-based) + RBAC — ✅ BAJARILDI
 
-> Admin login/parol **env**da — DB jadvali, register, forgot-password YO'Q. Bularsiz boshqa admin endpoint himoyalanmaydi.
+> Admin login/parol **env**da — DB jadvali, register, forgot-password YO'Q. Bularsiz boshqa admin endpoint himoyalanmaydi. **Qurilgan endpointlar: [`ADMIN-API.md`](./ADMIN-API.md).**
 
-- [ ] **Env config:** admin va moderator login/parol env'da — masalan `ADMIN_EMAIL`/`ADMIN_PASSWORD_HASH` (rol `ADMIN`), `MODERATOR_EMAIL`/`MODERATOR_PASSWORD_HASH` (rol `MODERATOR`). Parollar **argon2 hash** (ochiq matn emas). Ko'p moderator kerak bo'lsa — env'da JSON ro'yxat yoki keyinroq kichik jadval.
-- [ ] **`AdminRole`** — kod ichidagi TS enum (`ADMIN`, `MODERATOR`), DB emas.
-- [ ] **Login:** `POST /v1/admin/auth/login` (email+parol → env bilan tekshiradi) → JWT (`type: "admin"`, `role`). `GET /v1/admin/auth/me`, `POST /v1/admin/auth/logout`. Refresh **ixtiyoriy** (qayta login ham yetadi).
-- [ ] **Guard'lar:** `AdminJwtGuard` (token + `type === "admin"`) + `@Roles(...)` `AdminRoleGuard`.
-- [ ] **YO'Q (ataylab):** admin uchun register / forgot-password / o'zini boshqarish endpointlari — creds env'da fiks.
-- [ ] **Permission matrix:** `ADMIN` = hammasi (incl. delete, config, foydalanuvchi yaratish); `MODERATOR` = moderatsiya + o'qish + ban, lekin delete/config'ga ruxsatsiz.
+- [x] **Env config:** admin va moderator login/parol env'da — `ADMIN_EMAIL`/`ADMIN_PASSWORD_HASH` (rol `ADMIN`), `MODERATOR_EMAIL`/`MODERATOR_PASSWORD_HASH` (rol `MODERATOR`). Parollar **argon2 hash**. ✅
+- [x] **`AdminRole`** — kod ichidagi TS enum (`ADMIN`, `MODERATOR`), DB emas. ✅
+- [x] **Login:** `POST /v1/admin/auth/login` → JWT (`type:"admin"`, `role`). `GET /v1/admin/auth/me`, `POST /v1/admin/auth/logout`. ✅
+- [x] **Guard'lar:** `AdminJwtGuard` (token + `type === "admin"`) + `@Roles(...)` `AdminRoleGuard`. ✅
+- [x] **YO'Q (ataylab):** admin uchun register / forgot-password endpointlari — creds env'da fiks. ✅
+- [x] **Permission matrix:** `ADMIN` = hammasi; `MODERATOR` = moderatsiya + o'qish + ban, config/delete'siz. (RBAC guard tayyor; rol-cheklovlar keyingi fazalarda qo'llanadi.) ✅
 
-## Faza 1 — Cross-user o'qish / ro'yxatlash ("hammasini ko'rish") 🔴
+## Faza 1 — Cross-user o'qish / ro'yxatlash ("hammasini ko'rish") — ✅ BAJARILDI
 
-> Hozir hech bir endpoint bir nechta foydalanuvchi/biznesni qaytarmaydi. Havolalar: `02/03/04/06` fayllar.
+> Barcha read endpointlar qurildi. Qurilgan endpointlar: [`ADMIN-API.md`](./ADMIN-API.md).
 
-- [ ] **Studentlar:** `GET /v1/admin/students` (filtr: q, universityId, courseYear, gender, phoneVerified, status, createdFrom/To; pagination), `GET /v1/admin/students/:id`. (Havola `02-profile`, `11-connections`)
-- [ ] **Biznes egalari:** `GET /v1/admin/business-owners` (filtr + pagination), `GET /:id`, `GET /:id/businesses`.
-- [ ] **Bizneslar:** `GET /v1/admin/businesses` (filtr: q, ownerId, status, type, regionId, isOnlineOnly; pagination), `GET /:id` (owner-bypass — hozir `GET /business/:id` owner-only 403). (Havola `03-business`)
-- [ ] **Do'konlar/filiallar:** `GET /v1/admin/branches` (filtr: q, businessId, ownerId, regionId, districtId, tradeCenterId, isActive, geo bbox/radius; pagination), `GET /:id`. (Havola `04-branches`)
-- [ ] **E'lonlar:** `GET /v1/admin/listings` (filtr: status[] incl DRAFT/PENDING/REJECTED, businessId, ownerId, categoryKey, type, regionId, price, discount, sana; pagination), `GET /:id` (har status), `GET /:id/stats`. (Havola `06-listings`)
-- [ ] **Dashboard:** `GET /v1/admin/dashboard/stats` (jami sonlar + status breakdown + pending navbatlar). (Ixtiyoriy: `/timeseries`)
+- [x] **Studentlar:** `GET /v1/admin/students` (filtr: q, universityId, courseYear, gender, phoneVerified, createdFrom/To; pagination), `GET /v1/admin/students/:id`. ✅ *(status filtri Faza 3'da — ban maydoni qo'shilgach)*
+- [x] **Biznes egalari:** `GET /v1/admin/business-owners` (filtr + pagination), `GET /:id`, `GET /:id/businesses`. ✅
+- [x] **Bizneslar:** `GET /v1/admin/businesses` (filtr: q, ownerId, status[], type, regionId, isOnlineOnly; pagination), `GET /:id` (owner-bypass). ✅
+- [x] **Do'konlar/filiallar:** `GET /v1/admin/branches` (filtr: q, businessId, ownerId, regionId, districtId, tradeCenterId, isActive, hasDelivery, geo bbox/radius; pagination), `GET /:id`. ✅ *(geo — PostGIS ST_DWithin)*
+- [x] **E'lonlar:** `GET /v1/admin/listings` (filtr: status[] incl DRAFT/PENDING/REJECTED, businessId, ownerId, categoryKey, type, groupKey, regionId, districtId, price+basis, discountType, listingKind, redemptionMethod, sana; pagination), `GET /:id` (har status), `GET /:id/stats`. ✅
+- [x] **Dashboard:** `GET /v1/admin/dashboard/stats` (jami sonlar + status breakdown + pending navbatlar). ✅ *(`/timeseries` — ixtiyoriy, hali yo'q)*
 
 ## Faza 2 — Moderatsiya (status oqimlari) 🔴
 

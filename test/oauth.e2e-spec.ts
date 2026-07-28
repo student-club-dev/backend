@@ -8,10 +8,7 @@ import { AllExceptionsFilter } from '../src/common/filters/all-exceptions.filter
 import { ResponseInterceptor } from '../src/common/interceptors/response.interceptor';
 import type { Env } from '../src/config/env';
 import { PrismaService } from '../src/infrastructure/database/prisma.service';
-import {
-  OAuthIdentity,
-  OAuthProvider,
-} from '../src/modules/auth/domain/oauth/oauth-provider';
+import { OAuthIdentity, OAuthProvider } from '../src/modules/auth/domain/oauth/oauth-provider';
 import { GoogleOAuthProvider } from '../src/modules/auth/infrastructure/oauth/google-oauth.provider';
 
 /**

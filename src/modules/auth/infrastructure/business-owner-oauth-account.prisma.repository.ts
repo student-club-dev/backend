@@ -22,11 +22,7 @@ export class BusinessOwnerOAuthAccountPrismaRepository implements OAuthAccountRe
     return row === null ? null : row.businessOwnerId;
   }
 
-  async link(
-    accountId: string,
-    provider: AuthProvider,
-    providerAccountId: string,
-  ): Promise<void> {
+  async link(accountId: string, provider: AuthProvider, providerAccountId: string): Promise<void> {
     await this.prisma.businessOwnerOAuthAccount.create({
       data: {
         businessOwnerId: accountId,

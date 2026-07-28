@@ -44,7 +44,9 @@ describe('EskizSmsProvider', () => {
   it('logs in for a bearer token, then sends the SMS', async () => {
     fetchMock.mockResolvedValueOnce(loginOk('tkn')).mockResolvedValueOnce(withStatus(200));
 
-    await expect(new EskizSmsProvider(makeConfig()).send('+998901234567', 'hi')).resolves.toBeUndefined();
+    await expect(
+      new EskizSmsProvider(makeConfig()).send('+998901234567', 'hi'),
+    ).resolves.toBeUndefined();
 
     expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(fetchMock.mock.calls[0][0]).toBe(`${BASE}/api/auth/login`);
@@ -72,7 +74,9 @@ describe('EskizSmsProvider', () => {
       .mockResolvedValueOnce(loginOk('new'))
       .mockResolvedValueOnce(withStatus(200));
 
-    await expect(new EskizSmsProvider(makeConfig()).send('+998901234567', 'hi')).resolves.toBeUndefined();
+    await expect(
+      new EskizSmsProvider(makeConfig()).send('+998901234567', 'hi'),
+    ).resolves.toBeUndefined();
 
     expect(fetchMock).toHaveBeenCalledTimes(4);
     expect(fetchMock.mock.calls[2][0]).toBe(`${BASE}/api/auth/login`);

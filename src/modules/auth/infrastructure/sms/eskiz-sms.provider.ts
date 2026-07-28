@@ -97,7 +97,9 @@ export class EskizSmsProvider implements SmsProvider {
   }
 
   private mask(phoneNumber: string): string {
-    return phoneNumber.length <= 6 ? '***' : `${phoneNumber.slice(0, 4)}***${phoneNumber.slice(-2)}`;
+    return phoneNumber.length <= 6
+      ? '***'
+      : `${phoneNumber.slice(0, 4)}***${phoneNumber.slice(-2)}`;
   }
 
   private smsUnavailable(): AppException {

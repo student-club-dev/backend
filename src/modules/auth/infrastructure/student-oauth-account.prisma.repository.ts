@@ -22,11 +22,7 @@ export class StudentOAuthAccountPrismaRepository implements OAuthAccountReposito
     return row === null ? null : row.studentId;
   }
 
-  async link(
-    accountId: string,
-    provider: AuthProvider,
-    providerAccountId: string,
-  ): Promise<void> {
+  async link(accountId: string, provider: AuthProvider, providerAccountId: string): Promise<void> {
     await this.prisma.studentOAuthAccount.create({
       data: { studentId: accountId, provider: toPrismaAuthProvider(provider), providerAccountId },
     });
