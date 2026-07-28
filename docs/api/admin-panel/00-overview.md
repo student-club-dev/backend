@@ -9,10 +9,10 @@ Bu papka (`docs/api/admin-panel/`) — **loyihaning mavjud API'sining to'liq ref
 ## Base URL
 
 ```
-https://api.elon.uz/v1
+https://api.studentclub.uz/v1
 ```
 
-Barcha endpointlar yagona **`/v1`** prefiksida (provider ham, student ham — alohida `/provider/v1` yo'q).
+Barcha endpointlar yagona **`/v1`** prefiksida (provider ham, student ham — alohida `/provider/v1` yo'q). *(Ishlaydigan host — `api.studentclub.uz`; `api.elon.uz` faol emas.)*
 
 ---
 

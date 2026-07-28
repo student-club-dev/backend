@@ -7,7 +7,7 @@
 > Bu hujjat — ilova **hozir chaqiradigan** endpointlar (1-daraja) uchun bajariladigan ro'yxat.
 > Har bir DTO maydoni yonidagi `*` — majburiy (required).
 
-- **Base URL:** `https://api.elon.uz/v1`
+- **Base URL:** `https://api.studentclub.uz/v1`
 - **Format:** JSON (media yuklash — `multipart/form-data`)
 - **Sana/vaqt:** ISO-8601 (`date-time`), millisekund emas
 

@@ -67,6 +67,20 @@ async function bootstrap(): Promise<void> {
   const swaggerPassword = config.get('SWAGGER_PASSWORD', { infer: true });
   const isProd = config.get('NODE_ENV', { infer: true }) === 'production';
 
+  // CORS for the browser-based admin panel (native mobile apps are unaffected — they don't send an
+  // Origin). Allowed origins come from CORS_ORIGINS (comma-separated). Auth is a Bearer token, so the
+  // Authorization header must be allowed through.
+  app.enableCors({
+    origin: config
+      .get('CORS_ORIGINS', { infer: true })
+      .split(',')
+      .map((origin) => origin.trim())
+      .filter(Boolean),
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  });
+
   // Real-time chat (`/chat`): fan Socket.IO events out across instances via the Redis adapter.
   const redisIoAdapter = new RedisIoAdapter(app, config.get('REDIS_URL', { infer: true }));
   redisIoAdapter.connect();
