@@ -12,33 +12,42 @@ import { AdminBusinessOwnersWriteService } from './application/admin-business-ow
 import { AdminBusinessesService } from './application/admin-businesses.service';
 import { AdminBusinessesWriteService } from './application/admin-businesses-write.service';
 import { AdminDashboardService } from './application/admin-dashboard.service';
+import { AdminGeoService } from './application/admin-geo.service';
 import { AdminListingsService } from './application/admin-listings.service';
 import { AdminListingsWriteService } from './application/admin-listings-write.service';
 import { AdminStudentsService } from './application/admin-students.service';
 import { AdminStudentsWriteService } from './application/admin-students-write.service';
+import { AdminTradeCentersService } from './application/admin-trade-centers.service';
 import { ADMIN_BRANCH_READ_REPOSITORY } from './domain/admin-branch-read.repository';
 import { ADMIN_BUSINESS_OWNER_READ_REPOSITORY } from './domain/admin-business-owner-read.repository';
 import { ADMIN_BUSINESS_OWNER_WRITE_REPOSITORY } from './domain/admin-business-owner-write.repository';
 import { ADMIN_BUSINESS_READ_REPOSITORY } from './domain/admin-business-read.repository';
 import { ADMIN_DASHBOARD_READ_REPOSITORY } from './domain/admin-dashboard-read.repository';
+import { ADMIN_GEO_WRITE_REPOSITORY } from './domain/admin-geo-write.repository';
 import { ADMIN_LISTING_READ_REPOSITORY } from './domain/admin-listing-read.repository';
 import { ADMIN_STUDENT_READ_REPOSITORY } from './domain/admin-student-read.repository';
 import { ADMIN_STUDENT_WRITE_REPOSITORY } from './domain/admin-student-write.repository';
+import { ADMIN_TRADE_CENTER_WRITE_REPOSITORY } from './domain/admin-trade-center-write.repository';
 import { AdminBranchReadPrismaRepository } from './infrastructure/admin-branch-read.prisma.repository';
 import { AdminBusinessOwnerReadPrismaRepository } from './infrastructure/admin-business-owner-read.prisma.repository';
 import { AdminBusinessOwnerWritePrismaRepository } from './infrastructure/admin-business-owner-write.prisma.repository';
 import { AdminBusinessReadPrismaRepository } from './infrastructure/admin-business-read.prisma.repository';
 import { AdminDashboardReadPrismaRepository } from './infrastructure/admin-dashboard-read.prisma.repository';
+import { AdminGeoWritePrismaRepository } from './infrastructure/admin-geo-write.prisma.repository';
 import { AdminListingReadPrismaRepository } from './infrastructure/admin-listing-read.prisma.repository';
 import { AdminStudentReadPrismaRepository } from './infrastructure/admin-student-read.prisma.repository';
 import { AdminStudentWritePrismaRepository } from './infrastructure/admin-student-write.prisma.repository';
+import { AdminTradeCenterWritePrismaRepository } from './infrastructure/admin-trade-center-write.prisma.repository';
 import { AdminAuthController } from './presentation/admin-auth.controller';
 import { AdminBranchesController } from './presentation/admin-branches.controller';
 import { AdminBusinessOwnersController } from './presentation/admin-business-owners.controller';
 import { AdminBusinessesController } from './presentation/admin-businesses.controller';
 import { AdminDashboardController } from './presentation/admin-dashboard.controller';
+import { AdminDistrictsController } from './presentation/admin-districts.controller';
 import { AdminListingsController } from './presentation/admin-listings.controller';
+import { AdminRegionsController } from './presentation/admin-regions.controller';
 import { AdminStudentsController } from './presentation/admin-students.controller';
+import { AdminTradeCentersController } from './presentation/admin-trade-centers.controller';
 import { AdminJwtGuard } from './presentation/guards/admin-jwt.guard';
 import { AdminRoleGuard } from './presentation/guards/admin-role.guard';
 
@@ -62,6 +71,9 @@ import { AdminRoleGuard } from './presentation/guards/admin-role.guard';
     AdminBranchesController,
     AdminListingsController,
     AdminDashboardController,
+    AdminRegionsController,
+    AdminDistrictsController,
+    AdminTradeCentersController,
   ],
   providers: [
     AdminAuthService,
@@ -76,6 +88,8 @@ import { AdminRoleGuard } from './presentation/guards/admin-role.guard';
     AdminListingsService,
     AdminListingsWriteService,
     AdminDashboardService,
+    AdminGeoService,
+    AdminTradeCentersService,
     AdminJwtGuard,
     AdminRoleGuard,
     { provide: ADMIN_STUDENT_READ_REPOSITORY, useClass: AdminStudentReadPrismaRepository },
@@ -92,6 +106,11 @@ import { AdminRoleGuard } from './presentation/guards/admin-role.guard';
     { provide: ADMIN_BRANCH_READ_REPOSITORY, useClass: AdminBranchReadPrismaRepository },
     { provide: ADMIN_LISTING_READ_REPOSITORY, useClass: AdminListingReadPrismaRepository },
     { provide: ADMIN_DASHBOARD_READ_REPOSITORY, useClass: AdminDashboardReadPrismaRepository },
+    { provide: ADMIN_GEO_WRITE_REPOSITORY, useClass: AdminGeoWritePrismaRepository },
+    {
+      provide: ADMIN_TRADE_CENTER_WRITE_REPOSITORY,
+      useClass: AdminTradeCenterWritePrismaRepository,
+    },
   ],
 })
 export class AdminModule {}

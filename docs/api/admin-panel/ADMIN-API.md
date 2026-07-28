@@ -98,8 +98,30 @@ Ban/suspend + delete (student & owner) — `status`/`bannedAt` **migration** bil
 
 ---
 
+## Faza 4 — Reference CRUD (ADMIN only) 🚧
+
+### Geo — regions & districts ✅
+| METHOD + path | Nima |
+|---|---|
+| `POST · PUT · DELETE /v1/admin/regions` (`/:id`) | Viloyat CRUD (id key, nameUz/Ru, centerLat/Lng). 409 `REGION_EXISTS`/`REGION_IN_USE`, 404 `REGION_NOT_FOUND` |
+| `POST · PUT · DELETE /v1/admin/districts` (`/:id`) | Tuman CRUD (`regionId` mavjud bo'lishi shart). 409 `DISTRICT_EXISTS`/`DISTRICT_IN_USE`, 404 `DISTRICT_NOT_FOUND`/`REGION_NOT_FOUND` |
+
+### Savdo markazlari — centers & fields ✅
+| METHOD + path | Nima |
+|---|---|
+| `GET /v1/admin/trade-centers` (`/:id`) | Hammasi (**INACTIVE ham**). → `AdminTradeCenterDto` (status, sortOrder bilan) |
+| `POST · PUT · DELETE /v1/admin/trade-centers` (`/:id`) | Markaz CRUD (`slug` unique). 409 `TRADE_CENTER_SLUG_EXISTS`/`TRADE_CENTER_IN_USE` |
+| `POST · PUT · DELETE /v1/admin/trade-centers/:id/fields` (`/:fieldId`) | Dinamik maydonlar CRUD. 409 `TRADE_CENTER_FIELD_IN_USE`, 404 `TRADE_CENTER_FIELD_NOT_FOUND` |
+
+Barcha delete'lar **referential-integrity** bilan (ishlatilayotgan bo'lsa 409).
+
+### Qolgan (Faza 4) — 🔴 hali yo'q
+**Catalog CRUD** (groups / categories / attribute specs) — `admin/business-types` allaqachon bor (guard `X-Admin-Key` → `AdminJwtGuard`ga o'tkaziladi).
+
+---
+
 ## Boshqa keyingi fazalar — 🔴 hali yo'q
-- **Faza 4 — Reference CRUD:** catalog, geo, savdo markazlari.
+- **Ban/suspend + delete** (student & owner) — `status`/`bannedAt` migration bilan.
 - **Faza 5:** redemptions audit, audit log.
-- *(Moderatsiya — Faza 2 — hozircha kerak emas.)*
+- *(Moderatsiya — hozircha kerak emas.)*
 Reja: [`BACKEND-TASKS.md`](./BACKEND-TASKS.md).

@@ -69,8 +69,8 @@ Bu ro'yxat — admin panel **to'liq** ishlashi uchun backend qurishi kerak bo'lg
 > Hozir seed-managed / read-only.
 
 - [ ] **Katalog:** groups & categories & attribute specs uchun CRUD (business-**types** CRUD allaqachon bor). (Havola `05-catalog`)
-- [ ] **Geo:** regions & districts CRUD (nom, centerLat/Lng). (Havola `08-geo`)
-- [ ] **Savdo markazlari:** trade centers + dinamik fields CRUD, INACTIVE'larni ko'rish. (Havola `09-trade-centers`)
+- [x] **Geo:** regions & districts CRUD (nom, centerLat/Lng) + referential-integrity. ✅
+- [x] **Savdo markazlari:** trade centers + dinamik fields CRUD, INACTIVE'larni ko'rish + referential-integrity. ✅
 
 ## Faza 5 — Audit / nazorat (ixtiyoriy) 🔴
 
