@@ -6,13 +6,13 @@
 
 ## 1. Maqsad
 
-Katalog — ilovaning **statik ma'lumot bazasi** (data-driven, enum emas): biznes turlari (`business types`), ularning kategoriyalari (`categories`), har kategoriya uchun **dinamik forma maydonlari** (`attribute fields`), va student-feed uchun **guruhlar** (`catalog groups`). Bu ma'lumotlar `catalog-seed.json`dan **seed** qilinadi; ilova ularni faqat **o'qiydi** (public), yagona yozuv nuqtasi esa `admin/business-types` (business-type CRUD).
+Katalog — ilovaning **statik ma'lumot bazasi** (data-driven, enum emas): biznes turlari (`business types`), ularning kategoriyalari (`categories`), har kategoriya uchun **dinamik forma maydonlari** (`attribute fields`), va student-feed uchun **guruhlar** (`catalog groups`). Bu ma'lumotlar `catalog-seed.json`dan **seed** qilinadi; ilova (mobil) ularni faqat **o'qiydi** (public). Yozuv tomoni — **admin**: to'liq katalog CRUD (guruhlar / kategoriyalar / attribute-specs / business-types) endi `/v1/admin/*` da qurilgan (✅ built, [`ADMIN-API.md`](./ADMIN-API.md) Faza 4). Bu fayl public o'qishlarni **va** `admin/business-types` endpointlarini batafsil yozadi; qolgan admin catalog CRUD — ADMIN-API.md'da.
 
 Uch controller, uch xil qamrov:
 
 - **`business/types`** (`CatalogController`) — 🌐 public read: biznes turlari va kategoriyalar (gender bo'yicha personalizatsiya).
 - **`catalog`** (`CatalogGroupsController`) — 🌐 public, **POST-only** (Q2 — id hech qachon URL'da ketmaydi): student-feed uchun guruhlar/turlar + ko'rinadigan e'lonlar soni.
-- **`admin/business-types`** (`AdminBusinessTypeController`) — 🔑 admin (`X-Admin-Key`): business-type create/update/delete.
+- **`admin/business-types`** (`AdminBusinessTypeController`) — 🔑 admin (`AdminJwtGuard` + `@Roles(ADMIN)`, admin Bearer JWT): business-type create/update/delete.
 
 ---
 
@@ -226,7 +226,7 @@ Berilgan guruhlar ichidagi biznes turlarini, har biriga **kategoriyalar soni** v
 
 ### 3.5 🔑 `POST /v1/admin/business-types` → `201`
 
-Yangi biznes turi yaratadi. Header: `X-Admin-Key` (majburiy).
+Yangi biznes turi yaratadi. Auth: admin Bearer JWT (`AdminJwtGuard` + `@Roles(ADMIN)`).
 
 **Body (`CreateBusinessTypeDto`):**
 
@@ -284,7 +284,8 @@ Turni o'chiradi — **faqat** hech bir biznes va hech bir kategoriya unga bog'la
 | HTTP | `error.code` | Qachon | `message` (uz) |
 |---|---|---|---|
 | 404 | `NOT_FOUND` | `GET /business/types/:type/categories` — noma'lum tur | `Biznes turi topilmadi` |
-| 403 | `FORBIDDEN` | Admin endpoint'da `X-Admin-Key` yo'q/noto'g'ri | (AdminGuard) |
+| 401 | `UNAUTHORIZED` / `TOKEN_EXPIRED` | Admin endpoint'da JWT yo'q/yaroqsiz/muddati o'tgan | (`AdminJwtGuard`) |
+| 403 | `FORBIDDEN` | Admin JWT bor, lekin rol `ADMIN` emas (masalan `MODERATOR`) | (`@Roles(ADMIN)`) |
 | 409 | `BUSINESS_TYPE_EXISTS` | `POST /admin/business-types` — kalit band | `Bu biznes turi allaqachon mavjud` |
 | 404 | `BUSINESS_TYPE_NOT_FOUND` | `PUT`/`DELETE /admin/business-types/:type` — tur yo'q | `Biznes turi topilmadi` |
 | 409 | `BUSINESS_TYPE_IN_USE` | `DELETE` — biznes yoki kategoriya havola qilmoqda | `Bu biznes turi ishlatilmoqda, uni o'chirib bo'lmaydi` |
@@ -297,13 +298,14 @@ Turni o'chiradi — **faqat** hech bir biznes va hech bir kategoriya unga bog'la
 
 ## 6. Admin panel eslatmasi
 
-Katalog — asosan **seed'dan boshqariladigan** ma'lumot. Mavjud **yagona** admin-guarded yuza — `admin/business-types` (biznes turi CRUD), va u ham hozircha **placeholder `X-Admin-Key`** bilan himoyalangan (real admin auth/role emas — [`00-overview.md`](./00-overview.md) → AdminGuard).
+Katalog — asosan **seed'dan boshqariladigan** ma'lumot, lekin panel uchun to'liq admin CRUD endi **qurilgan** (real admin auth/role bilan).
 
-**Katalogni to'liq boshqaradigan panel uchun backend'da hozir mavjud EMAS (qo'shilishi kerak):**
+**✅ built — barchasi `AdminJwtGuard` + `@Roles(ADMIN)` ostida (qarang [`ADMIN-API.md`](./ADMIN-API.md) Faza 4):**
 
-- **Kategoriya CRUD** — `categories` uchun hech qanday yozuv endpointi yo'q (faqat public read). Hozir faqat seed orqali o'zgaradi.
-- **Attribute-field (forma maydonlari) CRUD** — dinamik forma sxemasini (`fields`, `options`) tahrirlash endpointi yo'q.
-- **Catalog-group CRUD** — 8 ta guruh ham seed'dan; guruh qo'shish/o'zgartirish/tartibini boshqarish endpointi yo'q.
-- **Real admin auth** — `X-Admin-Key` o'rniga JWT + role (RBAC). To'liq ro'yxat: [`BACKEND-TASKS.md`](./BACKEND-TASKS.md).
+- **Business-type CRUD** — `POST · PUT · DELETE /v1/admin/business-types` (bu faylda batafsil). Guard endi placeholder `X-Admin-Key` **emas**, balki admin JWT.
+- **Kategoriya CRUD** — `POST · PUT · DELETE /v1/admin/categories`.
+- **Attribute-spec (forma maydonlari) CRUD** — `POST · PUT · DELETE /v1/admin/attribute-specs`.
+- **Catalog-group CRUD** — `POST · PUT · DELETE /v1/admin/catalog/groups`.
+- **Real admin auth** — env-based `AdminJwtGuard` (JWT + rol), eski `X-Admin-Key` (`AdminGuard`) + `ADMIN_API_KEY` **o'chirildi**.
 
-Ya'ni: business-type'larni panel orqali boshqarish bugun mumkin (X-Admin-Key bilan), ammo **kategoriyalar va atribut sxemalarini** panel orqali boshqarish uchun yuqoridagi yozuv endpointlari qo'shilishi shart.
+Delete'lar referential-integrity bilan (ishlatilayotgan bo'lsa 409). Field shakllari va error kodlari — [`ADMIN-API.md`](./ADMIN-API.md) va Swagger (`/docs`).

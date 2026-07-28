@@ -131,11 +131,11 @@ Profilni **qisman** yangilaydi. Barcha maydonlar ixtiyoriy; berilmagan (yoki `nu
 
 ## 7. Admin panel eslatmasi
 
-🔓 **Self-scoped.** `GET /profile/me` **faqat chaqiruvchining o'zini** qaytaradi — **`GET /profile/:id` yoki barcha foydalanuvchilar ro'yxati YO'Q**. `PUT /profile/me` ham faqat o'zini o'zgartiradi.
+🔓 **Self-scoped (mobil).** Bu ikki endpoint o'zgarmaydi: `GET /profile/me` **faqat chaqiruvchining o'zini** qaytaradi (`GET /profile/:id` yo'q), `PUT /profile/me` faqat o'zini o'zgartiradi.
 
-Admin panel istalgan student yoki biznes egasining profilini **ko'rish yoki tahrirlash** (masalan, moderatsiya, qo'llab-quvvatlash) uchun mavjud endpointlar **yetarli emas**. Backend permission bilan cross-user variant ochishi kerak, masalan:
-- `GET /admin/users` (student/biznes ro'yxati, filtr + paginatsiya),
-- `GET /admin/users/:id` (istalgan profil),
-- `PATCH /admin/users/:id` (moderatsiya/tahrir).
+Admin panel uchun istalgan student yoki biznes egasini **ko'rish, tahrirlash, yaratish va ban qilish** — endi **qurilgan** (owner-bypass, `AdminJwtGuard` ostida). ✅ built — qarang [`ADMIN-API.md`](./ADMIN-API.md):
+- `GET /v1/admin/students · /business-owners` (filtr + paginatsiya) va `GET .../:id` (Faza 1);
+- `PUT .../:id` (tahrir, ADMIN+MODERATOR) va `POST /v1/admin/students · /business-owners` (yaratish, faqat ADMIN) (Faza 3);
+- `POST .../:id/ban` · `/unban` (status BANNED/ACTIVE; ban → sessiyalar bekor, login/refresh/oauth 403 `ACCOUNT_BANNED`) (Faza 3).
 
-To'liq ro'yxat: [`BACKEND-TASKS.md`](./BACKEND-TASKS.md).
+**Hali yo'q (kutilmoqda):** admin uchun boshqa foydalanuvchi **sessiya/qurilma** ko'rinishi va account **DELETE** (soft/anonymize). To'liq reja: [`BACKEND-TASKS.md`](./BACKEND-TASKS.md).

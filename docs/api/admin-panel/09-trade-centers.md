@@ -107,11 +107,13 @@ Bitta savdo markazini uning dinamik maydonlari bilan qaytaradi.
 
 ## 7. Admin panel eslatmasi
 
-🔒 **Read-only, ACTIVE-only, seed-managed.** Ikkala endpoint ham faqat **ACTIVE** markazlarni **o'qish** uchun. **Create/edit/delete YO'Q** va **INACTIVE markazlarni ko'rish yo'q**: savdo markazlari va ularning maydonlari seed'dan (deploy paytida) keladi, runtime'da boshqarib bo'lmaydi.
+🔒 **Read-only, ACTIVE-only (mobil/public).** Bu ikki endpoint faqat **ACTIVE** markazlarni **o'qish** uchun — o'zgarmaydi.
 
-Savdo-markaz boshqaruv paneli (yangi markaz qo'shish, nom/slug tahrirlash, ACTIVE/INACTIVE o'zgartirish, dinamik maydonlarni qo'shish/tahrirlash/qayta tartiblash) uchun mavjud endpointlar **yetarli emas** — backend admin CRUD qo'shishi kerak, masalan:
-- `GET /admin/trade-centers` (INACTIVE'larni ham qamrab, status filtri bilan),
-- `POST /admin/trade-centers`, `PATCH /admin/trade-centers/:id` (status, nom, slug),
-- `POST /admin/trade-centers/:id/fields`, `PATCH .../fields/:fieldId`, `DELETE .../fields/:fieldId`.
+Savdo-markaz boshqaruv paneli uchun admin CRUD endi **qurilgan** — ✅ built, `AdminJwtGuard` + `@Roles(ADMIN)` ostida ([`ADMIN-API.md`](./ADMIN-API.md) Faza 4):
+- `GET /v1/admin/trade-centers` (`/:id`) — **INACTIVE markazlarni ham** ko'radi (status, sortOrder bilan);
+- `POST · PUT · DELETE /v1/admin/trade-centers` (`/:id`) — markaz CRUD (`slug` unique);
+- `POST · PUT · DELETE /v1/admin/trade-centers/:id/fields` (`/:fieldId`) — dinamik maydonlar CRUD.
 
-To'liq ro'yxat: [`BACKEND-TASKS.md`](./BACKEND-TASKS.md).
+Delete'lar referential-integrity bilan (ishlatilayotgan bo'lsa **409** `TRADE_CENTER_IN_USE`/`TRADE_CENTER_FIELD_IN_USE`).
+
+To'liq reja: [`BACKEND-TASKS.md`](./BACKEND-TASKS.md).

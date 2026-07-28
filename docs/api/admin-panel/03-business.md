@@ -189,18 +189,11 @@ Scope: 🏢 **Business** (faqat biznes token) · 🔓 **Self-scoped** (faqat o'z
 
 ## 6. Admin panel eslatmasi
 
-Bu modul to'liq **🔓 owner-scoped** — admin uchun ikki katta bo'shliq bor:
+Bu modul (mobil) hamon **🔓 owner-scoped** — `GET /business/my` faqat token egasining bizneslari, `GET /business/:id` begona biznesda **403**. Bular o'zgarmaydi. Admin uchun esa alohida qatlam:
 
-**a) Cross-owner ko'rish YO'Q.** Hech bir endpoint boshqa owner'larning bizneslarini qaytarmaydi:
-- `GET /business/my` — faqat **token egasining** bizneslari;
-- `GET /business/:id` — begona biznes → **403** (`loadOwned` ownership).
+**a) Cross-owner ko'rish + tahrir — ✅ built.** [`ADMIN-API.md`](./ADMIN-API.md):
+- `GET /v1/admin/businesses` — filtr (`q`, `ownerId`, `status[]`, `type`, `regionId`, `isOnlineOnly`, sana) + **paginatsiya** (Faza 1);
+- `GET /v1/admin/businesses/:id` — **har qanday** biznesni ko'rish, ownership bypass (ARCHIVED ham) (Faza 1);
+- `PUT /v1/admin/businesses/:id` — admin tahrir (owner-bypass, mavjud validatsiya qayta ishlatiladi; type immutable) (Faza 3).
 
-Admin panel *hamma* bizneslarni ko'rish uchun backend **owner-bypass'li cross-owner endpointlar** ochishi kerak:
-- `GET /v1/admin/businesses` — filtr (`q`, `ownerId`, `status`, `type`, `regionId`, `isOnlineOnly`) + **paginatsiya** (hozir `my` array, paginatsiyasiz);
-- `GET /v1/admin/businesses/:id` — **har qanday** biznesni ko'rish (ownership 403'ni chetlab).
-
-**b) Moderatsiya oqimi YO'Q.** `BusinessStatus` enum'ida `PENDING_REVIEW/REJECTED/BLOCKED` bor, lekin **hech bir endpoint ularni o'rnatmaydi** — create avto `APPROVED` beradi, `rejectionReason` doim `null`. Admin panel moderatsiya qilishi uchun:
-- MVP auto-approve → owner **submit** (`DRAFT → PENDING_REVIEW`) ga o'zgartirilsin;
-- `POST /v1/admin/businesses/:id/approve · /reject(reason) · /block(reason) · /unblock` qo'shilsin (reject → `rejectionReason` to'ldiradi).
-
-Barchasi permission-gated (`AdminJwtGuard` + `@Roles`). To'liq ro'yxat: [`BACKEND-TASKS.md`](./BACKEND-TASKS.md) → Faza 1 (bizneslar ro'yxati) va Faza 2 (moderatsiya).
+**b) Moderatsiya oqimi — 🔴 hali yo'q (ataylab o'tkazib yuborilgan).** `BusinessStatus` enum'ida `PENDING_REVIEW/REJECTED/BLOCKED` bor, lekin **hech bir endpoint ularni o'rnatmaydi** — create avto `APPROVED`, `rejectionReason` doim `null`. Approve/reject/block/unblock oqimi hozircha kerak emas deb qoldirilgan. To'liq reja: [`BACKEND-TASKS.md`](./BACKEND-TASKS.md).

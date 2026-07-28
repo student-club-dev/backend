@@ -195,12 +195,14 @@ Bu modulda **enum yo'q**. `id`/`regionId`/`districtId` — seed'dan kelgan **str
 
 ## 9. Admin panel eslatmasi
 
-🌐 **Read-only, seed-managed.** `regions` va `districts` — public **o'qish** endpointlari. **Create/edit/delete YO'Q**: hudud ma'lumoti seed'dan (deploy paytida) keladi, runtime'da o'zgartirib bo'lmaydi.
+🌐 **Read-only (public), seed-managed.** `regions` va `districts` public **o'qish** endpointlari o'zgarmaydi.
 
-Geo-boshqaruv paneli (yangi viloyat/tuman qo'shish, nom/markaz tahrirlash, tuman polygon'lari) uchun mavjud endpointlar **yetarli emas** — backend admin CRUD qo'shishi kerak, masalan:
-- `POST /admin/regions`, `PATCH /admin/regions/:id`,
-- `POST /admin/districts`, `PATCH /admin/districts/:id`, `DELETE /admin/districts/:id`.
+Geo-boshqaruv paneli (yangi viloyat/tuman qo'shish, nom/markaz tahrirlash) uchun admin CRUD endi **qurilgan** — ✅ built, `AdminJwtGuard` + `@Roles(ADMIN)` ostida ([`ADMIN-API.md`](./ADMIN-API.md) Faza 4):
+- `POST · PUT · DELETE /v1/admin/regions` (`/:id`),
+- `POST · PUT · DELETE /v1/admin/districts` (`/:id`, `regionId` mavjud bo'lishi shart).
+
+Delete'lar referential-integrity bilan (ishlatilayotgan bo'lsa **409** `REGION_IN_USE`/`DISTRICT_IN_USE`).
 
 `geo/geocode` va `geo/reverse-geocode` — bu **JWT bilan himoyalangan Yandex proxy** (server kaliti bilan). Admin panelda ular **shundayligicha** (login qilingan holatda) ishlatiladi; alohida admin-scope shart emas. Provider kaliti va limitlar backend env'ida boshqariladi.
 
-To'liq ro'yxat: [`BACKEND-TASKS.md`](./BACKEND-TASKS.md).
+To'liq reja: [`BACKEND-TASKS.md`](./BACKEND-TASKS.md).

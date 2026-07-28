@@ -26,7 +26,7 @@ Backend o'zi autentifikatsiya qiladi (Firebase emas). **Ikki account turi, alohi
 | `BusinessAccountGuard` | `JwtAuthGuard`dan keyin: `type !== business` bo'lsa **403**. |
 | `StudentGuard` | `type !== student` bo'lsa **403**. |
 | `OptionalJwtAuthGuard` | Public; token bo'lsa `user` biriktiradi (personalizatsiya uchun). |
-| `AdminGuard` | Statik `X-Admin-Key` header'ni env `ADMIN_API_KEY` bilan solishtiradi. **Faqat** `admin/business-types`da ishlatiladi (placeholder). |
+| `AdminJwtGuard` | Admin panelning **o'z** Bearer JWT'sini tekshiradi (`POST /v1/admin/auth/login`'dan). Rollar `ADMIN`/`MODERATOR`, kerak joyda `@Roles`bilan cheklanadi. **Barcha** `/v1/admin/*` endpointlar shu guard ostida — → [`ADMIN-API.md`](./ADMIN-API.md). |
 | `ThrottlerGuard` | Rate-limit (OTP, media, reports...). |
 
 Har so'rovda: `Authorization: Bearer <accessToken>`. Token yo'q/yaroqsiz → **401** `UNAUTHORIZED`; muddati o'tgan → **401** `TOKEN_EXPIRED`.
@@ -38,7 +38,7 @@ Har so'rovda: `Authorization: Bearer <accessToken>`. Token yo'q/yaroqsiz → **4
 | 🔒 **Auth** | Har qanday login qilingan (student yoki biznes) |
 | 👤 **Student** | Faqat student token (`StudentGuard`) |
 | 🏢 **Business** | Faqat biznes token (`BusinessAccountGuard`) |
-| 🔑 **Admin** | Hozirgi `X-Admin-Key` (placeholder) |
+| 🔑 **Admin** | Admin panel JWT (`AdminJwtGuard`, rollar `ADMIN`/`MODERATOR`) — [`ADMIN-API.md`](./ADMIN-API.md) |
 | 🔓 **Self-scoped** | Faqat **chaqiruvchining o'z** ma'lumotini qaytaradi/o'zgartiradi (ownership) |
 
 ---
@@ -113,6 +113,6 @@ Ko'p endpoint **🔓 self-scoped** yoki **owner-scoped**:
 - `GET /business/:businessId/listings` → faqat **o'z biznesi** e'lonlari (ownership tekshiruvi).
 - `discounts/search` → faqat **ko'rinadigan** (ACTIVE + APPROVED) e'lonlar; DRAFT/PENDING/REJECTED **ko'rinmaydi**.
 
-**Natija:** admin panel *hamma* foydalanuvchi/biznes/e'lonni ko'rish yoki moderatsiya qilish uchun **mavjud endpointlarning o'zi yetarli emas** — backend shu endpointlarga permission bilan "hammasini ko'rish" rejimini ochishi yoki admin list endpointlari qo'shishi kerak. Har faylning **"Admin panel eslatmasi"** bo'limida aynan qayerda cheklov borligi va nima ochilishi kerakligi ko'rsatiladi. To'liq ro'yxat: [`BACKEND-TASKS.md`](./BACKEND-TASKS.md).
+**Natija:** yuqoridagi mobil (student/biznes) endpointlar hamon self/owner-scoped — ular **o'zgarmaydi**. Ammo admin panel uchun *hamma* foydalanuvchi/biznes/e'lonni ko'radigan **cross-user admin qatlami endi qurilgan**: alohida `/v1/admin/*` endpointlar (owner-bypass, filtr + paginatsiya) `AdminJwtGuard` ostida — ✅ built, qarang [`ADMIN-API.md`](./ADMIN-API.md). Har faylning **"Admin panel eslatmasi"** bo'limida qaysi admin imkoniyat qurilgani (va nima hali kutilayotgani) ko'rsatiladi. To'liq reja: [`BACKEND-TASKS.md`](./BACKEND-TASKS.md).
 
 Fayllar ro'yxati va o'qish tartibi: [`README.md`](./README.md).

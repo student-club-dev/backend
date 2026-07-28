@@ -247,10 +247,11 @@ Filialni **butunlay o'chiradi** (hard delete — filialda status/soft-delete ust
 
 ## 6. Admin panel eslatmasi
 
-**🔓 owner-scoped — bu yerdagi hamma narsa faqat egalik qilingan biznes ostida yetib boradi.** Cheklovlar:
+**🔓 owner-scoped (mobil) — bu yerdagi hamma narsa faqat egalik qilingan biznes ostida yetib boradi.** `GET /business/:businessId/branches` biznes egaligini tekshiradi (begona → **403**), global ro'yxat yoki filtr yo'q. Bular o'zgarmaydi.
 
-- Filiallarga **faqat** `GET /business/:businessId/branches` orqali kirish mumkin, va u avval biznes egaligini tekshiradi — ya'ni admin (yoki boshqa egaga tegishli biznes) uchun **403**.
-- **Global / barcha filiallar ro'yxati yo'q.** Bir nechta biznesning filiallarini birga ko'rish imkoni yo'q.
-- **Filtr yo'q:** viloyat/tuman, savdo markazi, `isActive`, geo bbox/radius bo'yicha qidiruv — hech biri mavjud emas (ro'yxat oddiy massiv).
+**Admin uchun cross-business filial qatlami — ✅ built** ([`ADMIN-API.md`](./ADMIN-API.md)):
+- `GET /v1/admin/branches` — **barcha biznes bo'ylab** filiallar, filtr: `q, businessId, ownerId, regionId, districtId, tradeCenterId, isActive, hasDelivery`, **geo** (bbox yoki radius, PostGIS `ST_DWithin`) + paginatsiya (Faza 1);
+- `GET /v1/admin/branches/:id` — istalgan filial, owner-bypass (Faza 1);
+- `PUT /v1/admin/branches/:id` — admin tahrir (full replace + location/trade-center gate'lar) (Faza 3).
 
-**Kerak (do'kon-boshqaruv paneli uchun):** backend **cross-business** filial ro'yxatini ochishi kerak — masalan `GET /v1/admin/branches` (filtr: `q, businessId, ownerId, regionId, districtId, tradeCenterId, isActive, geo bbox/radius`; paginatsiya) va `GET /v1/admin/branches/:id` (owner-bypass). To'liq ish ro'yxati: [`BACKEND-TASKS.md`](./BACKEND-TASKS.md) → Faza 1 (Do'konlar/filiallar) va Faza 3 (`PUT /v1/admin/branches/:id`).
+To'liq reja: [`BACKEND-TASKS.md`](./BACKEND-TASKS.md).

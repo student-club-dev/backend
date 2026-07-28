@@ -330,15 +330,11 @@ Owner analitikasi. **Response — `ListingStatsDto`:**
 
 ## 6. Admin panel eslatmasi
 
-**Bu modul to'liq 🔓 owner-scoped — listings-oversight panel uchun mavjud endpointlar YETARLI EMAS:**
+**Mobil tomon hamon 🔓 owner-scoped:** `GET /business/:businessId/listings` bitta biznesga bog'langan va owner-gated, birovning e'loni/stats → **403**. Bular o'zgarmaydi.
 
-- **Cross-business ro'yxat yo'q.** Yagona list — `GET /business/:businessId/listings` — bitta biznesga bog'langan va owner-gated. "Barcha e'lonlar" (hamma biznes bo'ylab) ro'yxatini olishning **imkoni yo'q**.
-- **Birovning e'lonini olishning yo'li yo'q.** `GET /:id/stats` va barcha amallar ownership tekshiruvidan o'tadi → birovning e'loni **403**. Alohida e'lonni id bo'yicha o'qish (`GET /listings/:id`) **umuman yo'q** — faqat write/action endpointlari bor.
-- **Moderatsiya yo'q.** Hech bir approve/reject endpoint mavjud emas; `REJECTED` va (amalda) `PENDING_REVIEW` hech qachon o'rnatilmaydi. Submit moderatsiyani chetlab o'tib to'g'ridan jonli qiladi.
-- **Stats owner-only** — moderator boshqa biznes e'loni statistikasini ko'ra olmaydi.
+**Admin uchun cross-business listings qatlami — ✅ built** ([`ADMIN-API.md`](./ADMIN-API.md)):
+- `GET /v1/admin/listings` — **hamma biznes bo'ylab** ro'yxat, filtr: `status[]` (jumladan `DRAFT`/`PENDING`/`REJECTED`), `businessId`, `ownerId`, `categoryKey`, `type`, `groupKey`, `regionId`, `districtId`, narx (`priceMin/Max` + `priceBasis`), chegirma, `listingKind`, `redemptionMethod`, sana; paginatsiya (Faza 1);
+- `GET /v1/admin/listings/:id` — **har status**, owner-bypass; `GET /v1/admin/listings/:id/stats` ham owner-bypass (Faza 1);
+- `PUT /v1/admin/listings/:id` — admin tahrir (finalPrice qayta hisob + catalog/attribute/discount validatsiya) (Faza 3).
 
-**Panel uchun backend ochishi kerak** (batafsil: [`BACKEND-TASKS.md`](./BACKEND-TASKS.md) Faza 1 + 2):
-- `GET /v1/admin/listings` — **cross-business** ro'yxat, filtr: `status[]` (jumladan `DRAFT`/`PENDING_REVIEW`/`REJECTED`), `businessId`, `ownerId`, `categoryKey`, `type`, `regionId`, narx, chegirma, sana; paginatsiya.
-- `GET /v1/admin/listings/:id` (har status, owner-bypass), `GET /:id/stats` (owner-bypass).
-- **Moderatsiya:** `POST /v1/admin/listings/:id/approve` · `/reject(reason)` (`rejectionReason`ni to'ldiradi), force `/pause` · `/activate` · `/archive`.
-- **MVP xatti-harakati o'zgarishi:** submit `DRAFT → PENDING_REVIEW`ga o'tsin (hozir to'g'ridan `ACTIVE`), shunda moderatsiya navbati mazmunli bo'ladi.
+**🔴 hali yo'q (kutilmoqda):** moderatsiya oqimi — approve/reject endpointlari, `REJECTED`/`PENDING_REVIEW`ni o'rnatish, submit `DRAFT → PENDING_REVIEW`ga o'tishi. Hozir submit moderatsiyani chetlab to'g'ridan jonli qiladi. To'liq reja: [`BACKEND-TASKS.md`](./BACKEND-TASKS.md).

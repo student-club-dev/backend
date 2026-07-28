@@ -233,6 +233,7 @@ Guard: `JwtAuthGuard`.
 | `ACCOUNT_EXISTS` | 409 | register — email yoki telefon allaqachon band |
 | `INVALID_CREDENTIALS` | 401 | login/reset — account yo'q · OAuth-only (parolsiz) · parol xato (anti-enumeration, bitta kod). `password/set` — `currentPassword` yo'q/xato |
 | `INVALID_OAUTH_TOKEN` | 401 | OAuth — ID token tekshiruvi muvaffaqiyatsiz |
+| `ACCOUNT_BANNED` | 403 | login / refresh / oauth — hisob **BANNED yoki DELETED** holatida (admin bloklagan). `message`: `Hisobingiz bloklangan` |
 | `INVALID_REFRESH_TOKEN` | 401 | refresh — token noma'lum/muddati o'tgan/bekor qilingan |
 | `SESSION_NOT_FOUND` | 404 | `DELETE /sessions/:id` — sessiya chaqiruvchiniki emas/yo'q |
 | `OTP_EXPIRED` | 410 | verify/reset — kod eskirgan yoki umuman so'ralmagan |
@@ -247,11 +248,14 @@ Guard: `JwtAuthGuard`.
 
 > **Anti-enumeration eslatmasi:** `login`, `password/forgot` va `password/reset` account bor-yo'qligini oshkor qilmaslik uchun ataylab bir xil natija beradi (login → doim `INVALID_CREDENTIALS`; forgot → doim muvaffaqiyat).
 
+> **Ban gate eslatmasi:** admin bloklagan hisob (status **BANNED** yoki **DELETED**) `login`, `refresh` **va** `oauth/*` ning uchalasida ham rad etiladi → **403 `ACCOUNT_BANNED`** (`message`: `Hisobingiz bloklangan`). Ban qo'yilganda mavjud sessiyalar ham bekor qilinadi. Admin ban/unban → [`ADMIN-API.md`](./ADMIN-API.md) (Faza 3).
+
 ---
 
 ## 6. Admin panel eslatmasi
 
-- **Bu yerda admin login YO'Q.** Auth **account-turi bo'yicha** (student / business), va admin panel foydalanuvchisi uchun alohida hisob/rol tizimi mavjud emas. Hozir yagona "admin" mexanizmi — statik `X-Admin-Key` header (`AdminGuard`), faqat `admin/business-types`da, placeholder sifatida (→ [`00-overview.md`](./00-overview.md), [`05-catalog.md`](./05-catalog.md)). **Admin auth — alohida masala:** panel uchun to'liq admin login/rol tizimi backend'da qurilishi kerak (→ [`BACKEND-TASKS.md`](./BACKEND-TASKS.md)).
-- **Sessions endpointlari self-scoped:** `GET/DELETE /sessions*` faqat **chaqiruvchining o'z** sessiyalarini boshqaradi. Admin panel boshqa foydalanuvchi sessiyalarini ko'rish yoki majburiy chiqarish (force-logout) uchun — mavjud endpointlar **yetarli emas**; buni admin-scoped endpoint sifatida ochish kerak.
-- **Foydalanuvchilar ro'yxati yo'q:** bu modulda "barcha studentlar/biznes egalari" ro'yxati yoki `GET /users/:id` yo'q — faqat login/register/session self-service. Foydalanuvchilarni admin sifatida boshqarish uchun yangi list/detail endpointlari kerak.
+- **Admin login endi bor.** ✅ built — admin panel o'z **alohida** auth'iga ega: `POST /v1/admin/auth/login` (env-based creds, argon2) → JWT; `GET /admin/auth/me`, `POST /admin/auth/logout`. Rollar `ADMIN`/`MODERATOR`, guard `AdminJwtGuard`. Bu yerdagi student/business auth'dan **butunlay ajralgan** — qarang [`ADMIN-API.md`](./ADMIN-API.md) (Faza 0). Eski placeholder `X-Admin-Key` (`AdminGuard`) **o'chirildi**.
+- **Ban gate:** admin BANNED/DELETED qilgan hisob login/refresh/oauth qila olmaydi → **403 `ACCOUNT_BANNED`** (yuqoridagi "Ban gate eslatmasi").
+- **Sessions endpointlari self-scoped:** `GET/DELETE /sessions*` faqat **chaqiruvchining o'z** sessiyalarini boshqaradi. Admin panel boshqa foydalanuvchi sessiyalarini **ko'rish** yoki majburiy chiqarish (force-logout) uchun alohida endpoint hali **yo'q** (kutilmoqda) — biroq ban qo'yilganda o'sha hisobning sessiyalari avtomatik bekor qilinadi.
+- **Foydalanuvchilar ro'yxati/boshqaruvi endi bor.** ✅ built — admin uchun student/biznes-egasi list + detail + create + edit + ban/unban `/v1/admin/*` da: [`ADMIN-API.md`](./ADMIN-API.md) (Faza 1 read, Faza 3 write/ban). Tafsilotlar [`02-profile.md`](./02-profile.md) "Admin panel eslatmasi"da.
 - **OTP dev rejimi:** non-production'da kod qat'iy (`OTP_DEV_CODE` yoki `111111`) — test/demo uchun; prod'da random. Buni admin panel demo muhitida hisobga oling.
