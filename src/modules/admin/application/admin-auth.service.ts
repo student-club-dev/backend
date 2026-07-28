@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { verify } from '@node-rs/argon2';
@@ -24,6 +24,8 @@ interface AdminCredential {
  */
 @Injectable()
 export class AdminAuthService {
+  private readonly logger = new Logger(AdminAuthService.name);
+
   constructor(
     private readonly jwt: JwtService,
     private readonly config: ConfigService<Env, true>,
@@ -36,12 +38,28 @@ export class AdminAuthService {
     if (credential === null) {
       throw this.invalidCredentials();
     }
-    const passwordMatches = await verify(credential.passwordHash, password);
-    if (!passwordMatches) {
+    if (!(await this.verifyPassword(credential, password))) {
       throw this.invalidCredentials();
     }
     const accessToken = await this.signAccessToken(email, credential.role);
     return { accessToken };
+  }
+
+  /**
+   * argon2-verifies the password. A MALFORMED hash — a plaintext password stored in `*_PASSWORD_HASH`,
+   * or an argon2 hash whose `$` were mangled by docker-compose `${}` interpolation — makes argon2
+   * throw. We must NOT return 500 on a config mistake: log it for the operator and fail the login (401).
+   */
+  private async verifyPassword(credential: AdminCredential, password: string): Promise<boolean> {
+    try {
+      return await verify(credential.passwordHash, password);
+    } catch {
+      this.logger.error(
+        `argon2 verify threw for admin role ${credential.role} — its *_PASSWORD_HASH is not a valid ` +
+          `argon2 hash (a plaintext password, or "$" mangled by docker-compose? escape as $$ or use env_file).`,
+      );
+      return false;
+    }
   }
 
   /** The authenticated admin's own identity (`GET /admin/auth/me`). */

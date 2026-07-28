@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { verify } from '@node-rs/argon2';
@@ -81,6 +82,20 @@ describe('AdminAuthService', () => {
         status: 401,
       });
       expect(jwt.signAsync).not.toHaveBeenCalled();
+    });
+
+    it('malformed hash (argon2 throws) → 401, NOT 500, logged, no token signed', async () => {
+      const { service, jwt } = makeService();
+      verifyMock.mockRejectedValue(new Error('invalid argon2 hash'));
+      const errorLog = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+
+      await expect(service.login('admin@elon.uz', 'password123')).rejects.toMatchObject({
+        code: ERROR_CODE.ADMIN_INVALID_CREDENTIALS,
+        status: 401,
+      });
+      expect(jwt.signAsync).not.toHaveBeenCalled();
+      expect(errorLog).toHaveBeenCalled();
+      errorLog.mockRestore();
     });
 
     it('unknown email → 401 ADMIN_INVALID_CREDENTIALS, argon2 never called (no enumeration)', async () => {
