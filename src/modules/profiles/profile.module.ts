@@ -25,5 +25,6 @@ import { ProfileController } from './presentation/profile.controller';
     { provide: STUDENT_PROFILE_REPOSITORY, useClass: StudentProfilePrismaRepository },
     { provide: BUSINESS_PROFILE_REPOSITORY, useClass: BusinessOwnerProfilePrismaRepository },
   ],
+  exports: [ProfileService],
 })
 export class ProfileModule {}

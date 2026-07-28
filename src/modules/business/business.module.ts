@@ -29,6 +29,6 @@ import { BusinessAccountGuard } from './presentation/guards/business-account.gua
     { provide: BUSINESS_OWNER_REPOSITORY, useClass: BusinessOwnerPrismaRepository },
     { provide: BUSINESS_READ, useClass: BusinessReadPrismaRepository },
   ],
-  exports: [BUSINESS_READ],
+  exports: [BUSINESS_READ, BusinessService],
 })
 export class BusinessModule {}

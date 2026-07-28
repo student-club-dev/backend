@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Put, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { ERROR_CODE } from '../../../common/errors/error-code';
 import {
@@ -7,6 +7,8 @@ import {
   ApiUnauthorizedEnvelope,
   ApiValidationEnvelope,
 } from '../../../common/swagger/api-envelope.decorator';
+import { BranchRequestDto } from '../../branches/presentation/dto/branch-request.dto';
+import { AdminBranchesWriteService } from '../application/admin-branches-write.service';
 import { AdminBranchesService } from '../application/admin-branches.service';
 import { AdminBranchListQueryDto } from './dto/admin-branch-list-query.dto';
 import { AdminBranchDto, AdminBranchPageDto } from './dto/admin-branch.dto';
@@ -23,7 +25,10 @@ import { AdminJwtGuard } from './guards/admin-jwt.guard';
 @UseGuards(AdminJwtGuard)
 @Controller('admin/branches')
 export class AdminBranchesController {
-  constructor(private readonly adminBranchesService: AdminBranchesService) {}
+  constructor(
+    private readonly adminBranchesService: AdminBranchesService,
+    private readonly adminBranchesWriteService: AdminBranchesWriteService,
+  ) {}
 
   @Get()
   @ApiOperation({
@@ -49,6 +54,22 @@ export class AdminBranchesController {
   @ApiNotFoundEnvelope(ERROR_CODE.BRANCH_NOT_FOUND, 'No branch with this id.', 'Filial topilmadi')
   async getById(@Param('id') id: string): Promise<AdminBranchDto> {
     const branch = await this.adminBranchesService.getById(id);
+    return AdminBranchDto.fromDomain(branch);
+  }
+
+  @Put(':id')
+  @ApiOperation({
+    summary: 'Edit any branch (ADMIN or MODERATOR)',
+    description:
+      'Owner-scoping bypassed; full-replace with the same validation gates as the owner update ' +
+      '(location bounds, region/district match, trade-center fields, duplicate-location).',
+  })
+  @ApiParam({ name: 'id', description: 'Branch id' })
+  @ApiOkEnvelope(AdminBranchDto)
+  @ApiValidationEnvelope()
+  @ApiNotFoundEnvelope(ERROR_CODE.BRANCH_NOT_FOUND, 'No branch with this id.', 'Filial topilmadi')
+  async update(@Param('id') id: string, @Body() body: BranchRequestDto): Promise<AdminBranchDto> {
+    const branch = await this.adminBranchesWriteService.update(id, body.toInput());
     return AdminBranchDto.fromDomain(branch);
   }
 }

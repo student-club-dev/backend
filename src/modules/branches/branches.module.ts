@@ -24,6 +24,6 @@ import { BranchesController } from './presentation/branches.controller';
     BusinessAccountGuard,
     { provide: BRANCH_REPOSITORY, useClass: BranchPrismaRepository },
   ],
-  exports: [BRANCH_REPOSITORY],
+  exports: [BRANCH_REPOSITORY, BranchesService],
 })
 export class BranchesModule {}

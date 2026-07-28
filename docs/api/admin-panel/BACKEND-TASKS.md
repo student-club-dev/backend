@@ -58,8 +58,8 @@ Bu ro'yxat — admin panel **to'liq** ishlashi uchun backend qurishi kerak bo'lg
 
 > Migratsiyalar (ban maydonlari) shart.
 
-- [ ] **Yaratish (admin):** `POST /v1/admin/students`, `POST /v1/admin/business-owners` — admin yangi student/biznes-owner akkaunt yaratadi (parol beriladi yoki invite/OTP). Owner/student o'zi ham register qiladi; bu — admin paneldan qo'lda qo'shish uchun.
-- [ ] **Tahrirlash (admin override):** `PUT /v1/admin/students/:id`, `PUT /v1/admin/business-owners/:id`, `PUT /v1/admin/businesses/:id`, `PUT /v1/admin/branches/:id`, `PUT /v1/admin/listings/:id`.
+- [x] **Yaratish (ADMIN only):** `POST /v1/admin/students`, `POST /v1/admin/business-owners` — argon2 parol bilan yangi akkaunt. ✅
+- [x] **Tahrirlash (admin override):** `PUT /v1/admin/students/:id`, `/business-owners/:id`, `/businesses/:id`, `/branches/:id`, `/listings/:id` — mavjud validatsiyani qayta ishlatib, ownership bypass. ✅
 - [ ] **Ban/suspend:** `POST /v1/admin/students/:id/ban(reason) · /unban`, xuddi shu owners uchun. Ban → sessiyalarni bekor qilish; owner ban → bizneslar ko'rinishini yashirish.
 - [ ] **Delete (`ADMIN`):** foydalanuvchi → soft/anonymize; biznes → archive.
 - [ ] **Sessiyalar:** `GET /v1/admin/students/:id/sessions`, `DELETE /.../sessions` (force logout); owners uchun ham. `GET /:id/devices` (student). (Havola `02-profile`, `14-devices`, `01-auth`)

@@ -75,10 +75,29 @@ export class BranchesService {
     branchId: string,
     input: BranchInput,
   ): Promise<Branch> {
-    await this.loadOwnedBranch(user, businessId, branchId);
-    const location = await this.validateLocation(businessId, input.location, branchId);
+    const branch = await this.loadOwnedBranch(user, businessId, branchId);
+    return this.applyBranchUpdate(branch, input);
+  }
+
+  /**
+   * Admin edit of ANY branch (Faza 3): the exact same location + trade-center validation as
+   * {@link update} but the owning-business ownership check is skipped. The branch must exist (404
+   * BRANCH_NOT_FOUND).
+   */
+  async adminUpdate(branchId: string, input: BranchInput): Promise<Branch> {
+    const branch = await this.loadBranchById(branchId);
+    return this.applyBranchUpdate(branch, input);
+  }
+
+  /**
+   * Shared full-replace core for the owner ({@link update}) and admin ({@link adminUpdate}) paths:
+   * runs the location + trade-center validation gates against the branch's own business, then
+   * persists.
+   */
+  private async applyBranchUpdate(branch: Branch, input: BranchInput): Promise<Branch> {
+    const location = await this.validateLocation(branch.businessId, input.location, branch.id);
     const tradeCenter = await this.validateTradeCenter(input);
-    return this.branches.update(branchId, {
+    return this.branches.update(branch.id, {
       name: input.name,
       phone: input.phone,
       location,
@@ -266,6 +285,15 @@ export class BranchesService {
     await this.assertBusinessOwned(user, businessId);
     const branch = await this.branches.findById(branchId);
     if (branch === null || branch.businessId !== businessId) {
+      throw AppException.notFound(ERROR_CODE.BRANCH_NOT_FOUND, 'Filial topilmadi');
+    }
+    return branch;
+  }
+
+  /** Loads a branch by id, enforcing existence (404). No ownership check (admin path). */
+  private async loadBranchById(branchId: string): Promise<Branch> {
+    const branch = await this.branches.findById(branchId);
+    if (branch === null) {
       throw AppException.notFound(ERROR_CODE.BRANCH_NOT_FOUND, 'Filial topilmadi');
     }
     return branch;

@@ -38,12 +38,22 @@ export class ProfileService {
    * rejected with 409 when the new number already belongs to another account in the same table.
    */
   async updateMyProfile(user: AuthenticatedUser, input: UpdateProfileInput): Promise<Profile> {
-    const repository = this.repositoryFor(user.type);
-    const current = await repository.findById(user.id);
+    return this.updateById(user.type, user.id, input);
+  }
+
+  /**
+   * Applies the same partial update as {@link updateMyProfile} but targets an account by id and
+   * type rather than the caller (used by the admin panel). Same rules: student-only fields are
+   * ignored for a business owner, a phone-number change resets `phoneVerified`, and a phone or
+   * username already taken by another account in the same table is rejected with 409.
+   */
+  async updateById(type: AccountType, id: string, input: UpdateProfileInput): Promise<Profile> {
+    const repository = this.repositoryFor(type);
+    const current = await repository.findById(id);
     if (current === null) {
       throw this.profileNotFound();
     }
-    const patch = this.buildPatch(user.type, current, input);
+    const patch = this.buildPatch(type, current, input);
     if (patch.phoneNumber !== undefined) {
       await this.ensurePhoneAvailable(repository, patch.phoneNumber, current.id);
     }

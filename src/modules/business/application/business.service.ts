@@ -73,6 +73,24 @@ export class BusinessService {
    */
   async update(user: AuthenticatedUser, id: string, input: UpdateBusinessInput): Promise<Business> {
     const current = await this.loadOwned(user, id);
+    return this.applyUpdate(current, input);
+  }
+
+  /**
+   * Admin edit of ANY business (Faza 3): the exact same validation + mutation as {@link update} but
+   * the ownership check is skipped. Existence and soft-delete rules still apply (404
+   * BUSINESS_NOT_FOUND); `type` stays immutable (422 BUSINESS_TYPE_IMMUTABLE).
+   */
+  async adminUpdate(id: string, input: UpdateBusinessInput): Promise<Business> {
+    const current = await this.loadById(id);
+    return this.applyUpdate(current, input);
+  }
+
+  /**
+   * Shared update core for the owner ({@link update}) and admin ({@link adminUpdate}) paths: rejects
+   * an attempt to change the immutable `type` (422 BUSINESS_TYPE_IMMUTABLE), then persists the patch.
+   */
+  private applyUpdate(current: Business, input: UpdateBusinessInput): Promise<Business> {
     if (input.type !== undefined && input.type !== current.type) {
       throw new AppException(
         ERROR_CODE.BUSINESS_TYPE_IMMUTABLE,
@@ -102,12 +120,18 @@ export class BusinessService {
 
   /** Loads a business, enforcing existence (404), soft-delete (404) and ownership (403). */
   private async loadOwned(user: AuthenticatedUser, id: string): Promise<Business> {
+    const business = await this.loadById(id);
+    if (business.ownerId !== user.id) {
+      throw AppException.forbidden();
+    }
+    return business;
+  }
+
+  /** Loads a business enforcing existence + soft-delete (404). No ownership check (admin path). */
+  private async loadById(id: string): Promise<Business> {
     const business = await this.businesses.findById(id);
     if (business === null || business.status === BusinessStatus.ARCHIVED) {
       throw AppException.notFound(ERROR_CODE.BUSINESS_NOT_FOUND, 'Biznes topilmadi');
-    }
-    if (business.ownerId !== user.id) {
-      throw AppException.forbidden();
     }
     return business;
   }

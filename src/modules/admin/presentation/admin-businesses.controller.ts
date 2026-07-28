@@ -1,12 +1,15 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Put, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { ERROR_CODE } from '../../../common/errors/error-code';
 import {
+  ApiErrorEnvelope,
   ApiNotFoundEnvelope,
   ApiOkEnvelope,
   ApiUnauthorizedEnvelope,
   ApiValidationEnvelope,
 } from '../../../common/swagger/api-envelope.decorator';
+import { UpdateBusinessDto } from '../../business/presentation/dto/update-business.dto';
+import { AdminBusinessesWriteService } from '../application/admin-businesses-write.service';
 import { AdminBusinessesService } from '../application/admin-businesses.service';
 import { AdminBusinessListQueryDto } from './dto/admin-business-list-query.dto';
 import { AdminBusinessDto, AdminBusinessPageDto } from './dto/admin-business.dto';
@@ -23,7 +26,10 @@ import { AdminJwtGuard } from './guards/admin-jwt.guard';
 @UseGuards(AdminJwtGuard)
 @Controller('admin/businesses')
 export class AdminBusinessesController {
-  constructor(private readonly adminBusinessesService: AdminBusinessesService) {}
+  constructor(
+    private readonly adminBusinessesService: AdminBusinessesService,
+    private readonly adminBusinessesWriteService: AdminBusinessesWriteService,
+  ) {}
 
   @Get()
   @ApiOperation({
@@ -51,6 +57,35 @@ export class AdminBusinessesController {
   )
   async getById(@Param('id') id: string): Promise<AdminBusinessDto> {
     const business = await this.adminBusinessesService.getById(id);
+    return AdminBusinessDto.fromDomain(business);
+  }
+
+  @Put(':id')
+  @ApiOperation({
+    summary: 'Edit any business (ADMIN or MODERATOR)',
+    description:
+      'Owner-scoping bypassed; the same validation as the owner update is applied. `type` is ' +
+      'immutable — a differing value returns BUSINESS_TYPE_IMMUTABLE.',
+  })
+  @ApiParam({ name: 'id', description: 'Business id' })
+  @ApiOkEnvelope(AdminBusinessDto)
+  @ApiValidationEnvelope()
+  @ApiNotFoundEnvelope(
+    ERROR_CODE.BUSINESS_NOT_FOUND,
+    'No business with this id.',
+    'Biznes topilmadi',
+  )
+  @ApiErrorEnvelope(
+    422,
+    ERROR_CODE.BUSINESS_TYPE_IMMUTABLE,
+    'Attempt to change the immutable business `type`.',
+    "Biznes turini o'zgartirib bo'lmaydi",
+  )
+  async update(
+    @Param('id') id: string,
+    @Body() body: UpdateBusinessDto,
+  ): Promise<AdminBusinessDto> {
+    const business = await this.adminBusinessesWriteService.update(id, body.toInput());
     return AdminBusinessDto.fromDomain(business);
   }
 }

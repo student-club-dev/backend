@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Put, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { ERROR_CODE } from '../../../common/errors/error-code';
 import {
@@ -8,6 +8,8 @@ import {
   ApiValidationEnvelope,
 } from '../../../common/swagger/api-envelope.decorator';
 import { ListingStatsDto } from '../../listings/presentation/dto/listing-stats.dto';
+import { UpdateListingRequestDto } from '../../listings/presentation/dto/update-listing-request.dto';
+import { AdminListingsWriteService } from '../application/admin-listings-write.service';
 import { AdminListingsService } from '../application/admin-listings.service';
 import { AdminListingListQueryDto } from './dto/admin-listing-list-query.dto';
 import { AdminListingDto, AdminListingPageDto } from './dto/admin-listing.dto';
@@ -24,7 +26,10 @@ import { AdminJwtGuard } from './guards/admin-jwt.guard';
 @UseGuards(AdminJwtGuard)
 @Controller('admin/listings')
 export class AdminListingsController {
-  constructor(private readonly adminListingsService: AdminListingsService) {}
+  constructor(
+    private readonly adminListingsService: AdminListingsService,
+    private readonly adminListingsWriteService: AdminListingsWriteService,
+  ) {}
 
   @Get()
   @ApiOperation({
@@ -59,5 +64,24 @@ export class AdminListingsController {
   async stats(@Param('id') id: string): Promise<ListingStatsDto> {
     const result = await this.adminListingsService.stats(id);
     return ListingStatsDto.fromResult(result);
+  }
+
+  @Put(':id')
+  @ApiOperation({
+    summary: 'Edit any listing (ADMIN or MODERATOR)',
+    description:
+      'Owner-scoping bypassed; full-replace with the same validation as the owner update — ' +
+      '`finalPrice` is recomputed and the catalog / attribute / discount rules are re-checked.',
+  })
+  @ApiParam({ name: 'id', description: 'Listing id' })
+  @ApiOkEnvelope(AdminListingDto)
+  @ApiValidationEnvelope()
+  @ApiNotFoundEnvelope(ERROR_CODE.LISTING_NOT_FOUND, 'No listing with this id.', 'E’lon topilmadi')
+  async update(
+    @Param('id') id: string,
+    @Body() body: UpdateListingRequestDto,
+  ): Promise<AdminListingDto> {
+    const listing = await this.adminListingsWriteService.update(id, body.toInput());
+    return AdminListingDto.fromDomain(listing);
   }
 }

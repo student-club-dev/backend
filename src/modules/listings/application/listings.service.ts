@@ -139,6 +139,29 @@ export class ListingsService {
     input: UpdateListingInput,
   ): Promise<Listing> {
     const { summary } = await this.loadOwnedListing(user, listingId);
+    return this.applyUpdate(listingId, summary, input);
+  }
+
+  /**
+   * Admin edit of ANY listing (Faza 3): the same re-validation + finalPrice recompute as
+   * {@link update} but the ownership check is skipped. The listing must exist and not be ARCHIVED
+   * (404 LISTING_NOT_FOUND) and its business must exist (404 BUSINESS_NOT_FOUND).
+   */
+  async adminUpdate(listingId: string, input: UpdateListingInput): Promise<Listing> {
+    const { summary } = await this.loadListingWithBusiness(listingId);
+    return this.applyUpdate(listingId, summary, input);
+  }
+
+  /**
+   * Shared full-replace core for the owner ({@link update}) and admin ({@link adminUpdate}) paths:
+   * re-validates the payload exactly like create (recomputing `finalPrice`) and persists; `status`,
+   * `currency` and the counters are preserved.
+   */
+  private async applyUpdate(
+    listingId: string,
+    summary: BusinessSummary,
+    input: UpdateListingInput,
+  ): Promise<Listing> {
     const { discount, optionGroups, searchText } = await this.validateAndResolve(summary, input);
     return this.listings.update(listingId, {
       branchIds: input.branchIds,
@@ -257,6 +280,21 @@ export class ListingsService {
     user: AuthenticatedUser,
     listingId: string,
   ): Promise<{ listing: Listing; summary: BusinessSummary }> {
+    const { listing, summary } = await this.loadListingWithBusiness(listingId);
+    if (summary.ownerId !== user.id) {
+      throw AppException.forbidden();
+    }
+    return { listing, summary };
+  }
+
+  /**
+   * Loads a listing and its business for a write, enforcing the not-found rules only: the listing
+   * must exist and not be ARCHIVED (404 LISTING_NOT_FOUND) and its business must exist (404
+   * BUSINESS_NOT_FOUND). No ownership check — the owner path layers that on top (admin path skips it).
+   */
+  private async loadListingWithBusiness(
+    listingId: string,
+  ): Promise<{ listing: Listing; summary: BusinessSummary }> {
     const listing = await this.listings.findById(listingId);
     if (listing === null || listing.status === ListingStatus.ARCHIVED) {
       throw AppException.notFound(ERROR_CODE.LISTING_NOT_FOUND, 'E’lon topilmadi');
@@ -264,9 +302,6 @@ export class ListingsService {
     const summary = await this.businesses.findSummaryById(listing.businessId);
     if (summary === null) {
       throw AppException.notFound(ERROR_CODE.BUSINESS_NOT_FOUND, 'Biznes topilmadi');
-    }
-    if (summary.ownerId !== user.id) {
-      throw AppException.forbidden();
     }
     return { listing, summary };
   }

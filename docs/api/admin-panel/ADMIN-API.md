@@ -69,8 +69,37 @@ node -e "require('@node-rs/argon2').hash(process.argv[1]).then(h=>console.log(h)
 
 ---
 
-## Keyingi fazalar — 🔴 hali yo'q
-- **Faza 2 — Moderatsiya:** biznes/e'lon approve/reject/block, shikoyatlar navbati.
-- **Faza 3 — User boshqaruvi:** create/edit/ban/delete student & owner (+ ban migration).
-- **Faza 4–5:** reference CRUD, redemptions audit, audit log.
+## Faza 3 — Write: edit + create ✅ (ban/delete keyingi)
+
+Ruxsat: **PUT (edit) = ADMIN + MODERATOR**; **POST (create) = faqat ADMIN**.
+
+### Studentlar ✅
+| METHOD + path | Rol | Nima |
+|---|---|---|
+| `PUT /v1/admin/students/:id` | ADMIN+MOD | Tahrirlash (firstName, lastName, username, phoneNumber, gender, universityId, universityEmail, birthYear, courseYear, avatarUrl — optional). Phone o'zgarsa `phoneVerified=false`; username unique. 404 `STUDENT_NOT_FOUND`, 409 `ACCOUNT_EXISTS`/`USERNAME_TAKEN`. → `AdminStudentDto` |
+| `POST /v1/admin/students` | ADMIN | Yangi akkaunt: `email?`/`phoneNumber?` (≥1), `password` (min 8, argon2) + profil maydonlari. → `AdminStudentDto` (201) |
+
+### Biznes egalari ✅
+| METHOD + path | Rol | Nima |
+|---|---|---|
+| `PUT /v1/admin/business-owners/:id` | ADMIN+MOD | Tahrirlash (firstName, lastName, phoneNumber, gender, avatarUrl). Phone o'zgarsa `phoneVerified=false`. 404 `BUSINESS_OWNER_NOT_FOUND`. → `AdminBusinessOwnerDto` |
+| `POST /v1/admin/business-owners` | ADMIN | Yangi akkaunt (`email?`/`phoneNumber?` ≥1, `password` min 8 + maydonlar). → `AdminBusinessOwnerDto` (201) |
+
+### Bizneslar / Do'konlar / E'lonlar — tahrirlash ✅
+Ruxsat: ADMIN + MODERATOR. Ownership bypass, lekin **mavjud validatsiya to'liq qayta ishlatiladi**.
+| METHOD + path | Nima |
+|---|---|
+| `PUT /v1/admin/businesses/:id` | `UpdateBusinessDto` (type immutable → 422 `BUSINESS_TYPE_IMMUTABLE`). 404 `BUSINESS_NOT_FOUND`. → `AdminBusinessDto` |
+| `PUT /v1/admin/branches/:id` | `BranchRequestDto` (full replace + location/trade-center gate'lar). 404 `BRANCH_NOT_FOUND`. → `AdminBranchDto` |
+| `PUT /v1/admin/listings/:id` | `UpdateListingRequestDto` (finalPrice qayta hisob + catalog/attribute/discount validatsiya). 404 `LISTING_NOT_FOUND`. → `AdminListingDto` |
+
+### Qolgan (Faza 3) — 🔴 hali yo'q
+Ban/suspend + delete (student & owner) — `status`/`bannedAt` **migration** bilan.
+
+---
+
+## Boshqa keyingi fazalar — 🔴 hali yo'q
+- **Faza 4 — Reference CRUD:** catalog, geo, savdo markazlari.
+- **Faza 5:** redemptions audit, audit log.
+- *(Moderatsiya — Faza 2 — hozircha kerak emas.)*
 Reja: [`BACKEND-TASKS.md`](./BACKEND-TASKS.md).
