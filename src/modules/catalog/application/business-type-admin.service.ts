@@ -10,8 +10,8 @@ import { BusinessType } from '../domain/entities/business-type.entity';
 
 /**
  * Admin use-cases for the business-type catalog data (create / update / delete). Enforces the
- * key-uniqueness (409), existence (404) and reference (409) rules; the AdminGuard authorises the
- * caller. Depends on the catalog repository interface only.
+ * key-uniqueness (409), existence (404) and reference (409) rules; both AdminJwtGuard +
+ * AdminRoleGuard (ADMIN) authorise the caller. Depends on the catalog repository interface only.
  */
 @Injectable()
 export class BusinessTypeAdminService {

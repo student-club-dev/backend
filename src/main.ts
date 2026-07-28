@@ -144,7 +144,7 @@ async function bootstrap(): Promise<void> {
     .addTag('Redemptions', 'Cashier: verify/confirm a code; owner: redemption history')
     .addTag('Geo', 'Regions, districts and geocoding')
     .addTag('Media', 'Image upload')
-    .addTag('Admin — Business Types', 'Admin-only catalog maintenance (`X-Admin-Key`)')
+    .addTag('Admin — Business Types', 'Admin-only catalog maintenance (ADMIN JWT)')
     .addTag('Health', 'Liveness probe')
     .build();
 

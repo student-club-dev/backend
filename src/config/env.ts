@@ -72,14 +72,10 @@ export const envSchema = z
     // a placeholder such as `https://<sening-domening>/uploads`; the prod localhost guard is below.
     PUBLIC_MEDIA_BASE_URL: z.string().url().default('http://localhost:3000/uploads'),
 
-    // Placeholder admin credential for the admin-only endpoints (business-type CRUD). Compared
-    // against the `X-Admin-Key` header by AdminGuard. Unset → every admin request is rejected.
-    ADMIN_API_KEY: z.string().optional(),
-
     // Admin-panel auth (Faza 0) — env-based, NO DB table. Admin/moderator login lives here:
     // AdminAuthService resolves the role by email and verifies the password against the argon2
-    // hash. Passwords are argon2 hashes, never plaintext. Optional (mirrors ADMIN_API_KEY):
-    // unset → admin login always fails. Moderator creds are wholly optional (single-admin setups).
+    // hash. Passwords are argon2 hashes, never plaintext. Optional: unset → admin login always
+    // fails. Moderator creds are wholly optional (single-admin setups).
     ADMIN_EMAIL: z.string().optional(),
     ADMIN_PASSWORD_HASH: z.string().optional(),
     MODERATOR_EMAIL: z.string().optional(),

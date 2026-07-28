@@ -20,7 +20,7 @@ Bu ro'yxat — admin panel **to'liq** ishlashi uchun backend qurishi kerak bo'lg
 
 - [ ] **Biznes create** hozir avto `status: APPROVED` beradi (`business.service.ts`) → owner `submit` qilganda `DRAFT → PENDING_REVIEW` bo'lsin (moderatsiya uchun).
 - [ ] **E'lon submit** hozir to'g'ridan `ACTIVE`/`SCHEDULED`ga o'tadi (`listings.service.ts`) → `PENDING_REVIEW`ga o'tsin.
-- [ ] **`AdminGuard` (X-Admin-Key)** placeholder'ni env-based `AdminJwtGuard`ga almashtirish; `admin/business-types` yangisiga o'tsin.
+- [x] **`AdminGuard` (X-Admin-Key)** placeholder'ni env-based `AdminJwtGuard`ga almashtirish; `admin/business-types` yangisiga o'tdi. Eski guard + `ADMIN_API_KEY` **o'chirildi**. ✅
 
 ---
 
@@ -64,11 +64,11 @@ Bu ro'yxat — admin panel **to'liq** ishlashi uchun backend qurishi kerak bo'lg
 - [ ] **Delete (`ADMIN`):** foydalanuvchi → soft/anonymize; biznes → archive.
 - [ ] **Sessiyalar:** `GET /v1/admin/students/:id/sessions`, `DELETE /.../sessions` (force logout); owners uchun ham. `GET /:id/devices` (student). (Havola `02-profile`, `14-devices`, `01-auth`)
 
-## Faza 4 — Reference data admin CRUD 🔶
+## Faza 4 — Reference data admin CRUD — ✅ BAJARILDI
 
-> Hozir seed-managed / read-only.
+> Hammasi qurildi (ADMIN only). Qurilgan endpointlar: [`ADMIN-API.md`](./ADMIN-API.md).
 
-- [ ] **Katalog:** groups & categories & attribute specs uchun CRUD (business-**types** CRUD allaqachon bor). (Havola `05-catalog`)
+- [x] **Katalog:** groups & categories & attribute specs uchun CRUD + business-types (guard yangilandi). ✅
 - [x] **Geo:** regions & districts CRUD (nom, centerLat/Lng) + referential-integrity. ✅
 - [x] **Savdo markazlari:** trade centers + dinamik fields CRUD, INACTIVE'larni ko'rish + referential-integrity. ✅
 

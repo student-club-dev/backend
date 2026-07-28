@@ -98,7 +98,7 @@ Ban/suspend + delete (student & owner) — `status`/`bannedAt` **migration** bil
 
 ---
 
-## Faza 4 — Reference CRUD (ADMIN only) 🚧
+## Faza 4 — Reference CRUD (ADMIN only) ✅ BAJARILDI
 
 ### Geo — regions & districts ✅
 | METHOD + path | Nima |
@@ -115,8 +115,15 @@ Ban/suspend + delete (student & owner) — `status`/`bannedAt` **migration** bil
 
 Barcha delete'lar **referential-integrity** bilan (ishlatilayotgan bo'lsa 409).
 
-### Qolgan (Faza 4) — 🔴 hali yo'q
-**Catalog CRUD** (groups / categories / attribute specs) — `admin/business-types` allaqachon bor (guard `X-Admin-Key` → `AdminJwtGuard`ga o'tkaziladi).
+### Katalog — groups / categories / attribute specs / business-types ✅
+| METHOD + path | Nima |
+|---|---|
+| `POST · PUT · DELETE /v1/admin/catalog/groups` (`/:key`) | Guruh CRUD. 409 `CATALOG_GROUP_EXISTS`/`CATALOG_GROUP_IN_USE`, 404 `CATALOG_GROUP_NOT_FOUND` |
+| `POST · PUT · DELETE /v1/admin/categories` (`/:id`) | Kategoriya CRUD (`businessType` mavjud). 409 `CATEGORY_EXISTS`/`CATEGORY_IN_USE`, 404 `CATEGORY_NOT_FOUND`/`BUSINESS_TYPE_NOT_FOUND` |
+| `POST · PUT · DELETE /v1/admin/attribute-specs` (`/:id`) | Atribut sxemasi CRUD. 409 `ATTRIBUTE_SPEC_EXISTS`, 404 `ATTRIBUTE_SPEC_NOT_FOUND` (in-use tekshiruvi yo'q — attributelar loose JSON) |
+| `POST · PUT · DELETE /v1/admin/business-types` (`/:type`) | Biznes turi CRUD (avvaldan bor; guard endi `AdminJwtGuard`) |
+
+> 🔑 **Placeholder tozalandi:** eski `X-Admin-Key` (`AdminGuard`) va `ADMIN_API_KEY` **o'chirildi** — barcha admin endpointlar endi yagona `AdminJwtGuard` ostida.
 
 ---
 

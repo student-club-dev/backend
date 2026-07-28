@@ -1,28 +1,35 @@
 import { Body, Controller, Delete, HttpCode, Param, Post, Put, UseGuards } from '@nestjs/common';
-import { ApiHeader, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { ERROR_CODE } from '../../../common/errors/error-code';
-import { AdminGuard } from '../../../common/guards/admin.guard';
 import {
   ApiCreatedEnvelope,
   ApiErrorEnvelope,
   ApiForbiddenEnvelope,
   ApiNotFoundEnvelope,
   ApiOkEnvelope,
+  ApiUnauthorizedEnvelope,
   ApiValidationEnvelope,
 } from '../../../common/swagger/api-envelope.decorator';
+import { AdminRole } from '../../admin/domain/enums/admin-role.enum';
+import { Roles } from '../../admin/presentation/decorators/roles.decorator';
+import { AdminJwtGuard } from '../../admin/presentation/guards/admin-jwt.guard';
+import { AdminRoleGuard } from '../../admin/presentation/guards/admin-role.guard';
 import { BusinessTypeAdminService } from '../application/business-type-admin.service';
 import { BusinessTypeInfoDto } from './dto/business-type-info.dto';
 import { CreateBusinessTypeDto } from './dto/create-business-type.dto';
 import { UpdateBusinessTypeDto } from './dto/update-business-type.dto';
 
 /**
- * Admin CRUD for the business-type catalog data. AdminGuard-protected (X-Admin-Key). The public
- * read (`GET /business/types`) is served by CatalogController and is unchanged.
+ * Admin CRUD for the business-type catalog data (Faza 4). Config endpoints — ADMIN only
+ * (AdminJwtGuard + AdminRoleGuard + `@Roles(AdminRole.ADMIN)` at controller level). The public read
+ * (`GET /business/types`) is served by CatalogController and is unchanged.
  */
 @ApiTags('Admin — Business Types')
-@ApiHeader({ name: 'X-Admin-Key', description: 'Admin API key', required: true })
-@ApiForbiddenEnvelope('Missing or invalid `X-Admin-Key` header.')
-@UseGuards(AdminGuard)
+@ApiBearerAuth()
+@ApiUnauthorizedEnvelope()
+@ApiForbiddenEnvelope('Only ADMIN may manage the catalog.')
+@UseGuards(AdminJwtGuard, AdminRoleGuard)
+@Roles(AdminRole.ADMIN)
 @Controller('admin/business-types')
 export class AdminBusinessTypeController {
   constructor(private readonly businessTypeAdminService: BusinessTypeAdminService) {}

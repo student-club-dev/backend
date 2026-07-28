@@ -1,18 +1,22 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { JwtService } from '@nestjs/jwt';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
 import { AppModule } from '../src/app.module';
+import { AccountType } from '../src/common/enums/account-type.enum';
 import { AllExceptionsFilter } from '../src/common/filters/all-exceptions.filter';
 import { ResponseInterceptor } from '../src/common/interceptors/response.interceptor';
 import type { Env } from '../src/config/env';
 import { RedisService } from '../src/infrastructure/cache/redis.service';
 import { PrismaService } from '../src/infrastructure/database/prisma.service';
+import { AdminRole } from '../src/modules/admin/domain/enums/admin-role.enum';
 
 /**
  * Business module (owner CRUD) + admin business-type CRUD — e2e. Runs against a real DB + Redis
- * with the Dev SMS provider (dev OTP 111111). Requires ADMIN_API_KEY to be set for the admin block.
- * Written to run manually — NOT part of the default suite.
+ * with the Dev SMS provider (dev OTP 111111). The admin block mints an ADMIN access token signed
+ * with JWT_ACCESS_SECRET (same mechanism as the admin panel). Written to run manually — NOT part of
+ * the default suite.
  */
 const DEV_CODE = '111111';
 
@@ -33,7 +37,7 @@ describe('Business (owner CRUD) + admin business types — e2e', () => {
   let app: INestApplication;
   let prisma: PrismaService;
   let redis: RedisService;
-  let adminKey: string | undefined;
+  let adminToken: string;
 
   const clearAll = async (): Promise<void> => {
     for (const key of otpKeys(OWNER_PHONE)) {
@@ -52,7 +56,10 @@ describe('Business (owner CRUD) + admin business types — e2e', () => {
 
     app = moduleRef.createNestApplication();
     const config = app.get<ConfigService<Env, true>>(ConfigService);
-    adminKey = config.get('ADMIN_API_KEY', { infer: true });
+    adminToken = await new JwtService().signAsync(
+      { sub: 'e2e-admin@example.com', type: AccountType.ADMIN, role: AdminRole.ADMIN },
+      { secret: config.get('JWT_ACCESS_SECRET', { infer: true }), expiresIn: '1h' },
+    );
     app.setGlobalPrefix(config.get('API_PREFIX', { infer: true }));
     app.useGlobalPipes(
       new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true, transform: true }),
@@ -183,18 +190,18 @@ describe('Business (owner CRUD) + admin business types — e2e', () => {
     });
   });
 
-  describe('admin business-type CRUD (X-Admin-Key)', () => {
-    it('rejects a request without a valid admin key (403)', async () => {
+  describe('admin business-type CRUD (ADMIN JWT)', () => {
+    it('rejects a request without an admin token (401)', async () => {
       await request(app.getHttpServer())
         .post('/v1/admin/business-types')
         .send({ type: ADMIN_TYPE, nameUz: 'Test', defaultPriceUnit: 'PER_ITEM' })
-        .expect(403);
+        .expect(401);
     });
 
     it('creates then deletes a business type', async () => {
       const created = await request(app.getHttpServer())
         .post('/v1/admin/business-types')
-        .set('X-Admin-Key', adminKey ?? '')
+        .set('Authorization', `Bearer ${adminToken}`)
         .send({
           type: ADMIN_TYPE,
           groupKey: 'SHOPPING',
@@ -207,7 +214,7 @@ describe('Business (owner CRUD) + admin business types — e2e', () => {
       // Duplicate key → 409.
       const dup = await request(app.getHttpServer())
         .post('/v1/admin/business-types')
-        .set('X-Admin-Key', adminKey ?? '')
+        .set('Authorization', `Bearer ${adminToken}`)
         .send({
           type: ADMIN_TYPE,
           groupKey: 'SHOPPING',
@@ -220,7 +227,7 @@ describe('Business (owner CRUD) + admin business types — e2e', () => {
       // Unreferenced → delete succeeds.
       const deleted = await request(app.getHttpServer())
         .delete(`/v1/admin/business-types/${ADMIN_TYPE}`)
-        .set('X-Admin-Key', adminKey ?? '')
+        .set('Authorization', `Bearer ${adminToken}`)
         .expect(200);
       expect(deleted.body.result).toBeNull();
     });
