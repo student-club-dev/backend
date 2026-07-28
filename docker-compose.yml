@@ -48,7 +48,11 @@ services:
         condition: service_healthy
 
     env_file:
-      - .env
+      # interpolate: false → env_file values are passed to the container LITERALLY, so secrets that
+      # contain `$` (e.g. an argon2 `ADMIN_PASSWORD_HASH`) are NOT mangled by Compose `$`-expansion.
+      # Requires Docker Compose ≥ v2.24. With this, `.env` uses a normal single-`$` hash (no `$$`).
+      - path: .env
+        interpolate: false
     # Overrides whatever .env says: inside the compose network the database is `db`,
     # never localhost. `environment` takes precedence over `env_file`.
     environment:
@@ -68,7 +72,11 @@ services:
         condition: service_completed_successfully
 
     env_file:
-      - .env
+      # interpolate: false → env_file values are passed to the container LITERALLY, so secrets that
+      # contain `$` (e.g. an argon2 `ADMIN_PASSWORD_HASH`) are NOT mangled by Compose `$`-expansion.
+      # Requires Docker Compose ≥ v2.24. With this, `.env` uses a normal single-`$` hash (no `$$`).
+      - path: .env
+        interpolate: false
     # Same reason as above — service names, not localhost.
     environment:
       DATABASE_URL: postgresql://elonuz:elonuz@db:5432/elonuz?schema=public
