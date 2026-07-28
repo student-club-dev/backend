@@ -141,6 +141,20 @@ enum AuthProvider {
   APPLE
 }
 
+// Account lifecycle for admin ban/suspend (Faza 3). DELETED is reserved for the account-delete run
+// (declared now so no re-migration later); it is NOT set by this run.
+enum StudentStatus {
+  ACTIVE
+  BANNED
+  DELETED
+}
+
+enum BusinessOwnerStatus {
+  ACTIVE
+  BANNED
+  DELETED
+}
+
 // Trade centers (savdo markazlari) — per-center dynamic location fields.
 enum TradeCenterStatus {
   ACTIVE
@@ -185,6 +199,11 @@ model Student {
   // Who may see `lastSeenAt`/`online` (C7 privacy). CONNECTIONS matches the pre-existing behaviour.
   lastSeenVisibility LastSeenVisibility @default(CONNECTIONS) @map("last_seen_visibility")
 
+  // Admin ban/suspend (Faza 3). A non-ACTIVE account cannot log in or refresh.
+  status    StudentStatus @default(ACTIVE)
+  bannedAt  DateTime?     @map("banned_at")
+  banReason String?       @map("ban_reason")
+
   oauthAccounts StudentOAuthAccount[]
   refreshTokens StudentRefreshToken[]
   redemptions   Redemption[]
@@ -210,6 +229,7 @@ model Student {
   @@index([gender])
   @@index([birthYear])
   @@index([createdAt])
+  @@index([status])
   @@map("students")
 }
 
@@ -227,6 +247,11 @@ model BusinessOwner {
   avatarUrl     String? @map("avatar_url")
   gender        Gender?
 
+  // Admin ban/suspend (Faza 3). A non-ACTIVE account cannot log in or refresh.
+  status    BusinessOwnerStatus @default(ACTIVE)
+  bannedAt  DateTime?           @map("banned_at")
+  banReason String?             @map("ban_reason")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -234,6 +259,7 @@ model BusinessOwner {
   refreshTokens BusinessOwnerRefreshToken[]
   businesses    Business[]
 
+  @@index([status])
   @@map("business_owners")
 }
 

@@ -2,6 +2,7 @@ import { CourseYear } from '../../profiles/domain/enums/course-year.enum';
 import { Gender } from '../../profiles/domain/enums/gender.enum';
 import { AdminStudent, AdminStudentSummary } from './entities/admin-student.entity';
 import { AdminUserSort } from './enums/admin-user-sort.enum';
+import { AdminUserStatus } from './enums/admin-user-status.enum';
 
 /** Injection token for the admin student read port (bound to the Prisma impl). */
 export const ADMIN_STUDENT_READ_REPOSITORY = Symbol('ADMIN_STUDENT_READ_REPOSITORY');
@@ -16,6 +17,7 @@ export interface AdminStudentListFilter {
   universityId: string | null;
   courseYear: CourseYear | null;
   gender: Gender | null;
+  status: AdminUserStatus | null;
   phoneVerified: boolean | null;
   createdFrom: Date | null;
   createdTo: Date | null;

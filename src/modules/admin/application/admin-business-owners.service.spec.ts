@@ -9,6 +9,7 @@ import {
   AdminOwnerBusinessSummary,
 } from '../domain/entities/admin-business-owner.entity';
 import { AdminUserSort } from '../domain/enums/admin-user-sort.enum';
+import { AdminUserStatus } from '../domain/enums/admin-user-status.enum';
 import { AdminBusinessOwnersService } from './admin-business-owners.service';
 
 function makeRepo(
@@ -26,6 +27,7 @@ function makeRepo(
 function makeFilter(overrides: Partial<AdminOwnerListFilter> = {}): AdminOwnerListFilter {
   return {
     q: null,
+    status: null,
     phoneVerified: null,
     createdFrom: null,
     createdTo: null,
@@ -47,6 +49,9 @@ const OWNER: AdminBusinessOwner = {
   avatarUrl: null,
   gender: null,
   businessesCount: 2,
+  status: AdminUserStatus.ACTIVE,
+  bannedAt: null,
+  banReason: null,
   createdAt: new Date('2026-01-01T00:00:00Z'),
   updatedAt: new Date('2026-01-02T00:00:00Z'),
 };

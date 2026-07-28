@@ -29,4 +29,13 @@ export interface AdminBusinessOwnerWriteRepository {
 
   /** Inserts the owner and returns its new id (the service re-fetches the full record). */
   create(data: AdminCreateOwnerData): Promise<string>;
+
+  /**
+   * Bans the owner: status=BANNED, bannedAt=now, banReason=reason, and revokes ALL of the owner's
+   * refresh tokens (force logout) — atomically. Re-banning updates the reason.
+   */
+  ban(id: string, reason: string): Promise<void>;
+
+  /** Un-bans the owner: status=ACTIVE, clears bannedAt/banReason. */
+  unban(id: string): Promise<void>;
 }

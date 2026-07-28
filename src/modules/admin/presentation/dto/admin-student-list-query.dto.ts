@@ -34,6 +34,7 @@ export class AdminStudentListQueryDto extends AdminUserListQueryDto {
       universityId: this.universityId ?? null,
       courseYear: this.courseYear ?? null,
       gender: this.gender ?? null,
+      status: this.status ?? null,
       phoneVerified: this.phoneVerified ?? null,
       createdFrom: this.createdFromDate(),
       createdTo: this.createdToDate(),

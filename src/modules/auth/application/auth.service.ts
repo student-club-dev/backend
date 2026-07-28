@@ -5,6 +5,7 @@ import { ERROR_CODE } from '../../../common/errors/error-code';
 import { AppException } from '../../../common/exceptions/app.exception';
 import { AuthProvider } from '../../../common/enums/auth-provider.enum';
 import { ACCOUNT_REPOSITORY, ACCOUNT_TYPE, AccountRepository } from '../domain/account.repository';
+import { AccountStatus } from '../domain/enums/account-status.enum';
 import { Account } from '../domain/entities/account.entity';
 import { RefreshTokenSession } from '../domain/entities/refresh-token.entity';
 import {
@@ -69,6 +70,9 @@ export class AuthService {
     if (!passwordMatches) {
       throw this.invalidCredentials();
     }
+    // Ban gate (Faza 3) — checked only after the credentials verify, so a banned account is never
+    // revealed to someone who does not already hold the correct password (no enumeration).
+    this.assertActive(account);
     return this.issueSession(account.id, input);
   }
 
@@ -89,6 +93,11 @@ export class AuthService {
       identity.providerAccountId,
     );
     if (linkedId !== null) {
+      // Ban gate (Faza 3): a banned account must not obtain a session via a linked OAuth identity.
+      const linked = await this.accounts.findById(linkedId);
+      if (linked !== null) {
+        this.assertActive(linked);
+      }
       return this.issueSession(linkedId, device);
     }
 
@@ -96,6 +105,8 @@ export class AuthService {
     if (identity.email !== null && identity.emailVerified) {
       const existing = await this.accounts.findByEmail(identity.email);
       if (existing !== null) {
+        // Ban gate (Faza 3): block a banned account before linking / issuing a session.
+        this.assertActive(existing);
         await this.oauthAccounts.link(existing.id, provider, identity.providerAccountId);
         return this.issueSession(existing.id, device);
       }
@@ -121,6 +132,12 @@ export class AuthService {
         'Sessiya yaroqsiz, qaytadan kiring',
         ERROR_CODE.INVALID_REFRESH_TOKEN,
       );
+    }
+    // Ban gate (Faza 3). A ban revokes the account's refresh tokens, so this is a second line of
+    // defence: even a still-active token cannot refresh once the account is no longer ACTIVE.
+    const account = await this.accounts.findById(session.accountId);
+    if (account !== null) {
+      this.assertActive(account);
     }
     const accessToken = await this.tokenService.signAccessToken(
       session.accountId,
@@ -276,6 +293,13 @@ export class AuthService {
       throw new AppException(ERROR_CODE.INTERNAL_ERROR, 500, 'OAuth provayder sozlanmagan');
     }
     return impl;
+  }
+
+  /** Rejects a non-ACTIVE (banned) account with 403 ACCOUNT_BANNED. No-op for ACTIVE accounts. */
+  private assertActive(account: Account): void {
+    if (account.status !== AccountStatus.ACTIVE) {
+      throw new AppException(ERROR_CODE.ACCOUNT_BANNED, 403, 'Hisobingiz bloklangan');
+    }
   }
 
   private invalidCredentials(): AppException {

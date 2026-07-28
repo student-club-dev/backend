@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { Prisma, StudentStatus } from '@prisma/client';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import {
   COURSE_YEAR_TO_PRISMA,
@@ -71,6 +71,10 @@ export class AdminStudentReadPrismaRepository implements AdminStudentReadReposit
     }
     if (filter.gender !== null) {
       where.gender = GENDER_TO_PRISMA[filter.gender];
+    }
+    if (filter.status !== null) {
+      // AdminUserStatus and Prisma StudentStatus share wire values — index the Prisma enum by ours.
+      where.status = StudentStatus[filter.status];
     }
     if (filter.phoneVerified !== null) {
       where.phoneVerified = filter.phoneVerified;

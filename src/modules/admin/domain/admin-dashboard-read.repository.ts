@@ -18,7 +18,9 @@ export interface StatusCount<S extends string> {
  */
 export interface AdminDashboardCounts {
   students: number;
+  studentsBanned: number;
   businessOwners: number;
+  businessOwnersBanned: number;
   businessesByStatus: StatusCount<BusinessStatus>[];
   listingsByStatus: StatusCount<ListingStatus>[];
   redemptionsByStatus: StatusCount<RedemptionStatus>[];

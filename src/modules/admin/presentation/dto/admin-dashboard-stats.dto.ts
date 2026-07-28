@@ -3,10 +3,13 @@ import { BusinessStatus } from '../../../business/domain/enums/business-status.e
 import { ListingStatus } from '../../../listings/domain/enums/listing-status.enum';
 import { AdminDashboardStats } from '../../domain/entities/admin-dashboard-stats.entity';
 
-/** A single `{ total }` count block (students, business owners). */
+/** A `{ total, banned }` count block (students, business owners). */
 export class AdminDashboardTotalDto {
   @ApiProperty({ format: 'int32', example: 42 })
   total!: number;
+
+  @ApiProperty({ format: 'int32', example: 3, description: 'Accounts with status=BANNED.' })
+  banned!: number;
 }
 
 /** Business totals plus the per-status breakdown (every BusinessStatus key present, 0 default). */
@@ -82,8 +85,11 @@ export class AdminDashboardStatsDto {
 
   static fromDomain(stats: AdminDashboardStats): AdminDashboardStatsDto {
     const dto = new AdminDashboardStatsDto();
-    dto.students = { total: stats.students.total };
-    dto.businessOwners = { total: stats.businessOwners.total };
+    dto.students = { total: stats.students.total, banned: stats.students.banned };
+    dto.businessOwners = {
+      total: stats.businessOwners.total,
+      banned: stats.businessOwners.banned,
+    };
     dto.businesses = { total: stats.businesses.total, byStatus: stats.businesses.byStatus };
     dto.listings = { total: stats.listings.total, byStatus: stats.listings.byStatus };
     dto.redemptions = {

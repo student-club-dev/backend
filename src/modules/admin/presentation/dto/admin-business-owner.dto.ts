@@ -7,6 +7,7 @@ import {
   AdminBusinessOwnerSummary,
   AdminOwnerBusinessSummary,
 } from '../../domain/entities/admin-business-owner.entity';
+import { AdminUserStatus } from '../../domain/enums/admin-user-status.enum';
 
 /** One business-owner row in the admin list. */
 export class AdminBusinessOwnerSummaryDto {
@@ -28,6 +29,15 @@ export class AdminBusinessOwnerSummaryDto {
   @ApiProperty({ format: 'int32', example: 3, description: 'How many businesses this owner has.' })
   businessesCount!: number;
 
+  @ApiProperty({ enum: AdminUserStatus, enumName: 'AdminUserStatusDto' })
+  status!: AdminUserStatus;
+
+  @ApiProperty({ format: 'date-time', nullable: true, description: 'When the account was banned.' })
+  bannedAt!: string | null;
+
+  @ApiProperty({ nullable: true, description: 'Admin-supplied ban reason.' })
+  banReason!: string | null;
+
   @ApiProperty({ format: 'date-time' })
   createdAt!: string;
 
@@ -39,6 +49,9 @@ export class AdminBusinessOwnerSummaryDto {
     dto.phoneNumber = owner.phoneNumber;
     dto.email = owner.email;
     dto.businessesCount = owner.businessesCount;
+    dto.status = owner.status;
+    dto.bannedAt = owner.bannedAt === null ? null : owner.bannedAt.toISOString();
+    dto.banReason = owner.banReason;
     dto.createdAt = owner.createdAt.toISOString();
     return dto;
   }
@@ -108,6 +121,15 @@ export class AdminBusinessOwnerDto {
   @ApiProperty({ format: 'int32', example: 3 })
   businessesCount!: number;
 
+  @ApiProperty({ enum: AdminUserStatus, enumName: 'AdminUserStatusDto' })
+  status!: AdminUserStatus;
+
+  @ApiProperty({ format: 'date-time', nullable: true, description: 'When the account was banned.' })
+  bannedAt!: string | null;
+
+  @ApiProperty({ nullable: true, description: 'Admin-supplied ban reason.' })
+  banReason!: string | null;
+
   @ApiProperty({ format: 'date-time' })
   createdAt!: string;
 
@@ -126,6 +148,9 @@ export class AdminBusinessOwnerDto {
     dto.avatarUrl = owner.avatarUrl;
     dto.gender = owner.gender;
     dto.businessesCount = owner.businessesCount;
+    dto.status = owner.status;
+    dto.bannedAt = owner.bannedAt === null ? null : owner.bannedAt.toISOString();
+    dto.banReason = owner.banReason;
     dto.createdAt = owner.createdAt.toISOString();
     dto.updatedAt = owner.updatedAt.toISOString();
     return dto;

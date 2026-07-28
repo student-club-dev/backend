@@ -1,13 +1,16 @@
 import {
+  BusinessOwnerStatus as PrismaBusinessOwnerStatus,
   BusinessStatus as PrismaBusinessStatus,
   CourseYear as PrismaCourseYear,
   Gender as PrismaGender,
   LastSeenVisibility as PrismaLastSeenVisibility,
+  StudentStatus as PrismaStudentStatus,
 } from '@prisma/client';
 import { BusinessStatus } from '../../business/domain/enums/business-status.enum';
 import { CourseYear } from '../../profiles/domain/enums/course-year.enum';
 import { Gender } from '../../profiles/domain/enums/gender.enum';
 import { LastSeenVisibility } from '../../profiles/domain/enums/last-seen-visibility.enum';
+import { AdminUserStatus } from '../domain/enums/admin-user-status.enum';
 import { AdminUserMapper } from './admin-user.mapper';
 
 describe('AdminUserMapper', () => {
@@ -32,6 +35,9 @@ describe('AdminUserMapper', () => {
         courseYear: PrismaCourseYear.YEAR_1,
         lastSeenAt: null,
         lastSeenVisibility: PrismaLastSeenVisibility.CONNECTIONS,
+        status: PrismaStudentStatus.BANNED,
+        bannedAt: now,
+        banReason: 'spam',
         createdAt: now,
         updatedAt: now,
       });
@@ -39,6 +45,9 @@ describe('AdminUserMapper', () => {
       expect(student.gender).toBe(Gender.MALE);
       expect(student.courseYear).toBe(CourseYear.YEAR_1);
       expect(student.lastSeenVisibility).toBe(LastSeenVisibility.CONNECTIONS);
+      expect(student.status).toBe(AdminUserStatus.BANNED);
+      expect(student.bannedAt).toBe(now);
+      expect(student.banReason).toBe('spam');
       expect(Object.keys(student)).not.toContain('passwordHash');
     });
   });
@@ -55,10 +64,14 @@ describe('AdminUserMapper', () => {
         email: 'a@b.uz',
         universityId: 'emis-142',
         courseYear: null,
+        status: PrismaStudentStatus.ACTIVE,
+        bannedAt: null,
+        banReason: null,
         createdAt: now,
       });
 
       expect(summary.courseYear).toBeNull();
+      expect(summary.status).toBe(AdminUserStatus.ACTIVE);
       expect(Object.keys(summary)).not.toContain('passwordHash');
     });
   });
@@ -75,6 +88,9 @@ describe('AdminUserMapper', () => {
         lastName: 'Karimov',
         avatarUrl: null,
         gender: PrismaGender.FEMALE,
+        status: PrismaBusinessOwnerStatus.BANNED,
+        bannedAt: now,
+        banReason: 'fraud',
         createdAt: now,
         updatedAt: now,
         _count: { businesses: 3 },
@@ -82,6 +98,8 @@ describe('AdminUserMapper', () => {
 
       expect(owner.gender).toBe(Gender.FEMALE);
       expect(owner.businessesCount).toBe(3);
+      expect(owner.status).toBe(AdminUserStatus.BANNED);
+      expect(owner.banReason).toBe('fraud');
       expect(Object.keys(owner)).not.toContain('passwordHash');
     });
   });
@@ -94,11 +112,15 @@ describe('AdminUserMapper', () => {
         lastName: 'Karimov',
         phoneNumber: '+998901112233',
         email: 'owner@b.uz',
+        status: PrismaBusinessOwnerStatus.ACTIVE,
+        bannedAt: null,
+        banReason: null,
         createdAt: now,
         _count: { businesses: 2 },
       });
 
       expect(summary.businessesCount).toBe(2);
+      expect(summary.status).toBe(AdminUserStatus.ACTIVE);
       expect(Object.keys(summary)).not.toContain('passwordHash');
     });
   });

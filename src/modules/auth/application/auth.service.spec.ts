@@ -4,6 +4,7 @@ import { AuthProvider } from '../../../common/enums/auth-provider.enum';
 import { ERROR_CODE } from '../../../common/errors/error-code';
 import { AppException } from '../../../common/exceptions/app.exception';
 import { AccountRepository } from '../domain/account.repository';
+import { AccountStatus } from '../domain/enums/account-status.enum';
 import { Account } from '../domain/entities/account.entity';
 import { RefreshToken } from '../domain/entities/refresh-token.entity';
 import { OAuthAccountRepository } from '../domain/oauth-account.repository';
@@ -32,6 +33,7 @@ function makeAccount(overrides: Partial<Account> = {}): Account {
     phoneNumber: null,
     phoneVerified: false,
     passwordHash: 'stored-hash',
+    status: AccountStatus.ACTIVE,
     ...overrides,
   };
 }
@@ -261,6 +263,27 @@ describe('AuthService', () => {
         service.login({ email: 'a@b.com', phoneNumber: null, password: 'wrong', ...noDevice }),
       ).rejects.toMatchObject({ code: ERROR_CODE.INVALID_CREDENTIALS });
     });
+
+    it('throws ACCOUNT_BANNED (403) for a BANNED account whose password verifies (no session)', async () => {
+      const accounts = makeAccountRepository({
+        findByEmail: jest
+          .fn()
+          .mockResolvedValue(makeAccount({ passwordHash: 'stored', status: AccountStatus.BANNED })),
+      });
+      const refreshTokens = makeRefreshTokenRepository();
+      const service = makeService(accounts, refreshTokens);
+
+      await expect(
+        service.login({
+          email: 'a@b.com',
+          phoneNumber: null,
+          password: 'password123',
+          ...noDevice,
+        }),
+      ).rejects.toMatchObject({ code: ERROR_CODE.ACCOUNT_BANNED, status: 403 });
+      expect(verifyMock).toHaveBeenCalled();
+      expect(refreshTokens.create).not.toHaveBeenCalled();
+    });
   });
 
   describe('refresh', () => {
@@ -293,6 +316,27 @@ describe('AuthService', () => {
         code: ERROR_CODE.INVALID_REFRESH_TOKEN,
         status: 401,
       });
+    });
+
+    it('throws ACCOUNT_BANNED (403) when the session belongs to a BANNED account (no rotation)', async () => {
+      const session: RefreshToken = {
+        id: 'rt-1',
+        accountId: 'acc-9',
+        expiresAt: new Date(Date.now() + 60_000),
+        revokedAt: null,
+      };
+      const accounts = makeAccountRepository({
+        findById: jest.fn().mockResolvedValue(makeAccount({ status: AccountStatus.BANNED })),
+      });
+      const refreshTokens = makeRefreshTokenRepository({
+        findActiveByHash: jest.fn().mockResolvedValue(session),
+      });
+      const service = makeService(accounts, refreshTokens);
+
+      await expect(
+        service.refresh({ refreshToken: 'old-plain', ...noDevice }),
+      ).rejects.toMatchObject({ code: ERROR_CODE.ACCOUNT_BANNED, status: 403 });
+      expect(refreshTokens.rotate).not.toHaveBeenCalled();
     });
   });
 

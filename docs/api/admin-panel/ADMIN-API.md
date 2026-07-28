@@ -93,8 +93,19 @@ Ruxsat: ADMIN + MODERATOR. Ownership bypass, lekin **mavjud validatsiya to'liq q
 | `PUT /v1/admin/branches/:id` | `BranchRequestDto` (full replace + location/trade-center gate'lar). 404 `BRANCH_NOT_FOUND`. → `AdminBranchDto` |
 | `PUT /v1/admin/listings/:id` | `UpdateListingRequestDto` (finalPrice qayta hisob + catalog/attribute/discount validatsiya). 404 `LISTING_NOT_FOUND`. → `AdminListingDto` |
 
+### Ban / suspend ✅
+Ruxsat: ADMIN + MODERATOR. Migration: `students`/`business_owners` → `status`, `bannedAt`, `banReason` (deploy'da `prisma migrate deploy`).
+| METHOD + path | Nima |
+|---|---|
+| `POST /v1/admin/students/:id/ban` | `{ reason }` → status=BANNED, sessiyalar bekor. 404 `STUDENT_NOT_FOUND`. → `AdminStudentDto` |
+| `POST /v1/admin/students/:id/unban` | status=ACTIVE. → `AdminStudentDto` |
+| `POST /v1/admin/business-owners/:id/ban` · `/unban` | Xuddi shu (owners). 404 `BUSINESS_OWNER_NOT_FOUND` |
+
+- **Auth:** BANNED/DELETED hisob **login / refresh / OAuth** qila olmaydi → **403 `ACCOUNT_BANNED`**.
+- **Filtr/DTO:** `GET /admin/students · /business-owners` endi `status` filtri + `status`/`bannedAt`/`banReason` maydonlari; dashboard'da `banned` soni.
+
 ### Qolgan (Faza 3) — 🔴 hali yo'q
-Ban/suspend + delete (student & owner) — `status`/`bannedAt` **migration** bilan.
+**Delete** (student & owner) — soft/anonymize (Run 9). Owner ban → bizneslarni feed'dan yashirish (ixtiyoriy).
 
 ---
 

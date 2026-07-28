@@ -29,8 +29,8 @@ export class AdminDashboardService {
     const redemptionsByStatus = fold(counts.redemptionsByStatus, Object.values(RedemptionStatus));
 
     return {
-      students: { total: counts.students },
-      businessOwners: { total: counts.businessOwners },
+      students: { total: counts.students, banned: counts.studentsBanned },
+      businessOwners: { total: counts.businessOwners, banned: counts.businessOwnersBanned },
       businesses: { total: sum(businessesByStatus), byStatus: businessesByStatus },
       listings: { total: sum(listingsByStatus), byStatus: listingsByStatus },
       redemptions: {

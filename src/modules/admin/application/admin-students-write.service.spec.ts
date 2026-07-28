@@ -5,6 +5,7 @@ import { ProfileService } from '../../profiles/application/profile.service';
 import { LastSeenVisibility } from '../../profiles/domain/enums/last-seen-visibility.enum';
 import { AdminStudentWriteRepository } from '../domain/admin-student-write.repository';
 import { AdminStudent } from '../domain/entities/admin-student.entity';
+import { AdminUserStatus } from '../domain/enums/admin-user-status.enum';
 import { AdminStudentsService } from './admin-students.service';
 import { AdminStudentsWriteService } from './admin-students-write.service';
 import { AdminCreateStudentInput } from './admin-user-write.io';
@@ -29,6 +30,9 @@ const STUDENT: AdminStudent = {
   courseYear: null,
   lastSeenAt: null,
   lastSeenVisibility: LastSeenVisibility.CONNECTIONS,
+  status: AdminUserStatus.ACTIVE,
+  bannedAt: null,
+  banReason: null,
   createdAt: new Date('2026-01-01T00:00:00Z'),
   updatedAt: new Date('2026-01-02T00:00:00Z'),
 };
@@ -45,6 +49,8 @@ function makeWriteRepo(
     existsByPhone: jest.fn().mockResolvedValue(false),
     existsByUsername: jest.fn().mockResolvedValue(false),
     create: jest.fn().mockResolvedValue('stu-1'),
+    ban: jest.fn().mockResolvedValue(undefined),
+    unban: jest.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }
@@ -157,6 +163,61 @@ describe('AdminStudentsWriteService', () => {
         status: 409,
       });
       expect(repo.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('ban', () => {
+    it('bans the student (delegating session revocation to the repo) and returns the re-fetched record', async () => {
+      const reads = makeReads();
+      const repo = makeWriteRepo();
+      const service = new AdminStudentsWriteService(reads, repo, makeProfileService());
+
+      const result = await service.ban('stu-1', 'spam');
+
+      expect(reads.getById).toHaveBeenCalledWith('stu-1');
+      expect(repo.ban).toHaveBeenCalledWith('stu-1', 'spam');
+      expect(result).toBe(STUDENT);
+    });
+
+    it('throws 404 STUDENT_NOT_FOUND when the id is unknown (before banning)', async () => {
+      const reads = makeReads({
+        getById: jest.fn().mockRejectedValue({ code: ERROR_CODE.STUDENT_NOT_FOUND, status: 404 }),
+      });
+      const repo = makeWriteRepo();
+      const service = new AdminStudentsWriteService(reads, repo, makeProfileService());
+
+      await expect(service.ban('nope', 'spam')).rejects.toMatchObject({
+        code: ERROR_CODE.STUDENT_NOT_FOUND,
+        status: 404,
+      });
+      expect(repo.ban).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('unban', () => {
+    it('unbans the student and returns the re-fetched record', async () => {
+      const reads = makeReads();
+      const repo = makeWriteRepo();
+      const service = new AdminStudentsWriteService(reads, repo, makeProfileService());
+
+      const result = await service.unban('stu-1');
+
+      expect(repo.unban).toHaveBeenCalledWith('stu-1');
+      expect(result).toBe(STUDENT);
+    });
+
+    it('throws 404 STUDENT_NOT_FOUND when the id is unknown (before unbanning)', async () => {
+      const reads = makeReads({
+        getById: jest.fn().mockRejectedValue({ code: ERROR_CODE.STUDENT_NOT_FOUND, status: 404 }),
+      });
+      const repo = makeWriteRepo();
+      const service = new AdminStudentsWriteService(reads, repo, makeProfileService());
+
+      await expect(service.unban('nope')).rejects.toMatchObject({
+        code: ERROR_CODE.STUDENT_NOT_FOUND,
+        status: 404,
+      });
+      expect(repo.unban).not.toHaveBeenCalled();
     });
   });
 });

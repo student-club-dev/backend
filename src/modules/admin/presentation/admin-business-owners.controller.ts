@@ -14,6 +14,7 @@ import { AdminBusinessOwnersService } from '../application/admin-business-owners
 import { AdminBusinessOwnersWriteService } from '../application/admin-business-owners-write.service';
 import { AdminRole } from '../domain/enums/admin-role.enum';
 import { Roles } from './decorators/roles.decorator';
+import { AdminBanUserDto } from './dto/admin-ban-user.dto';
 import { AdminCreateOwnerDto } from './dto/admin-create-owner.dto';
 import {
   AdminBusinessOwnerDto,
@@ -131,6 +132,46 @@ export class AdminBusinessOwnersController {
     @Body() body: AdminUpdateOwnerDto,
   ): Promise<AdminBusinessOwnerDto> {
     const owner = await this.adminBusinessOwnersWriteService.update(id, body.toInput());
+    return AdminBusinessOwnerDto.fromDomain(owner);
+  }
+
+  @Post(':id/ban')
+  @ApiOperation({
+    summary: 'Ban a business owner',
+    description:
+      'Sets status=BANNED with the given reason and revokes all the owner’s sessions (force ' +
+      'logout). Re-banning updates the reason. ADMIN and MODERATOR.',
+  })
+  @ApiParam({ name: 'id', description: 'Business-owner id' })
+  @ApiOkEnvelope(AdminBusinessOwnerDto)
+  @ApiValidationEnvelope()
+  @ApiNotFoundEnvelope(
+    ERROR_CODE.BUSINESS_OWNER_NOT_FOUND,
+    'No business owner with this id.',
+    'Biznes egasi topilmadi',
+  )
+  async ban(
+    @Param('id') id: string,
+    @Body() body: AdminBanUserDto,
+  ): Promise<AdminBusinessOwnerDto> {
+    const owner = await this.adminBusinessOwnersWriteService.ban(id, body.reason);
+    return AdminBusinessOwnerDto.fromDomain(owner);
+  }
+
+  @Post(':id/unban')
+  @ApiOperation({
+    summary: 'Un-ban a business owner',
+    description: 'Sets status=ACTIVE and clears the ban reason. ADMIN and MODERATOR.',
+  })
+  @ApiParam({ name: 'id', description: 'Business-owner id' })
+  @ApiOkEnvelope(AdminBusinessOwnerDto)
+  @ApiNotFoundEnvelope(
+    ERROR_CODE.BUSINESS_OWNER_NOT_FOUND,
+    'No business owner with this id.',
+    'Biznes egasi topilmadi',
+  )
+  async unban(@Param('id') id: string): Promise<AdminBusinessOwnerDto> {
+    const owner = await this.adminBusinessOwnersWriteService.unban(id);
     return AdminBusinessOwnerDto.fromDomain(owner);
   }
 }

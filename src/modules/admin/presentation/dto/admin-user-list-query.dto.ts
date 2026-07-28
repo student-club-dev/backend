@@ -11,6 +11,7 @@ import {
   Min,
 } from 'class-validator';
 import { AdminUserSort } from '../../domain/enums/admin-user-sort.enum';
+import { AdminUserStatus } from '../../domain/enums/admin-user-status.enum';
 
 export const ADMIN_LIST_DEFAULT_PAGE = 1;
 export const ADMIN_LIST_DEFAULT_SIZE = 20;
@@ -37,6 +38,15 @@ export abstract class AdminUserListQueryDto {
   @IsOptional()
   @IsString()
   q?: string;
+
+  @ApiPropertyOptional({
+    enum: AdminUserStatus,
+    enumName: 'AdminUserStatusDto',
+    description: 'Keep only accounts in this lifecycle state (ACTIVE / BANNED / DELETED).',
+  })
+  @IsOptional()
+  @IsEnum(AdminUserStatus)
+  status?: AdminUserStatus;
 
   @ApiPropertyOptional({ description: 'Keep only accounts whose phone is (un)verified.' })
   @IsOptional()

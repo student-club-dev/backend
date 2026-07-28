@@ -9,6 +9,7 @@ export class AdminOwnerListQueryDto extends AdminUserListQueryDto {
   toFilter(): AdminOwnerListFilter {
     return {
       q: this.q ?? null,
+      status: this.status ?? null,
       phoneVerified: this.phoneVerified ?? null,
       createdFrom: this.createdFromDate(),
       createdTo: this.createdToDate(),

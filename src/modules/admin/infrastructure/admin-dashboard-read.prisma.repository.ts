@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { ReportStatus as PrismaReportStatus } from '@prisma/client';
+import {
+  BusinessOwnerStatus,
+  ReportStatus as PrismaReportStatus,
+  StudentStatus,
+} from '@prisma/client';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { BusinessStatus } from '../../business/domain/enums/business-status.enum';
 import { ListingStatus } from '../../listings/domain/enums/listing-status.enum';
@@ -22,31 +26,45 @@ export class AdminDashboardReadPrismaRepository implements AdminDashboardReadRep
   async counts(): Promise<AdminDashboardCounts> {
     // Interactive transaction: the array form of `$transaction` erases the precise groupBy `_count`
     // typing, so the queries run inside one interactive transaction where the types stay exact.
-    const { students, businessOwners, businesses, listings, redemptions, openReports } =
-      await this.prisma.$transaction(async (tx) => ({
-        students: await tx.student.count(),
-        businessOwners: await tx.businessOwner.count(),
-        businesses: await tx.business.groupBy({
-          by: ['status'],
-          _count: { _all: true },
-          orderBy: { status: 'asc' },
-        }),
-        listings: await tx.listing.groupBy({
-          by: ['status'],
-          _count: { _all: true },
-          orderBy: { status: 'asc' },
-        }),
-        redemptions: await tx.redemption.groupBy({
-          by: ['status'],
-          _count: { _all: true },
-          orderBy: { status: 'asc' },
-        }),
-        openReports: await tx.report.count({ where: { status: PrismaReportStatus.OPEN } }),
-      }));
+    const {
+      students,
+      studentsBanned,
+      businessOwners,
+      businessOwnersBanned,
+      businesses,
+      listings,
+      redemptions,
+      openReports,
+    } = await this.prisma.$transaction(async (tx) => ({
+      students: await tx.student.count(),
+      studentsBanned: await tx.student.count({ where: { status: StudentStatus.BANNED } }),
+      businessOwners: await tx.businessOwner.count(),
+      businessOwnersBanned: await tx.businessOwner.count({
+        where: { status: BusinessOwnerStatus.BANNED },
+      }),
+      businesses: await tx.business.groupBy({
+        by: ['status'],
+        _count: { _all: true },
+        orderBy: { status: 'asc' },
+      }),
+      listings: await tx.listing.groupBy({
+        by: ['status'],
+        _count: { _all: true },
+        orderBy: { status: 'asc' },
+      }),
+      redemptions: await tx.redemption.groupBy({
+        by: ['status'],
+        _count: { _all: true },
+        orderBy: { status: 'asc' },
+      }),
+      openReports: await tx.report.count({ where: { status: PrismaReportStatus.OPEN } }),
+    }));
 
     return {
       students,
+      studentsBanned,
       businessOwners,
+      businessOwnersBanned,
       businessesByStatus: businesses.map((row) => ({
         status: BusinessStatus[row.status],
         count: row._count._all,

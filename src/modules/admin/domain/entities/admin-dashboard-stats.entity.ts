@@ -6,8 +6,8 @@ import { ListingStatus } from '../../../listings/domain/enums/listing-status.enu
  * enum key (0 default), folded by the service from the repository's groupBy counts. Pure domain type.
  */
 export interface AdminDashboardStats {
-  students: { total: number };
-  businessOwners: { total: number };
+  students: { total: number; banned: number };
+  businessOwners: { total: number; banned: number };
   businesses: { total: number; byStatus: Record<BusinessStatus, number> };
   listings: { total: number; byStatus: Record<ListingStatus, number> };
   redemptions: { total: number; confirmed: number; pending: number };

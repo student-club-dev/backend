@@ -6,6 +6,7 @@ import {
 } from '../domain/admin-student-read.repository';
 import { AdminStudent } from '../domain/entities/admin-student.entity';
 import { AdminUserSort } from '../domain/enums/admin-user-sort.enum';
+import { AdminUserStatus } from '../domain/enums/admin-user-status.enum';
 import { AdminStudentsService } from './admin-students.service';
 
 function makeRepo(overrides: Partial<AdminStudentReadRepository> = {}): AdminStudentReadRepository {
@@ -22,6 +23,7 @@ function makeFilter(overrides: Partial<AdminStudentListFilter> = {}): AdminStude
     universityId: null,
     courseYear: null,
     gender: null,
+    status: null,
     phoneVerified: null,
     createdFrom: null,
     createdTo: null,
@@ -49,6 +51,9 @@ const STUDENT: AdminStudent = {
   courseYear: null,
   lastSeenAt: null,
   lastSeenVisibility: LastSeenVisibility.CONNECTIONS,
+  status: AdminUserStatus.ACTIVE,
+  bannedAt: null,
+  banReason: null,
   createdAt: new Date('2026-01-01T00:00:00Z'),
   updatedAt: new Date('2026-01-02T00:00:00Z'),
 };

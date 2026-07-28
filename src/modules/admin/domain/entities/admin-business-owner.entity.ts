@@ -1,5 +1,6 @@
 import { BusinessStatus } from '../../../business/domain/enums/business-status.enum';
 import { Gender } from '../../../profiles/domain/enums/gender.enum';
+import { AdminUserStatus } from '../enums/admin-user-status.enum';
 
 /**
  * A business-owner row as the admin list shows it. `businessesCount` is the number of businesses the
@@ -12,6 +13,9 @@ export interface AdminBusinessOwnerSummary {
   phoneNumber: string | null;
   email: string | null;
   businessesCount: number;
+  status: AdminUserStatus;
+  bannedAt: Date | null;
+  banReason: string | null;
   createdAt: Date;
 }
 
@@ -30,6 +34,9 @@ export interface AdminBusinessOwner {
   avatarUrl: string | null;
   gender: Gender | null;
   businessesCount: number;
+  status: AdminUserStatus;
+  bannedAt: Date | null;
+  banReason: string | null;
   createdAt: Date;
   updatedAt: Date;
 }

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { Prisma } from '@prisma/client';
+import { BusinessOwnerStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import {
   AdminBusinessOwnerPage,
@@ -74,6 +74,10 @@ export class AdminBusinessOwnerReadPrismaRepository implements AdminBusinessOwne
         { phoneNumber: { contains: filter.q, mode: 'insensitive' } },
         { email: { contains: filter.q, mode: 'insensitive' } },
       ];
+    }
+    if (filter.status !== null) {
+      // AdminUserStatus and Prisma BusinessOwnerStatus share wire values — index the Prisma enum by ours.
+      where.status = BusinessOwnerStatus[filter.status];
     }
     if (filter.phoneVerified !== null) {
       where.phoneVerified = filter.phoneVerified;

@@ -4,6 +4,7 @@ import {
   AdminOwnerBusinessSummary,
 } from './entities/admin-business-owner.entity';
 import { AdminUserSort } from './enums/admin-user-sort.enum';
+import { AdminUserStatus } from './enums/admin-user-status.enum';
 
 /** Injection token for the admin business-owner read port (bound to the Prisma impl). */
 export const ADMIN_BUSINESS_OWNER_READ_REPOSITORY = Symbol('ADMIN_BUSINESS_OWNER_READ_REPOSITORY');
@@ -15,6 +16,7 @@ export const ADMIN_BUSINESS_OWNER_READ_REPOSITORY = Symbol('ADMIN_BUSINESS_OWNER
 export interface AdminOwnerListFilter {
   /** Free text against firstName / lastName / phoneNumber / email (case-insensitive). */
   q: string | null;
+  status: AdminUserStatus | null;
   phoneVerified: boolean | null;
   createdFrom: Date | null;
   createdTo: Date | null;

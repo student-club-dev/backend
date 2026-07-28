@@ -65,6 +65,24 @@ export class AdminStudentsWriteService {
     return this.reads.getById(id);
   }
 
+  /**
+   * Bans the student (Faza 3): sets status=BANNED with the reason and revokes all the student's
+   * refresh tokens (force logout). Re-banning updates the reason. 404 `STUDENT_NOT_FOUND` when the
+   * id is unknown (the read pre-check runs first).
+   */
+  async ban(id: string, reason: string): Promise<AdminStudent> {
+    await this.reads.getById(id);
+    await this.students.ban(id, reason);
+    return this.reads.getById(id);
+  }
+
+  /** Un-bans the student: status=ACTIVE, clears bannedAt/banReason. 404 when the id is unknown. */
+  async unban(id: string): Promise<AdminStudent> {
+    await this.reads.getById(id);
+    await this.students.unban(id);
+    return this.reads.getById(id);
+  }
+
   private async ensureIdentifiersAvailable(
     email: string | null,
     phoneNumber: string | null,

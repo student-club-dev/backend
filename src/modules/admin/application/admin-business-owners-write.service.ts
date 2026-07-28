@@ -57,6 +57,24 @@ export class AdminBusinessOwnersWriteService {
     return this.reads.getById(id);
   }
 
+  /**
+   * Bans the owner (Faza 3): sets status=BANNED with the reason and revokes all the owner's refresh
+   * tokens (force logout). Re-banning updates the reason. 404 `BUSINESS_OWNER_NOT_FOUND` when the id
+   * is unknown (the read pre-check runs first).
+   */
+  async ban(id: string, reason: string): Promise<AdminBusinessOwner> {
+    await this.reads.getById(id);
+    await this.owners.ban(id, reason);
+    return this.reads.getById(id);
+  }
+
+  /** Un-bans the owner: status=ACTIVE, clears bannedAt/banReason. 404 when the id is unknown. */
+  async unban(id: string): Promise<AdminBusinessOwner> {
+    await this.reads.getById(id);
+    await this.owners.unban(id);
+    return this.reads.getById(id);
+  }
+
   private async ensureIdentifiersAvailable(
     email: string | null,
     phoneNumber: string | null,

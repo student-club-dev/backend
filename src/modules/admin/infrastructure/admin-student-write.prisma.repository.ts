@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { StudentStatus } from '@prisma/client';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import {
   COURSE_YEAR_TO_PRISMA,
@@ -45,5 +46,27 @@ export class AdminStudentWritePrismaRepository implements AdminStudentWriteRepos
       select: { id: true },
     });
     return row.id;
+  }
+
+  async ban(id: string, reason: string): Promise<void> {
+    // Status change + session revocation in one transaction, so a banned student can never keep
+    // an active refresh token.
+    await this.prisma.$transaction([
+      this.prisma.student.update({
+        where: { id },
+        data: { status: StudentStatus.BANNED, bannedAt: new Date(), banReason: reason },
+      }),
+      this.prisma.studentRefreshToken.updateMany({
+        where: { studentId: id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      }),
+    ]);
+  }
+
+  async unban(id: string): Promise<void> {
+    await this.prisma.student.update({
+      where: { id },
+      data: { status: StudentStatus.ACTIVE, bannedAt: null, banReason: null },
+    });
   }
 }

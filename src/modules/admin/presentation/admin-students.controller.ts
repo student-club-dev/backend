@@ -14,6 +14,7 @@ import { AdminStudentsService } from '../application/admin-students.service';
 import { AdminStudentsWriteService } from '../application/admin-students-write.service';
 import { AdminRole } from '../domain/enums/admin-role.enum';
 import { Roles } from './decorators/roles.decorator';
+import { AdminBanUserDto } from './dto/admin-ban-user.dto';
 import { AdminCreateStudentDto } from './dto/admin-create-student.dto';
 import { AdminStudentListQueryDto } from './dto/admin-student-list-query.dto';
 import { AdminStudentDto, AdminStudentPageDto } from './dto/admin-student.dto';
@@ -113,6 +114,43 @@ export class AdminStudentsController {
     @Body() body: AdminUpdateStudentDto,
   ): Promise<AdminStudentDto> {
     const student = await this.adminStudentsWriteService.update(id, body.toInput());
+    return AdminStudentDto.fromDomain(student);
+  }
+
+  @Post(':id/ban')
+  @ApiOperation({
+    summary: 'Ban a student',
+    description:
+      'Sets status=BANNED with the given reason and revokes all the student’s sessions (force ' +
+      'logout). Re-banning updates the reason. ADMIN and MODERATOR.',
+  })
+  @ApiParam({ name: 'id', description: 'Student id' })
+  @ApiOkEnvelope(AdminStudentDto)
+  @ApiValidationEnvelope()
+  @ApiNotFoundEnvelope(
+    ERROR_CODE.STUDENT_NOT_FOUND,
+    'No student with this id.',
+    'Student topilmadi',
+  )
+  async ban(@Param('id') id: string, @Body() body: AdminBanUserDto): Promise<AdminStudentDto> {
+    const student = await this.adminStudentsWriteService.ban(id, body.reason);
+    return AdminStudentDto.fromDomain(student);
+  }
+
+  @Post(':id/unban')
+  @ApiOperation({
+    summary: 'Un-ban a student',
+    description: 'Sets status=ACTIVE and clears the ban reason. ADMIN and MODERATOR.',
+  })
+  @ApiParam({ name: 'id', description: 'Student id' })
+  @ApiOkEnvelope(AdminStudentDto)
+  @ApiNotFoundEnvelope(
+    ERROR_CODE.STUDENT_NOT_FOUND,
+    'No student with this id.',
+    'Student topilmadi',
+  )
+  async unban(@Param('id') id: string): Promise<AdminStudentDto> {
+    const student = await this.adminStudentsWriteService.unban(id);
     return AdminStudentDto.fromDomain(student);
   }
 }

@@ -13,8 +13,8 @@ Bu ro'yxat — admin panel **to'liq** ishlashi uchun backend qurishi kerak bo'lg
 > **Admin auth uchun DB jadvali kerak EMAS** — admin login/parol **env**da (Faza 0). Faqat quyidagilar:
 
 - [x] **`AccountType`** enum'ga `ADMIN = "admin"` qo'shish (JWT `type`). ✅
-- [ ] **`students`** jadvaliga ban maydonlari: `status(StudentStatus: ACTIVE|BANNED, default ACTIVE)`, `bannedAt?`, `banReason?`.
-- [ ] **`business_owners`** jadvaliga ban maydonlari: `status(BusinessOwnerStatus: ACTIVE|BANNED)`, `bannedAt?`, `banReason?`.
+- [x] **`students`** jadvaliga ban maydonlari: `status(StudentStatus: ACTIVE|BANNED|DELETED)`, `bannedAt?`, `banReason?` + index. ✅ *(migration fayli yozildi — deploy'da `prisma migrate deploy` bilan qo'llang)*
+- [x] **`business_owners`** jadvaliga ban maydonlari: `status(BusinessOwnerStatus: ACTIVE|BANNED|DELETED)`, `bannedAt?`, `banReason?` + index. ✅
 
 ## 🔁 O'zgartirilishi kerak MVP xatti-harakatlari
 
@@ -60,7 +60,7 @@ Bu ro'yxat — admin panel **to'liq** ishlashi uchun backend qurishi kerak bo'lg
 
 - [x] **Yaratish (ADMIN only):** `POST /v1/admin/students`, `POST /v1/admin/business-owners` — argon2 parol bilan yangi akkaunt. ✅
 - [x] **Tahrirlash (admin override):** `PUT /v1/admin/students/:id`, `/business-owners/:id`, `/businesses/:id`, `/branches/:id`, `/listings/:id` — mavjud validatsiyani qayta ishlatib, ownership bypass. ✅
-- [ ] **Ban/suspend:** `POST /v1/admin/students/:id/ban(reason) · /unban`, xuddi shu owners uchun. Ban → sessiyalarni bekor qilish; owner ban → bizneslar ko'rinishini yashirish.
+- [x] **Ban/suspend:** `POST /v1/admin/students/:id/ban(reason) · /unban` (+ owners). Ban → status=BANNED + sessiyalar bekor + **auth login/refresh/oauth bloklanadi** (403 `ACCOUNT_BANNED`). ✅ *(owner ban → bizneslarni feed'dan yashirish — ixtiyoriy, hali yo'q)*
 - [ ] **Delete (`ADMIN`):** foydalanuvchi → soft/anonymize; biznes → archive.
 - [ ] **Sessiyalar:** `GET /v1/admin/students/:id/sessions`, `DELETE /.../sessions` (force logout); owners uchun ham. `GET /:id/devices` (student). (Havola `02-profile`, `14-devices`, `01-auth`)
 

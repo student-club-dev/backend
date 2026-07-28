@@ -1,6 +1,7 @@
 import { CourseYear } from '../../../profiles/domain/enums/course-year.enum';
 import { Gender } from '../../../profiles/domain/enums/gender.enum';
 import { LastSeenVisibility } from '../../../profiles/domain/enums/last-seen-visibility.enum';
+import { AdminUserStatus } from '../enums/admin-user-status.enum';
 
 /**
  * A student row as the admin list shows it — the fields the panel renders per row. Pure domain
@@ -16,6 +17,9 @@ export interface AdminStudentSummary {
   email: string | null;
   universityId: string | null;
   courseYear: CourseYear | null;
+  status: AdminUserStatus;
+  bannedAt: Date | null;
+  banReason: string | null;
   createdAt: Date;
 }
 
@@ -40,6 +44,9 @@ export interface AdminStudent {
   courseYear: CourseYear | null;
   lastSeenAt: Date | null;
   lastSeenVisibility: LastSeenVisibility;
+  status: AdminUserStatus;
+  bannedAt: Date | null;
+  banReason: string | null;
   createdAt: Date;
   updatedAt: Date;
 }

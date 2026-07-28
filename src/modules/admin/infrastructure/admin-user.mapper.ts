@@ -11,6 +11,7 @@ import {
   AdminOwnerBusinessSummary,
 } from '../domain/entities/admin-business-owner.entity';
 import { AdminStudent, AdminStudentSummary } from '../domain/entities/admin-student.entity';
+import { AdminUserStatus } from '../domain/enums/admin-user-status.enum';
 
 // Explicit column allowlists — `passwordHash` is deliberately never selected, so it can never be
 // read or leaked. The mapper owns these `select`s so the row types line up with the mappers.
@@ -25,6 +26,9 @@ export const ADMIN_STUDENT_SUMMARY_SELECT = {
   email: true,
   universityId: true,
   courseYear: true,
+  status: true,
+  bannedAt: true,
+  banReason: true,
   createdAt: true,
 } satisfies Prisma.StudentSelect;
 
@@ -45,6 +49,9 @@ export const ADMIN_STUDENT_DETAIL_SELECT = {
   courseYear: true,
   lastSeenAt: true,
   lastSeenVisibility: true,
+  status: true,
+  bannedAt: true,
+  banReason: true,
   createdAt: true,
   updatedAt: true,
 } satisfies Prisma.StudentSelect;
@@ -55,6 +62,9 @@ export const ADMIN_OWNER_SUMMARY_SELECT = {
   lastName: true,
   phoneNumber: true,
   email: true,
+  status: true,
+  bannedAt: true,
+  banReason: true,
   createdAt: true,
   _count: { select: { businesses: true } },
 } satisfies Prisma.BusinessOwnerSelect;
@@ -69,6 +79,9 @@ export const ADMIN_OWNER_DETAIL_SELECT = {
   lastName: true,
   avatarUrl: true,
   gender: true,
+  status: true,
+  bannedAt: true,
+  banReason: true,
   createdAt: true,
   updatedAt: true,
   _count: { select: { businesses: true } },
@@ -112,6 +125,9 @@ export class AdminUserMapper {
       email: row.email,
       universityId: row.universityId,
       courseYear: row.courseYear === null ? null : COURSE_YEAR_TO_DOMAIN[row.courseYear],
+      status: AdminUserStatus[row.status],
+      bannedAt: row.bannedAt,
+      banReason: row.banReason,
       createdAt: row.createdAt,
     };
   }
@@ -134,6 +150,9 @@ export class AdminUserMapper {
       courseYear: row.courseYear === null ? null : COURSE_YEAR_TO_DOMAIN[row.courseYear],
       lastSeenAt: row.lastSeenAt,
       lastSeenVisibility: LAST_SEEN_VISIBILITY_TO_DOMAIN[row.lastSeenVisibility],
+      status: AdminUserStatus[row.status],
+      bannedAt: row.bannedAt,
+      banReason: row.banReason,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };
@@ -147,6 +166,9 @@ export class AdminUserMapper {
       phoneNumber: row.phoneNumber,
       email: row.email,
       businessesCount: row._count.businesses,
+      status: AdminUserStatus[row.status],
+      bannedAt: row.bannedAt,
+      banReason: row.banReason,
       createdAt: row.createdAt,
     };
   }
@@ -163,6 +185,9 @@ export class AdminUserMapper {
       avatarUrl: row.avatarUrl,
       gender: row.gender === null ? null : GENDER_TO_DOMAIN[row.gender],
       businessesCount: row._count.businesses,
+      status: AdminUserStatus[row.status],
+      bannedAt: row.bannedAt,
+      banReason: row.banReason,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     };

@@ -4,6 +4,7 @@ import { Gender } from '../../../profiles/domain/enums/gender.enum';
 import { LastSeenVisibility } from '../../../profiles/domain/enums/last-seen-visibility.enum';
 import { AdminStudentPage } from '../../domain/admin-student-read.repository';
 import { AdminStudent, AdminStudentSummary } from '../../domain/entities/admin-student.entity';
+import { AdminUserStatus } from '../../domain/enums/admin-user-status.enum';
 
 /** One student row in the admin list. */
 export class AdminStudentSummaryDto {
@@ -34,6 +35,15 @@ export class AdminStudentSummaryDto {
   @ApiProperty({ enum: CourseYear, enumName: 'CourseYearDto', nullable: true })
   courseYear!: CourseYear | null;
 
+  @ApiProperty({ enum: AdminUserStatus, enumName: 'AdminUserStatusDto' })
+  status!: AdminUserStatus;
+
+  @ApiProperty({ format: 'date-time', nullable: true, description: 'When the account was banned.' })
+  bannedAt!: string | null;
+
+  @ApiProperty({ nullable: true, description: 'Admin-supplied ban reason.' })
+  banReason!: string | null;
+
   @ApiProperty({ format: 'date-time' })
   createdAt!: string;
 
@@ -48,6 +58,9 @@ export class AdminStudentSummaryDto {
     dto.email = student.email;
     dto.universityId = student.universityId;
     dto.courseYear = student.courseYear;
+    dto.status = student.status;
+    dto.bannedAt = student.bannedAt === null ? null : student.bannedAt.toISOString();
+    dto.banReason = student.banReason;
     dto.createdAt = student.createdAt.toISOString();
     return dto;
   }
@@ -131,6 +144,15 @@ export class AdminStudentDto {
   @ApiProperty({ enum: LastSeenVisibility, enumName: 'LastSeenVisibilityDto' })
   lastSeenVisibility!: LastSeenVisibility;
 
+  @ApiProperty({ enum: AdminUserStatus, enumName: 'AdminUserStatusDto' })
+  status!: AdminUserStatus;
+
+  @ApiProperty({ format: 'date-time', nullable: true, description: 'When the account was banned.' })
+  bannedAt!: string | null;
+
+  @ApiProperty({ nullable: true, description: 'Admin-supplied ban reason.' })
+  banReason!: string | null;
+
   @ApiProperty({ format: 'date-time' })
   createdAt!: string;
 
@@ -155,6 +177,9 @@ export class AdminStudentDto {
     dto.courseYear = student.courseYear;
     dto.lastSeenAt = student.lastSeenAt === null ? null : student.lastSeenAt.toISOString();
     dto.lastSeenVisibility = student.lastSeenVisibility;
+    dto.status = student.status;
+    dto.bannedAt = student.bannedAt === null ? null : student.bannedAt.toISOString();
+    dto.banReason = student.banReason;
     dto.createdAt = student.createdAt.toISOString();
     dto.updatedAt = student.updatedAt.toISOString();
     return dto;

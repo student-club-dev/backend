@@ -13,7 +13,9 @@ function makeRepo(counts: AdminDashboardCounts): AdminDashboardReadRepository {
 
 const EMPTY: AdminDashboardCounts = {
   students: 0,
+  studentsBanned: 0,
   businessOwners: 0,
+  businessOwnersBanned: 0,
   businessesByStatus: [],
   listingsByStatus: [],
   redemptionsByStatus: [],
@@ -57,7 +59,9 @@ describe('AdminDashboardService', () => {
     const service = new AdminDashboardService(
       makeRepo({
         students: 42,
+        studentsBanned: 4,
         businessOwners: 9,
+        businessOwnersBanned: 1,
         businessesByStatus: [
           { status: BusinessStatus.APPROVED, count: 3 },
           { status: BusinessStatus.PENDING_REVIEW, count: 2 },
@@ -77,8 +81,8 @@ describe('AdminDashboardService', () => {
 
     const stats = await service.stats();
 
-    expect(stats.students.total).toBe(42);
-    expect(stats.businessOwners.total).toBe(9);
+    expect(stats.students).toEqual({ total: 42, banned: 4 });
+    expect(stats.businessOwners).toEqual({ total: 9, banned: 1 });
     expect(stats.businesses.total).toBe(5);
     expect(stats.listings.total).toBe(11);
     expect(stats.redemptions).toEqual({ total: 16, confirmed: 10, pending: 5 });
