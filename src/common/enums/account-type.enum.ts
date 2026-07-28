@@ -6,4 +6,5 @@
 export enum AccountType {
   STUDENT = 'student',
   BUSINESS = 'business',
+  ADMIN = 'admin',
 }

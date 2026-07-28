@@ -10,6 +10,7 @@ import { RedisModule } from './infrastructure/cache/redis.module';
 import { PrismaModule } from './infrastructure/database/prisma.module';
 import { PushModule } from './infrastructure/push/push.module';
 import { StorageModule } from './infrastructure/storage/storage.module';
+import { AdminModule } from './modules/admin/admin.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { BranchesModule } from './modules/branches/branches.module';
 import { BusinessModule } from './modules/business/business.module';
@@ -61,6 +62,7 @@ import { TradeCentersModule } from './modules/trade-centers/trade-centers.module
     DiscountsModule,
     GeoModule,
     AuthModule,
+    AdminModule,
     ProfileModule,
     BusinessModule,
     BranchesModule,
