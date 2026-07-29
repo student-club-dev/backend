@@ -1,6 +1,7 @@
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import type { Server } from 'socket.io';
+import { MediaReadyBus } from '../media/application/media-ready.bus';
 import { NotificationsService } from '../notifications/application/notifications.service';
 import { CHAT_EVENT } from './application/chat-events';
 import { ChatService } from './application/chat.service';
@@ -39,7 +40,8 @@ function makeGateway(chat: ChatMocks): { gateway: ChatGateway; emit: jest.Mock; 
     chat as unknown as ChatService,
     { pushToStudent: jest.fn() } as unknown as NotificationsService,
     {} as JwtService,
-    {} as ConfigService<never, true>,
+    { get: () => 'v1' } as unknown as ConfigService<never, true>,
+    new MediaReadyBus(),
   );
   const emit = jest.fn();
   const to = jest.fn().mockReturnValue({ emit });

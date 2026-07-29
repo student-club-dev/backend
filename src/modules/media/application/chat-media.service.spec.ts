@@ -54,8 +54,11 @@ function makeService(
   assets: MediaAssetRepository = makeAssets(),
   access: ChatAccessRepository = makeAccess(),
   queue: MediaQueuePort = { enqueueTranscode: jest.fn().mockResolvedValue(undefined) },
-): { service: ChatMediaService; storage: { save: jest.Mock } } {
-  const storage = { save: jest.fn(async (): Promise<string> => 'key/abc.webp') };
+): { service: ChatMediaService; storage: { save: jest.Mock; delete: jest.Mock } } {
+  const storage = {
+    save: jest.fn(async (): Promise<string> => 'key/abc.webp'),
+    delete: jest.fn(async (): Promise<void> => undefined),
+  };
   const config = {
     get: (key: string) =>
       key === 'CHAT_UPLOAD_BYTES_PER_DAY'
@@ -208,6 +211,69 @@ describe('ChatMediaService — upload', () => {
     await expect(
       service.upload(me, { kind: MediaKind.IMAGE, conversationId: CONVERSATION }),
     ).rejects.toMatchObject({ code: ERROR_CODE.VALIDATION_ERROR });
+  });
+});
+
+describe('ChatMediaService — deleteOrphans', () => {
+  const orphan = (id: string): MediaAsset => ({
+    id,
+    ownerId: 'std_me',
+    conversationId: CONVERSATION,
+    kind: MediaKind.IMAGE,
+    status: MediaStatus.READY,
+    isAnimated: false,
+    storageKey: `${id}.webp`,
+    thumbStorageKey: `${id}-t.webp`,
+    externalUrl: null,
+    externalThumbUrl: null,
+    provider: null,
+    externalId: null,
+    mimeType: 'image/webp',
+    sizeBytes: 10,
+    width: 1,
+    height: 1,
+    durationMs: null,
+    waveform: [],
+    fileName: null,
+    blurHash: null,
+    messageId: null,
+    createdAt: new Date('2026-07-20T00:00:00Z'),
+  });
+
+  it('deletes the bytes before the rows', async () => {
+    const order: string[] = [];
+    const assets = makeAssets({
+      findOrphans: jest.fn().mockResolvedValue([orphan('a')]),
+      deleteMany: jest.fn(async () => {
+        order.push('rows');
+      }),
+    });
+    const { service, storage } = makeService(assets);
+    storage.delete = jest.fn(async () => {
+      order.push('bytes');
+    });
+
+    expect(await service.deleteOrphans()).toBe(1);
+    // Bytes with no row are a leak nothing can find again; a row with no bytes is harmless noise.
+    expect(order[0]).toBe('bytes');
+    expect(order[order.length - 1]).toBe('rows');
+    expect(storage.delete).toHaveBeenCalledTimes(2); // full + thumb
+  });
+
+  it('does nothing when there is nothing to sweep', async () => {
+    const assets = makeAssets({ findOrphans: jest.fn().mockResolvedValue([]) });
+    const { service } = makeService(assets);
+    expect(await service.deleteOrphans()).toBe(0);
+    expect(assets.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('still removes the row when the bytes are already gone', async () => {
+    const assets = makeAssets({ findOrphans: jest.fn().mockResolvedValue([orphan('a')]) });
+    const { service, storage } = makeService(assets);
+    storage.delete = jest.fn().mockRejectedValue(new Error('ENOENT'));
+
+    expect(await service.deleteOrphans()).toBe(1);
+    expect(assets.deleteMany).toHaveBeenCalledWith(['a']);
   });
 });
 

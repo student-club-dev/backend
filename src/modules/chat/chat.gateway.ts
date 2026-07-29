@@ -1,4 +1,4 @@
-import { Logger } from '@nestjs/common';
+import { Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import {
@@ -15,6 +15,9 @@ import { ERROR_CODE } from '../../common/errors/error-code';
 import { AppException } from '../../common/exceptions/app.exception';
 import type { AuthenticatedUser } from '../../common/types/authenticated-user';
 import type { Env } from '../../config/env';
+import { MediaReadyBus } from '../media/application/media-ready.bus';
+import { MediaAsset } from '../media/domain/entities/media-asset.entity';
+import { AttachmentDto } from '../media/presentation/dto/attachment.dto';
 import { NotificationsService } from '../notifications/application/notifications.service';
 import {
   CHAT_EVENT,
@@ -40,7 +43,7 @@ const userOf = (client: Socket): AuthenticatedUser | undefined =>
  * personal room. Scales across instances via the Redis adapter attached in `main.ts`.
  */
 @WebSocketGateway({ namespace: '/chat', cors: false })
-export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
+export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, OnModuleInit {
   private readonly logger = new Logger(ChatGateway.name);
 
   @WebSocketServer()
@@ -51,7 +54,21 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     private readonly notifications: NotificationsService,
     private readonly jwt: JwtService,
     private readonly config: ConfigService<Env, true>,
+    private readonly mediaReady: MediaReadyBus,
   ) {}
+
+  /**
+   * A video finishes transcoding long after its message was sent, so the client is told out of band
+   * rather than by re-sending the message.
+   */
+  onModuleInit(): void {
+    this.mediaReady.subscribe(async (asset) => {
+      if (asset.messageId === null) {
+        return; // never attached to a message — nobody to tell
+      }
+      await this.broadcastMediaReady(asset);
+    });
+  }
 
   async handleConnection(client: Socket): Promise<void> {
     let verified: VerifiedSocket;
@@ -194,11 +211,22 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
     // Offline push to the recipient (C8) — best-effort; only when they have no open socket.
     if (otherId !== null && !(await this.chat.isOnline(otherId))) {
-      await this.notifications.pushToStudent(otherId, {
-        title: 'Yangi xabar',
-        body: message.body ?? '',
-        data: { conversationId: message.conversationId },
-      });
+      // One push per album, not one per image: the rest of a multi-image send would otherwise
+      // buzz the recipient's phone ten times in a row.
+      const isAlbumFollowUp =
+        message.albumId !== null &&
+        (await this.chat.countInAlbum(message.conversationId, message.albumId)) > 1;
+      if (!isAlbumFollowUp) {
+        await this.notifications.pushToStudent(otherId, {
+          title: 'Yangi xabar',
+          body: pushTextFor(message),
+          data: {
+            conversationId: message.conversationId,
+            messageType: message.type,
+            ...(message.albumId === null ? {} : { albumId: message.albumId }),
+          },
+        });
+      }
     }
   }
 
@@ -221,6 +249,31 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       rooms.push(personalRoom(otherId));
     }
     this.server.to(rooms).emit(CHAT_EVENT.MESSAGE_DELETED, payload);
+  }
+
+  /** Tell both members an attachment finished processing (chat media spec §6.3). */
+  async broadcastMediaReady(asset: MediaAsset): Promise<void> {
+    if (this.server === undefined || asset.messageId === null) {
+      return;
+    }
+    const message = await this.chat.findMessageById(asset.messageId);
+    if (message === null) {
+      return;
+    }
+    const otherId = await this.chat.otherMemberId(message.conversationId, message.senderId);
+    const rooms = [personalRoom(message.senderId)];
+    if (otherId !== null) {
+      rooms.push(personalRoom(otherId));
+    }
+    this.server.to(rooms).emit(CHAT_EVENT.MEDIA_READY, {
+      mediaId: asset.id,
+      conversationId: message.conversationId,
+      messageId: message.id,
+      attachment: AttachmentDto.fromDomain(
+        asset,
+        `/${this.config.get('API_PREFIX', { infer: true })}`,
+      ),
+    });
   }
 
   /** Broadcast a read receipt to the other member (the sender whose messages were read). */
@@ -307,6 +360,32 @@ function toMessageType(value: string | undefined): MessageType | undefined {
     throw AppException.validation({ type: 'Noma‘lum xabar turi' });
   }
   return value as MessageType;
+}
+
+/**
+ * What the recipient sees on the lock screen (chat media spec §7). Localisation stays here rather
+ * than on the client because a push arrives while the app is not running.
+ */
+function pushTextFor(message: Message): string {
+  const caption = message.body === null ? '' : ` ${message.body}`;
+  switch (message.type) {
+    case MessageType.TEXT:
+      return (message.body ?? '').slice(0, 120);
+    case MessageType.IMAGE:
+      return `📷 Rasm${caption}`.slice(0, 120);
+    case MessageType.GIF:
+      return '🎞 GIF';
+    case MessageType.VIDEO:
+      return `🎥 Video${caption}`.slice(0, 120);
+    case MessageType.VOICE:
+      return '🎤 Ovozli xabar';
+    case MessageType.FILE:
+      return `📎 ${message.attachment?.fileName ?? 'Fayl'}`.slice(0, 120);
+    case MessageType.STICKER:
+      return `${message.sticker?.emoji ?? ''} Stiker`.trim();
+    case MessageType.SYSTEM:
+      return 'Xabar';
+  }
 }
 
 function unauthorized(): { code: string; message: string } {

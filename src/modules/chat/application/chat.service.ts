@@ -331,6 +331,16 @@ export class ChatService {
     return this.chat.softDeleteMessage(messageId);
   }
 
+  /** A message by id, with its attachment — used when a transcode finishes (chat media spec §6.3). */
+  findMessageById(messageId: string): Promise<Message | null> {
+    return this.chat.findMessage(messageId);
+  }
+
+  /** How many messages share an album id — the gateway coalesces pushes with it. */
+  countInAlbum(conversationId: string, albumId: string): Promise<number> {
+    return this.chat.countInAlbum(conversationId, albumId);
+  }
+
   /** A socket connected — mark the student online. */
   async goOnline(studentId: string): Promise<void> {
     await this.presence.online(studentId);

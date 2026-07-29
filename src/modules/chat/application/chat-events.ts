@@ -9,6 +9,7 @@ export const CHAT_EVENT = {
   // server → client
   MESSAGE_NEW: 'message:new',
   MESSAGE_DELETED: 'message:deleted',
+  MEDIA_READY: 'media:ready',
   READ_RECEIPT: 'message:read',
   DELIVERED_RECEIPT: 'message:delivered',
   TYPING: 'typing',

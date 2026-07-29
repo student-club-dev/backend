@@ -153,6 +153,29 @@ export class ChatMediaService {
     return asset;
   }
 
+  /**
+   * Removes uploads that were never attached to a message, bytes first. A day's grace: long enough
+   * that a slow send or a retried one is never caught, short enough that abandoned picks do not
+   * accumulate. Returns how many rows went.
+   */
+  async deleteOrphans(olderThanMs = DAY_MS, batch = 500): Promise<number> {
+    const orphans = await this.assets.findOrphans(new Date(Date.now() - olderThanMs), batch);
+    if (orphans.length === 0) {
+      return 0;
+    }
+    for (const asset of orphans) {
+      for (const key of [asset.storageKey, asset.thumbStorageKey]) {
+        if (key !== null) {
+          // Storage first: a row without bytes is recoverable noise, bytes without a row are a leak
+          // nothing will ever find again.
+          await this.storage.delete(key).catch(() => undefined);
+        }
+      }
+    }
+    await this.assets.deleteMany(orphans.map((asset) => asset.id));
+    return orphans.length;
+  }
+
   // ---- per-kind processing ----
 
   private async buildImage(base: NewMediaAsset, file: UploadedChatFile): Promise<NewMediaAsset> {
