@@ -198,6 +198,27 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
+  /**
+   * Tell both members a message was deleted (§18). Only the identity is sent — the content is gone,
+   * and the recipient already holds the row it needs to replace with a tombstone.
+   */
+  async broadcastDeleted(message: Message): Promise<void> {
+    if (this.server === undefined) {
+      return;
+    }
+    const otherId = await this.chat.otherMemberId(message.conversationId, message.senderId);
+    const payload = {
+      conversationId: message.conversationId,
+      messageId: message.id,
+      seq: message.seq,
+    };
+    const rooms = [personalRoom(message.senderId)];
+    if (otherId !== null) {
+      rooms.push(personalRoom(otherId));
+    }
+    this.server.to(rooms).emit(CHAT_EVENT.MESSAGE_DELETED, payload);
+  }
+
   /** Broadcast a read receipt to the other member (the sender whose messages were read). */
   async broadcastRead(conversationId: string, readerId: string, seq: number): Promise<void> {
     if (this.server === undefined) {

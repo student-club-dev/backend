@@ -5993,6 +5993,162 @@
             "bearer": []
           }
         ]
+      },
+      "get": {
+        "operationId": "BlocksController_list",
+        "summary": "List the students you have blocked (newest first)",
+        "description": "One-directional: who blocked *you* is not shown. Presence is always masked — blocking removes the connection (§18).",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "format": "int32",
+              "default": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "size",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "format": "int32",
+              "default": 20,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "$ref": "#/components/schemas/BlockedStudentPageDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (`UNAUTHORIZED`), or expired (`TOKEN_EXPIRED`) — refresh and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 401
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Avtorizatsiyadan o‘tilmagan"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UNAUTHORIZED",
+                            "message": "Avtorizatsiyadan o‘tilmagan",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not a STUDENT account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 403
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Ruxsat yo‘q"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "FORBIDDEN",
+                            "message": "Ruxsat yo‘q",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Connections"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
       }
     },
     "/v1/blocks/{studentId}": {
@@ -6702,6 +6858,331 @@
                           "example": {
                             "code": "FORBIDDEN",
                             "message": "Ruxsat yo‘q",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Chat"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/conversations/unread-count": {
+      "get": {
+        "operationId": "ConversationsController_unreadCount",
+        "summary": "Unread totals for the tab badge",
+        "description": "Both counters in one query. Without it the client loads the whole conversation list just to add up unread messages (§18).",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "$ref": "#/components/schemas/UnreadCountDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (`UNAUTHORIZED`), or expired (`TOKEN_EXPIRED`) — refresh and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 401
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Avtorizatsiyadan o‘tilmagan"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UNAUTHORIZED",
+                            "message": "Avtorizatsiyadan o‘tilmagan",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not a STUDENT account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 403
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Ruxsat yo‘q"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "FORBIDDEN",
+                            "message": "Ruxsat yo‘q",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Chat"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/conversations/{id}": {
+      "get": {
+        "operationId": "ConversationsController_one",
+        "summary": "One conversation — the same row the list returns",
+        "description": "For opening a conversation from a push without reloading the whole list (§18). The shape is identical to an item of `GET /v1/conversations`, so the client can slot it straight in.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Conversation id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "$ref": "#/components/schemas/ConversationListItemDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (`UNAUTHORIZED`), or expired (`TOKEN_EXPIRED`) — refresh and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 401
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Avtorizatsiyadan o‘tilmagan"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UNAUTHORIZED",
+                            "message": "Avtorizatsiyadan o‘tilmagan",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not a STUDENT account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 403
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Ruxsat yo‘q"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "FORBIDDEN",
+                            "message": "Ruxsat yo‘q",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not a member.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 404
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Suhbat topilmadi"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "CONVERSATION_NOT_FOUND",
+                            "message": "Suhbat topilmadi",
                             "fields": {}
                           }
                         }
@@ -7666,6 +8147,197 @@
                           "example": {
                             "code": "VALIDATION_ERROR",
                             "message": "Ma’lumotlar noto‘g‘ri",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Chat"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/messages/{id}": {
+      "delete": {
+        "operationId": "MessagesController_remove",
+        "summary": "Delete your own message",
+        "description": "Soft delete: the message keeps its `seq` and stays in the history, but `body` is emptied, `deletedAt` is set and it stops counting as unread. `seq` is the axis every history and read cursor walks, so removing the row would tear holes in both. Idempotent.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Message id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The message, now deleted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "$ref": "#/components/schemas/MessageDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (`UNAUTHORIZED`), or expired (`TOKEN_EXPIRED`) — refresh and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 401
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Avtorizatsiyadan o‘tilmagan"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UNAUTHORIZED",
+                            "message": "Avtorizatsiyadan o‘tilmagan",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not your message (`FORBIDDEN`), or the caller is not a STUDENT account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 403
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Ruxsat yo‘q"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "FORBIDDEN",
+                            "message": "Ruxsat yo‘q",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such message, or it is not in a conversation you belong to.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 404
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Xabar topilmadi"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "MESSAGE_NOT_FOUND",
+                            "message": "Xabar topilmadi",
                             "fields": {}
                           }
                         }
@@ -15625,6 +16297,55 @@
           "studentId"
         ]
       },
+      "BlockedStudentDto": {
+        "type": "object",
+        "properties": {
+          "student": {
+            "$ref": "#/components/schemas/StudentSummaryDto"
+          },
+          "blockedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "student",
+          "blockedAt"
+        ]
+      },
+      "BlockedStudentPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BlockedStudentDto"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "hasNext": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "size",
+          "total",
+          "hasNext"
+        ]
+      },
       "ReportReasonDto": {
         "type": "string",
         "enum": [
@@ -15769,6 +16490,12 @@
             "nullable": true,
             "description": "Your own idempotency key, echoed back — set only when you are the sender, `null` for everyone else. Match your optimistic (\"sending\") copy against this rather than against the message text: two identical texts in a row are indistinguishable, and a media message has no text at all (§17.1)."
           },
+          "deletedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time",
+            "description": "When the sender deleted this message, `null` otherwise. The row keeps its `seq` and stays in the history — `body` is emptied and it no longer counts as unread. Render a \"message deleted\" placeholder (§18)."
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -15782,6 +16509,7 @@
           "type",
           "body",
           "clientMsgId",
+          "deletedAt",
           "createdAt"
         ]
       },
@@ -15864,6 +16592,25 @@
           "size",
           "total",
           "hasNext"
+        ]
+      },
+      "UnreadCountDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Unread messages across every conversation. Deleted messages are not counted."
+          },
+          "conversations": {
+            "type": "integer",
+            "format": "int32",
+            "description": "How many conversations hold at least one unread message."
+          }
+        },
+        "required": [
+          "total",
+          "conversations"
         ]
       },
       "MessageListDto": {

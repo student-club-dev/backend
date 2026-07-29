@@ -33,6 +33,7 @@ function message(overrides: Partial<Message> = {}): Message {
     type: MessageType.TEXT,
     body: 'salom',
     clientMsgId: null,
+    deletedAt: null,
     createdAt: new Date('2026-07-01T00:00:00Z'),
     ...overrides,
   };
@@ -95,6 +96,12 @@ function makeChat(overrides: Partial<ChatRepository> = {}): ChatRepository {
     listMessages: jest.fn().mockResolvedValue([]),
     listSince: jest.fn().mockResolvedValue([]),
     listConversations: jest.fn().mockResolvedValue({ items: [], total: 0 }),
+    findConversationItem: jest.fn().mockResolvedValue(listItem()),
+    unreadSummary: jest.fn().mockResolvedValue({ total: 0, conversations: 0 }),
+    findMessage: jest.fn().mockResolvedValue(message()),
+    softDeleteMessage: jest.fn(async (id: string) =>
+      message({ id, body: null, deletedAt: new Date('2026-07-29T00:00:00Z') }),
+    ),
     advanceCursor: jest.fn().mockResolvedValue(undefined),
     touchLastSeen: jest.fn().mockResolvedValue(new Date('2026-07-27T00:00:00Z')),
     lastSeenVisibilityOf: jest.fn().mockResolvedValue(LastSeenVisibility.CONNECTIONS),
@@ -330,6 +337,99 @@ describe('ChatService', () => {
         presence,
       ).listConversations(me, 1, 20);
       expect(result.items[0].other).toMatchObject({ online: false, lastSeenAt: null });
+    });
+  });
+
+  // §18 — soft delete. `seq` is the axis every cursor walks, so the row survives; only its content
+  // and its claim on the unread badge go away.
+  describe('deleteMessage (§18)', () => {
+    it('soft-deletes the caller’s own message', async () => {
+      const chat = makeChat();
+      const result = await makeService(chat).deleteMessage(me, 'm1');
+      expect(chat.softDeleteMessage).toHaveBeenCalledWith('m1');
+      expect(result.body).toBeNull();
+      expect(result.deletedAt).not.toBeNull();
+    });
+
+    it('throws 403 FORBIDDEN for a message the caller did not send', async () => {
+      const chat = makeChat({
+        findMessage: jest.fn().mockResolvedValue(message({ senderId: 'other' })),
+      });
+      await expect(makeService(chat).deleteMessage(me, 'm1')).rejects.toMatchObject({
+        code: ERROR_CODE.FORBIDDEN,
+        status: 403,
+      });
+      expect(chat.softDeleteMessage).not.toHaveBeenCalled();
+    });
+
+    it('throws 404 for an unknown message id', async () => {
+      const chat = makeChat({ findMessage: jest.fn().mockResolvedValue(null) });
+      await expect(makeService(chat).deleteMessage(me, 'nope')).rejects.toMatchObject({
+        code: ERROR_CODE.MESSAGE_NOT_FOUND,
+        status: 404,
+      });
+    });
+
+    it('hides a non-member’s message behind 404 rather than 403', async () => {
+      // Answering 403 here would confirm the id exists — an id-probing oracle for other people's
+      // conversations. Only a member is entitled to be told "exists, but not yours".
+      const chat = makeChat({
+        findMessage: jest.fn().mockResolvedValue(message({ senderId: 'other' })),
+        findMembership: jest.fn().mockResolvedValue(null),
+      });
+      await expect(makeService(chat).deleteMessage(me, 'm1')).rejects.toMatchObject({
+        code: ERROR_CODE.MESSAGE_NOT_FOUND,
+        status: 404,
+      });
+    });
+
+    it('is idempotent — a second delete changes nothing', async () => {
+      const already = message({ body: null, deletedAt: new Date('2026-07-29T00:00:00Z') });
+      const chat = makeChat({ findMessage: jest.fn().mockResolvedValue(already) });
+      const result = await makeService(chat).deleteMessage(me, 'm1');
+      expect(result).toBe(already);
+      expect(chat.softDeleteMessage).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('conversationItem / unreadSummary (§18)', () => {
+    it('404s when the caller is not a member', async () => {
+      const chat = makeChat({ findConversationItem: jest.fn().mockResolvedValue(null) });
+      await expect(makeService(chat).conversationItem(me, 'conv-1')).rejects.toMatchObject({
+        code: ERROR_CODE.CONVERSATION_NOT_FOUND,
+        status: 404,
+      });
+    });
+
+    it('applies presence visibility to the other member, like the list does', async () => {
+      const chat = makeChat();
+      const presence = makePresence({ isOnline: jest.fn().mockResolvedValue(true) });
+      const item = await makeService(chat, makeConnectionCheck(), presence).conversationItem(
+        me,
+        'conv-1',
+      );
+      expect(item.other.online).toBe(true);
+    });
+
+    it('hides presence from a former connection', async () => {
+      const chat = makeChat();
+      const presence = makePresence({ isOnline: jest.fn().mockResolvedValue(true) });
+      const item = await makeService(
+        chat,
+        makeConnectionCheck(false, []),
+        presence,
+      ).conversationItem(me, 'conv-1');
+      expect(item.other).toMatchObject({ online: false, lastSeenAt: null });
+    });
+
+    it('passes the unread summary through', async () => {
+      const chat = makeChat({
+        unreadSummary: jest.fn().mockResolvedValue({ total: 37, conversations: 4 }),
+      });
+      await expect(makeService(chat).unreadSummary(me)).resolves.toEqual({
+        total: 37,
+        conversations: 4,
+      });
     });
   });
 

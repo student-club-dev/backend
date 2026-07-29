@@ -74,6 +74,7 @@ function makeConnections(overrides: Partial<ConnectionsRepository> = {}): Connec
     block: jest.fn().mockResolvedValue(undefined),
     unblock: jest.fn().mockResolvedValue(undefined),
     blockedIds: jest.fn().mockResolvedValue([]),
+    listBlocked: jest.fn().mockResolvedValue({ items: [], total: 0 }),
     ...overrides,
   };
 }
@@ -497,6 +498,49 @@ describe('ConnectionsService', () => {
       expect(result.items).toEqual([
         { student: summary('other'), connectedAt: new Date('2026-07-05T00:00:00Z') },
       ]);
+    });
+  });
+
+  describe('listBlocked (§18)', () => {
+    it('maps blocks to the blocked student + blockedAt', async () => {
+      const blockedAt = new Date('2026-07-10T00:00:00Z');
+      const connections = makeConnections({
+        listBlocked: jest
+          .fn()
+          .mockResolvedValue({ items: [{ studentId: 'other', blockedAt }], total: 1 }),
+      });
+      const directory = makeDirectory({
+        findSummaries: jest.fn().mockResolvedValue([summary('other')]),
+      });
+
+      const result = await makeService(connections, directory).listBlocked(me, 1, 20);
+
+      expect(connections.listBlocked).toHaveBeenCalledWith('me', 1, 20);
+      expect(result.items).toEqual([
+        { student: summary('other', { online: false, lastSeenAt: null }), blockedAt },
+      ]);
+    });
+
+    it('never exposes a blocked student’s presence', async () => {
+      const connections = makeConnections({
+        listBlocked: jest.fn().mockResolvedValue({
+          items: [{ studentId: 'other', blockedAt: new Date('2026-07-10T00:00:00Z') }],
+          total: 1,
+        }),
+      });
+      const directory = makeDirectory({
+        findSummaries: jest.fn().mockResolvedValue([
+          summary('other', {
+            online: true,
+            lastSeenAt: new Date('2026-07-11T00:00:00Z'),
+            lastSeenVisibility: LastSeenVisibility.CONNECTIONS,
+          }),
+        ]),
+      });
+
+      const result = await makeService(connections, directory).listBlocked(me, 1, 20);
+
+      expect(result.items[0].student).toMatchObject({ online: false, lastSeenAt: null });
     });
   });
 

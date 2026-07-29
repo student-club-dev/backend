@@ -8,7 +8,7 @@ import {
 } from '../../../infrastructure/presence/presence.repository';
 import { applyPresenceVisibility } from '../../connections/domain/presence-visibility';
 import { LastSeenVisibility } from '../../profiles/domain/enums/last-seen-visibility.enum';
-import { CHAT_REPOSITORY, ChatRepository } from '../domain/chat.repository';
+import { CHAT_REPOSITORY, ChatRepository, UnreadSummary } from '../domain/chat.repository';
 import { CONNECTION_CHECK, ConnectionCheckRepository } from '../domain/connection-check.repository';
 import { Conversation } from '../domain/entities/conversation.entity';
 import { ConversationListItem } from '../domain/entities/conversation-view.entity';
@@ -124,6 +124,52 @@ export class ChatService {
       return { ...item, other };
     });
     return { items, total: result.total };
+  }
+
+  /** One conversation-list row for a member — what the client needs when a push is tapped (§18). */
+  async conversationItem(
+    user: AuthenticatedUser,
+    conversationId: string,
+  ): Promise<ConversationListItem> {
+    const item = await this.chat.findConversationItem(conversationId, user.id);
+    if (item === null) {
+      throw AppException.notFound(ERROR_CODE.CONVERSATION_NOT_FOUND, 'Suhbat topilmadi');
+    }
+    const [connected, online] = await Promise.all([
+      this.connectionCheck.areConnected(user.id, item.other.id),
+      this.presence.isOnline(item.other.id),
+    ]);
+    return { ...item, other: applyPresenceVisibility(item.other, connected, online) };
+  }
+
+  /** Unread totals across all the caller's conversations — the tab badge (§18). */
+  unreadSummary(user: AuthenticatedUser): Promise<UnreadSummary> {
+    return this.chat.unreadSummary(user.id);
+  }
+
+  /**
+   * Soft-deletes the caller's own message (§18).
+   *
+   * A non-member gets 404 rather than 403: telling someone who has no business in this conversation
+   * that the id exists turns the endpoint into a probe for other people's message ids. A member who
+   * is not the sender gets 403 — they are entitled to know the message exists, just not to delete it.
+   */
+  async deleteMessage(user: AuthenticatedUser, messageId: string): Promise<Message> {
+    const message = await this.chat.findMessage(messageId);
+    if (message === null) {
+      throw AppException.notFound(ERROR_CODE.MESSAGE_NOT_FOUND, 'Xabar topilmadi');
+    }
+    const membership = await this.chat.findMembership(message.conversationId, user.id);
+    if (membership === null) {
+      throw AppException.notFound(ERROR_CODE.MESSAGE_NOT_FOUND, 'Xabar topilmadi');
+    }
+    if (message.senderId !== user.id) {
+      throw AppException.forbidden("Faqat o'z xabaringizni o'chira olasiz");
+    }
+    if (message.deletedAt !== null) {
+      return message; // idempotent — a retried delete is not an error
+    }
+    return this.chat.softDeleteMessage(messageId);
   }
 
   /** A socket connected — mark the student online. */

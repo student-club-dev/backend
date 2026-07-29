@@ -1,9 +1,13 @@
 import { Injectable } from '@nestjs/common';
-import { MessageType as PrismaMessageType, Prisma } from '@prisma/client';
+import {
+  Conversation as PrismaConversation,
+  MessageType as PrismaMessageType,
+  Prisma,
+} from '@prisma/client';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { LastSeenVisibility } from '../../profiles/domain/enums/last-seen-visibility.enum';
 import { LAST_SEEN_VISIBILITY_TO_DOMAIN } from '../../profiles/infrastructure/profile-enums.mapper';
-import { ChatRepository, ConversationPage } from '../domain/chat.repository';
+import { ChatRepository, ConversationPage, UnreadSummary } from '../domain/chat.repository';
 import { Conversation, ConversationMember } from '../domain/entities/conversation.entity';
 import { ConversationListItem } from '../domain/entities/conversation-view.entity';
 import { Message } from '../domain/entities/message.entity';
@@ -21,6 +25,13 @@ const SUMMARY_SELECT = {
   lastSeenAt: true,
   lastSeenVisibility: true,
 } as const;
+
+/** The counterpart membership row, loaded with just enough of the student to build a summary. */
+interface OtherMemberRow {
+  lastReadSeq: number;
+  lastDeliveredSeq: number;
+  student: ChatSummaryRow;
+}
 
 /** The other member has left the conversation (or the row is corrupt) — render an empty person. */
 const MISSING_MEMBER: ConversationListItem['other'] = {
@@ -187,34 +198,127 @@ export class ChatPrismaRepository implements ChatRepository {
     ]);
 
     const items = await Promise.all(
-      memberships.map(async (membership): Promise<ConversationListItem> => {
-        const otherMember = membership.conversation.members[0];
-        const otherRow = otherMember?.student as ChatSummaryRow | undefined;
-        const [lastRow, unreadCount] = await Promise.all([
-          this.prisma.message.findFirst({
-            where: { conversationId: membership.conversationId },
-            orderBy: { seq: 'desc' },
-          }),
-          this.prisma.message.count({
-            where: {
-              conversationId: membership.conversationId,
-              seq: { gt: membership.lastReadSeq },
-              senderId: { not: studentId },
-            },
-          }),
-        ]);
-        return {
-          conversation: ChatMapper.toConversation(membership.conversation),
-          other: otherRow === undefined ? MISSING_MEMBER : ChatMapper.toSummary(otherRow),
-          lastMessage: lastRow === null ? null : ChatMapper.toMessage(lastRow),
-          unreadCount,
-          myReadSeq: membership.lastReadSeq,
-          peerReadSeq: otherMember?.lastReadSeq ?? 0,
-          peerDeliveredSeq: otherMember?.lastDeliveredSeq ?? 0,
-        };
-      }),
+      memberships.map((membership) =>
+        this.toListItem(
+          membership.conversation,
+          membership.lastReadSeq,
+          membership.conversation.members[0],
+          studentId,
+        ),
+      ),
     );
     return { items, total };
+  }
+
+  async findConversationItem(
+    conversationId: string,
+    studentId: string,
+  ): Promise<ConversationListItem | null> {
+    const membership = await this.prisma.conversationMember.findUnique({
+      where: { conversationId_studentId: { conversationId, studentId } },
+      include: {
+        conversation: {
+          include: {
+            members: {
+              where: { studentId: { not: studentId } },
+              include: { student: { select: SUMMARY_SELECT } },
+            },
+          },
+        },
+      },
+    });
+    if (membership === null) {
+      return null;
+    }
+    return this.toListItem(
+      membership.conversation,
+      membership.lastReadSeq,
+      membership.conversation.members[0],
+      studentId,
+    );
+  }
+
+  /**
+   * Both badge numbers in one round trip. Prisma's `groupBy` cannot express this: the unread
+   * threshold is `lastReadSeq`, which varies per membership row, so it has to be a join. Counting
+   * per conversation instead — the way `listConversations` does — is one query per row, far too
+   * much for a number the app asks for on every foreground.
+   */
+  async unreadSummary(studentId: string): Promise<UnreadSummary> {
+    // `::int` on both aggregates is deliberate: SUM(bigint) is `numeric` and COUNT is `bigint`, which
+    // Prisma hands back as Decimal/BigInt — awkward values to carry through the DTO for two badge
+    // counters. `${studentId}` is a tagged-template parameter, so it is bound, never interpolated.
+    const rows = await this.prisma.$queryRaw<{ total: number; conversations: number }[]>`
+      SELECT
+        COALESCE(SUM(c.unread), 0)::int             AS total,
+        (COUNT(*) FILTER (WHERE c.unread > 0))::int AS conversations
+      FROM (
+        SELECT COUNT(m.id) AS unread
+        FROM conversation_members cm
+        LEFT JOIN messages m
+          ON m.conversation_id = cm.conversation_id
+         AND m.seq > cm.last_read_seq
+         AND m.sender_id <> cm.student_id
+         AND m.deleted_at IS NULL
+        WHERE cm.student_id = ${studentId}
+        GROUP BY cm.id
+      ) c
+    `;
+    const row = rows[0];
+    return {
+      total: row?.total ?? 0,
+      conversations: row?.conversations ?? 0,
+    };
+  }
+
+  async findMessage(messageId: string): Promise<Message | null> {
+    const row = await this.prisma.message.findUnique({ where: { id: messageId } });
+    return row === null ? null : ChatMapper.toMessage(row);
+  }
+
+  async softDeleteMessage(messageId: string): Promise<Message> {
+    const row = await this.prisma.message.update({
+      where: { id: messageId },
+      // The body really goes — a delete that only hid the text would be a lie to the sender.
+      // Evidence for moderation is captured in `reports.content_snapshot` at report time.
+      data: { deletedAt: new Date(), body: null },
+    });
+    return ChatMapper.toMessage(row);
+  }
+
+  /** Builds one conversation-list row from an already-loaded membership and its counterpart. */
+  private async toListItem(
+    conversation: PrismaConversation,
+    myReadSeq: number,
+    otherMember: OtherMemberRow | undefined,
+    studentId: string,
+  ): Promise<ConversationListItem> {
+    const [lastRow, unreadCount] = await Promise.all([
+      this.prisma.message.findFirst({
+        where: { conversationId: conversation.id },
+        orderBy: { seq: 'desc' },
+      }),
+      this.prisma.message.count({
+        where: {
+          conversationId: conversation.id,
+          seq: { gt: myReadSeq },
+          senderId: { not: studentId },
+          // A deleted message must not keep the badge lit: it is invisible, so it can never be read.
+          deletedAt: null,
+        },
+      }),
+    ]);
+    const otherRow = otherMember?.student;
+    return {
+      conversation: ChatMapper.toConversation(conversation),
+      other: otherRow === undefined ? MISSING_MEMBER : ChatMapper.toSummary(otherRow),
+      // The last message is shown even when deleted — the client draws the tombstone.
+      lastMessage: lastRow === null ? null : ChatMapper.toMessage(lastRow),
+      unreadCount,
+      myReadSeq,
+      peerReadSeq: otherMember?.lastReadSeq ?? 0,
+      peerDeliveredSeq: otherMember?.lastDeliveredSeq ?? 0,
+    };
   }
 
   async advanceCursor(

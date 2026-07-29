@@ -18,6 +18,7 @@ import {
   StudentSort,
 } from '../domain/student-directory.repository';
 import {
+  BlockedListItem,
   ConnectionListItem,
   Page,
   RequestListItem,
@@ -232,6 +233,28 @@ export class ConnectionsService {
       return student === undefined
         ? []
         : [{ student, connectedAt: edge.respondedAt ?? edge.createdAt }];
+    });
+    return { items, total };
+  }
+
+  /**
+   * The students the caller has blocked, newest first (§18). Presence is never resolved here: a
+   * block removes the connection, so `CONNECTIONS` visibility already hides `online`/`lastSeenAt` —
+   * asking Redis for it would only risk leaking presence to someone they cut off.
+   */
+  async listBlocked(
+    user: AuthenticatedUser,
+    page: number,
+    size: number,
+  ): Promise<Page<BlockedListItem>> {
+    const { items: blocks, total } = await this.connections.listBlocked(user.id, page, size);
+    const summaries = await this.directory.findSummaries(blocks.map((block) => block.studentId));
+    const byId = new Map(summaries.map((summary) => [summary.id, summary]));
+    const items = blocks.flatMap((block): BlockedListItem[] => {
+      const student = byId.get(block.studentId);
+      return student === undefined
+        ? []
+        : [{ student: applyPresenceVisibility(student, false, false), blockedAt: block.blockedAt }];
     });
     return { items, total };
   }

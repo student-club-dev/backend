@@ -8,6 +8,7 @@ export const CHAT_EVENT = {
   TYPING_STOP: 'typing:stop',
   // server → client
   MESSAGE_NEW: 'message:new',
+  MESSAGE_DELETED: 'message:deleted',
   READ_RECEIPT: 'message:read',
   DELIVERED_RECEIPT: 'message:delivered',
   TYPING: 'typing',

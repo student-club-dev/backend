@@ -190,6 +190,7 @@ Auth: the socket handshake carries the **access JWT** (`auth: { token }`); the g
 | Event | Payload |
 |-------|---------|
 | `message:new` | `{ conversationId, message }` |
+| `message:deleted` | `{ conversationId, messageId, seq }` — sent to **both** members |
 | `message:delivered` | `{ conversationId, seq, byStudentId }` |
 | `message:read` | `{ conversationId, seq, byStudentId }` |
 | `typing` | `{ conversationId, studentId, isTyping }` |
@@ -241,11 +242,33 @@ sequenceDiagram
 | Method | Path | Purpose |
 |--------|------|---------|
 | `GET`  | `/v1/conversations` | List (last message + `unreadCount`), newest-active first, paginated |
+| `GET`  | `/v1/conversations/unread-count` | `{ total, conversations }` for the tab badge |
+| `GET`  | `/v1/conversations/{id}` | One conversation — the same row shape the list returns |
 | `GET`  | `/v1/conversations/{id}/messages?before={seq}&size=` | History (paginated, `seq`-cursor) |
 | `POST` | `/v1/conversations/{id}/messages` | Send (REST fallback; same idempotency) |
 | `POST` | `/v1/conversations/{id}/read` `{ seq }` | Advance read cursor |
 | `POST` | `/v1/conversations/{id}/delivered` `{ seq }` | Advance delivered cursor (REST twin of the WS event) |
-| *(v2)* | `GET /v1/conversations/{id}` · `PUT /v1/messages/{id}` · `DELETE /v1/messages/{id}` · `POST /v1/messages/{id}/reactions` | Single conversation · edit / delete / react |
+| `DELETE` | `/v1/messages/{id}` | Soft-delete your own message |
+| *(v2)* | `PUT /v1/messages/{id}` · `POST /v1/messages/{id}/reactions` | Edit / react |
+
+`unread-count` is declared **before** `:id` in the controller — Nest matches routes in declaration
+order, and `:id` would otherwise capture `unread-count` as a conversation id.
+
+### Deleting a message
+
+`DELETE /v1/messages/{id}` is a **soft** delete: `deleted_at` is stamped and `body` is emptied, but
+the row stays. `seq` is the axis every cursor walks (history `before`/`after`, the read and delivered
+cursors, unread arithmetic) — removing the row would tear holes in all of them. Clients render a
+"message deleted" tombstone from `MessageDto.deletedAt`.
+
+- **Only the sender** can delete, with no time limit. Idempotent.
+- A member who is not the sender gets **403**; someone who is not in the conversation gets **404** —
+  answering 403 there would confirm the id exists, making the endpoint an id-probing oracle.
+- A deleted message **stops counting as unread** (it is invisible, so it could never be read) but is
+  still returned by history and still shown as `lastMessage`.
+- It stays **reportable**: `POST /v1/reports` deliberately does not filter deleted messages, so abuse
+  can still be reported after the sender removes it. The evidence lives in `reports.content_snapshot`,
+  captured at report time.
 
 `hasMore` on the history page is exact: the server reads one row past `size` and drops it, rather
 than inferring "more exist" from a page that happened to fill. It means "more messages past this

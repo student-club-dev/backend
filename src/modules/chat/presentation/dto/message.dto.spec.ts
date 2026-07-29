@@ -10,6 +10,7 @@ const message: Message = {
   type: MessageType.TEXT,
   body: 'salom',
   clientMsgId: 'cmid-1',
+  deletedAt: null,
   createdAt: new Date('2026-07-28T09:14:22.531Z'),
 };
 

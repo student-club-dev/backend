@@ -50,6 +50,7 @@ export class ChatMapper {
       type: MessageType[row.type],
       body: row.body,
       clientMsgId: row.clientMsgId,
+      deletedAt: row.deletedAt,
       createdAt: row.createdAt,
     };
   }

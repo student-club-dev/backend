@@ -12,6 +12,7 @@ import { CONNECTION_CHECK } from './domain/connection-check.repository';
 import { ChatPrismaRepository } from './infrastructure/chat.prisma.repository';
 import { ConnectionCheckPrismaRepository } from './infrastructure/connection-check.prisma.repository';
 import { ConversationsController } from './presentation/conversations.controller';
+import { MessagesController } from './presentation/messages.controller';
 
 /**
  * Student↔student chat (Plan 2). 1:1 conversations gated by an accepted connection. REST +
@@ -19,7 +20,7 @@ import { ConversationsController } from './presentation/conversations.controller
  */
 @Module({
   imports: [PrismaModule, PresenceModule, JwtModule.register({}), NotificationsModule],
-  controllers: [ConversationsController],
+  controllers: [ConversationsController, MessagesController],
   providers: [
     ChatService,
     ChatGateway,

@@ -37,6 +37,17 @@ export class MessageDto {
   })
   clientMsgId!: string | null;
 
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    format: 'date-time',
+    description:
+      'When the sender deleted this message, `null` otherwise. The row keeps its `seq` and stays ' +
+      'in the history — `body` is emptied and it no longer counts as unread. Render a "message ' +
+      'deleted" placeholder (§18).',
+  })
+  deletedAt!: string | null;
+
   @ApiProperty({ type: String, format: 'date-time' })
   createdAt!: string;
 
@@ -50,6 +61,7 @@ export class MessageDto {
     dto.type = message.type;
     dto.body = message.body;
     dto.clientMsgId = message.senderId === viewerId ? message.clientMsgId : null;
+    dto.deletedAt = message.deletedAt === null ? null : message.deletedAt.toISOString();
     dto.createdAt = message.createdAt.toISOString();
     return dto;
   }

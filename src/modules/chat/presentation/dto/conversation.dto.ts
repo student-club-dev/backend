@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { StudentSummaryDto } from '../../../connections/presentation/dto/student-summary.dto';
 import { Page } from '../../application/chat.io';
+import { UnreadSummary } from '../../domain/chat.repository';
 import { Conversation } from '../../domain/entities/conversation.entity';
 import { ConversationListItem } from '../../domain/entities/conversation-view.entity';
 import { ConversationType } from '../../domain/enums/conversation-type.enum';
@@ -81,6 +82,30 @@ export class ConversationListItemDto {
     dto.myReadSeq = item.myReadSeq;
     dto.peerReadSeq = item.peerReadSeq;
     dto.peerDeliveredSeq = item.peerDeliveredSeq;
+    return dto;
+  }
+}
+
+/** Tab-badge counters (§18) — saves loading the whole conversation list just to add up unread. */
+export class UnreadCountDto {
+  @ApiProperty({
+    type: 'integer',
+    format: 'int32',
+    description: 'Unread messages across every conversation. Deleted messages are not counted.',
+  })
+  total!: number;
+
+  @ApiProperty({
+    type: 'integer',
+    format: 'int32',
+    description: 'How many conversations hold at least one unread message.',
+  })
+  conversations!: number;
+
+  static from(summary: UnreadSummary): UnreadCountDto {
+    const dto = new UnreadCountDto();
+    dto.total = summary.total;
+    dto.conversations = summary.conversations;
     return dto;
   }
 }

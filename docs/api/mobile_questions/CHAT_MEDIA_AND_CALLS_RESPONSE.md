@@ -10,8 +10,8 @@ Bu hujjat uch narsani beradi:
 2. **Bugun bajarilgan** ishlar va o'zgargan kontrakt, to'liq endpoint hujjati bilan — §2–§4.
 3. Qolgan bosqichlar va ular **nimaga bog'liqligi** — §5.
 
-**Holat: Bosqich 0 bajarildi.** Media (A qism) va qo'ng'iroq (B qism) hali boshlanmagan —
-sabablari §5 da.
+**Holat: Bosqich 0 va Bosqich 2 bajarildi.** Media (A qism) va qo'ng'iroq (B qism) hali
+boshlanmagan — sabablari §5 da.
 
 ---
 
@@ -49,9 +49,10 @@ qo'shish emas — avval butun FCM/APNs integratsiyasi yozilishi kerak.
 | §19.1 tipsiz `object,nullable` | ✅ Bajarildi — **butun API bo'ylab, 0 ta qoldi** | §3.8 |
 | §19.2 `MessageDto.body` → `string` | ✅ Bajarildi | §3.8 |
 | §19.3 butun sonlar `integer` | ✅ Bajarildi | §3.8 |
-| §19.4 sahifalash nomuvofiqligi | ⏳ Yangi endpointlar qo'shilganda (Bosqich 2/3) | §5 |
+| §19.4 sahifalash nomuvofiqligi | ✅ Yangi endpointlar chat uslubida (`?page=` 1 dan) | §4b |
 | §19.5 WS protokoli hujjati | ✅ `docs/architecture/chat.md` yangilandi | — |
-| §18 yetishmayotgan endpointlar | ⏳ Bosqich 2 | §5 |
+| §18 — 4 ta endpoint | ✅ Bajarildi | §4b |
+| §18 — qolganlari (tahrirlash, arxiv, qidiruv, reply, reaksiya, forward, guruh, universitetlar) | ⏳ Talab qilinmagan | §5 |
 | A qism (media) | ⏳ Bosqich 3 | §5 |
 | B qism (qo'ng'iroq) | ⏳ Bloklangan | §5 |
 
@@ -61,6 +62,9 @@ qo'shish emas — avval butun FCM/APNs integratsiyasi yozilishi kerak.
 
 > Barcha yangi maydonlar **nullable**, WS ack shakli **o'zgarmadi**, `MessageDto.body` **string
 > bo'lib qoldi**. Tarqatilgan eski klientlar buzilmaydi.
+>
+> `MessageDto` ga jami ikkita maydon qo'shildi: `clientMsgId` (§3.1) va `deletedAt` (§4b).
+> Mavjud maydonlarning birortasi ham o'zgarmadi.
 
 ### 3.1 `MessageDto` — `+clientMsgId` (§17.1)
 
@@ -238,19 +242,118 @@ bitta belgichani ikkitaga aylantiradi.
 
 ---
 
+## 4b. Bosqich 2 — §18 dagi to'rt endpoint
+
+Sahifalash sizning §19.4 talabingizdek: `?page=` **1** dan, query'da. Yangi nomuvofiqlik yo'q.
+
+### `DELETE /v1/messages/{id}` — soft delete
+
+```http
+DELETE /v1/messages/cmg7x...
+Authorization: Bearer <accessToken>
+```
+
+Javob `200` — o'chirilgan xabarning o'zi:
+
+```jsonc
+{
+  "success": true, "status": 200, "message": "OK",
+  "result": {
+    "id": "cmg7x...", "conversationId": "cnv_01H...", "senderId": "std_A",
+    "seq": 148,                                  // ← joyida qoladi
+    "type": "TEXT",
+    "body": null,                                // ← haqiqatan bo'shatiladi
+    "clientMsgId": "1993f0b2a11-...",
+    "deletedAt": "2026-07-29T10:02:11.000Z",     // ← YANGI maydon
+    "createdAt": "2026-07-28T09:14:22.531Z"
+  },
+  "error": null
+}
+```
+
+| HTTP | `error.code` | Qachon |
+|---|---|---|
+| 403 | `FORBIDDEN` | Siz a'zosiz, lekin xabar sizniki emas |
+| 404 | `MESSAGE_NOT_FOUND` | Bunday xabar yo'q **yoki** siz u turgan suhbat a'zosi emassiz |
+
+> **Nega a'zo bo'lmaganga 404, begona xabarga 403.** 403 «bu resurs bor, lekin sizniki emas» degani —
+> uni faqat resurs mavjudligini bilishga haqli odam eshitishi kerak. Suhbatga umuman aloqasi yo'q
+> odamga 403 aytish begona xabar id'lari mavjudligini tekshirish imkonini beradi.
+
+**Xatti-harakati:**
+
+- Qator **o'chirilmaydi**, `seq` joyida qoladi. `seq` — tarix kursori, o'qildi/yetkazildi kursorlari
+  va o'qilmaganlar arifmetikasining o'qi; qatorni yo'q qilish ularning hammasida teshik qoldiradi.
+- `body` **haqiqatan** bo'shatiladi. Faqat DTO darajasida yashirish jo'natuvchiga yolg'on bo'lardi.
+- **O'qilmaganlar sanog'idan chiqadi** — ko'rinmaydigan xabarni o'qib bo'lmaydi, ya'ni aks holda
+  badge abadiy yoqiq qolardi.
+- Tarixda va `lastMessage` da **qoladi** (`deletedAt` to'ldirilgan holda) — siz tombstone chizasiz.
+- **Idempotent** — ikkinchi marta `DELETE` ham `200` qaytaradi.
+- **Shikoyat qilish mumkinligicha qoladi:** jo'natuvchi haqoratli xabarni o'chirsa ham,
+  `POST /v1/reports` uni topadi. Dalil `reports.content_snapshot` da — u **shikoyat paytida** olinadi.
+
+**Yangi WS hodisasi** — ikkala a'zoga:
+
+```jsonc
+// message:deleted
+{ "conversationId": "cnv_01H...", "messageId": "cmg7x...", "seq": 148 }
+```
+
+> ⚠️ **`MESSAGE_NOT_FOUND` ikki xil status bilan keladi:** bu yerda **404**, `POST /v1/reports` da esa
+> **422** (sizning §21 qabul mezoningiz shunday yozilgan). Kod *nima* topilmaganini, status esa
+> *qanday* muvaffaqiyatsizlikni bildiradi — biri marshrut darajasida, ikkinchisi tana validatsiyasida.
+> Klientda kodni statusga bog'lamang. Agar buni bir xil qilishni istasangiz — ayting, o'zgartiramiz.
+
+### `GET /v1/conversations/{id}`
+
+Javob — **ro'yxatdagi qator bilan aynan bir xil shakl** (`ConversationListItemDto`), ya'ni push
+bosilganda uni to'g'ridan-to'g'ri ro'yxatga qo'yib yuborsangiz bo'ladi:
+
+```jsonc
+{ "result": {
+    "conversation": { "id": "cnv_01H...", "type": "DIRECT", "lastMessageAt": "..." },
+    "other": { "id": "std_A", "username": "...", "online": true, "lastSeenAt": null, "...": "..." },
+    "lastMessage": { "...": "MessageDto" },
+    "unreadCount": 3, "myReadSeq": 145, "peerReadSeq": 148, "peerDeliveredSeq": 148
+} }
+```
+
+A'zo bo'lmasangiz → `404 CONVERSATION_NOT_FOUND`. Presence ro'yxatdagidek maskalanadi (C7/C9).
+
+### `GET /v1/conversations/unread-count`
+
+```jsonc
+{ "result": { "total": 37, "conversations": 4 } }
+```
+
+`total` — o'qilmagan xabarlar soni (o'chirilganlar hisobga olinmaydi), `conversations` — kamida bitta
+o'qilmagani bor suhbatlar soni. Ikkalasi bitta agregat so'rovdan chiqadi. Badge uchun qaysi biri
+kerakligini o'zingiz tanlaysiz.
+
+### `GET /v1/blocks?page=1&size=20`
+
+```jsonc
+{ "result": {
+    "items": [ { "student": { "...": "StudentSummaryDto" }, "blockedAt": "2026-07-10T00:00:00.000Z" } ],
+    "page": 1, "size": 20, "total": 1, "hasNext": false
+} }
+```
+
+**Faqat siz bloklaganlar.** Sizni kim bloklagani ko'rsatilmaydi — bu ataylab. Bloklanganning
+`online`/`lastSeenAt` maydonlari doim maskalangan.
+
+---
+
 ## 5. Keyingi bosqichlar
 
-### Bosqich 2 — §18 yetishmayotgan endpointlar
+### §18 dagi qolganlar
 
-`DELETE /v1/messages/{id}` · `GET /v1/conversations/{id}` · `GET /v1/blocks` ·
-`GET /v1/conversations/unread-count`.
+Tahrirlash, arxivlash, tarixni tozalash, xabarlar ichida qidiruv, reply/quote, reaksiya, forward,
+guruh suhbat, universitetlar katalogi — bular hujjatda ro'yxatga olingan, lekin talab sifatida
+qo'yilmagan. Kerak bo'lsa ayting, navbatga qo'yamiz.
 
-`DELETE` da bitta muhim nuqta: xabar **soft-delete** qilinadi (tombstone), chunki `seq` — butun
-chatning tartib o'qi. Uni haqiqiy o'chirish `seq` uzluksizligini, o'qilmaganlar sanog'ini va `before`/
-`after` kursorlarini buzadi. Klient uchun bu `type` saqlanib, `body` va `attachment` bo'shashi
-degani; `message:deleted` WS hodisasi ham qo'shiladi. Siz bilan kelishib olamiz.
-
-Sahifalash — sizning §19.4 talabingizdek chat uslubida (`?page=` 1 dan, query'da).
+`ConversationTypeDto.GROUP` «o'lik enum» ekani haqidagi kuzatuvingiz to'g'ri. Lekin uni olib tashlash
+generatsiya qilingan klientni buzadi, shuning uchun alohida kelishuv kerak — o'z-o'zidan qilmadik.
 
 ### Bosqich 3 — A qism (media)
 
@@ -293,4 +396,5 @@ o'shani asos qilib olamiz. `denied-peer-ip` bloklari va 443/TLS talabi ayniqsa t
 | WS protokoli | `docs/architecture/chat.md` → «Real-time protocol» |
 | nginx konfiguratsiyasi | `deploy/nginx/socket-io.conf`, `deploy/nginx/README.md` |
 | Bosqich 0 dizayni | `docs/superpowers/specs/2026-07-28-chat-phase0-fixes-design.md` |
+| Bosqich 2 dizayni | `docs/superpowers/specs/2026-07-29-chat-phase2-missing-endpoints-design.md` |
 | Sizning hujjatingiz | `docs/api/mobile_questions/CHAT_MEDIA_AND_CALLS_BACKEND.md` |

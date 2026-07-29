@@ -322,6 +322,124 @@ describe('Connections + Chat — e2e', () => {
     expect(stored.contentSnapshot).toBe(message.body);
   });
 
+  // ---- Phase 2: the endpoints §18 listed as missing ----
+
+  it('returns one conversation in the same shape as a list row (§18)', async () => {
+    const res = await request(app.getHttpServer())
+      .get(`/v1/conversations/${conversationId}`)
+      .set('Authorization', auth(bToken))
+      .expect(200);
+
+    expect(res.body.result.conversation.id).toBe(conversationId);
+    expect(res.body.result.other.id).toBe(aId);
+    expect(res.body.result).toHaveProperty('unreadCount');
+    expect(res.body.result).toHaveProperty('myReadSeq');
+    expect(res.body.result).toHaveProperty('peerDeliveredSeq');
+  });
+
+  it('404s a conversation the caller is not a member of (§18)', async () => {
+    const res = await request(app.getHttpServer())
+      .get(`/v1/conversations/${conversationId}`)
+      .set('Authorization', auth(cToken))
+      .expect(404);
+    expect(res.body.error.code).toBe('CONVERSATION_NOT_FOUND');
+  });
+
+  it('reports unread totals for the tab badge (§18)', async () => {
+    const res = await request(app.getHttpServer())
+      .get('/v1/conversations/unread-count')
+      .set('Authorization', auth(bToken))
+      .expect(200);
+
+    expect(typeof res.body.result.total).toBe('number');
+    expect(typeof res.body.result.conversations).toBe('number');
+    expect(res.body.result.total).toBeGreaterThanOrEqual(res.body.result.conversations);
+  });
+
+  it('lists only the students the caller blocked, never who blocked them (§18)', async () => {
+    // A blocked C earlier in this file. From C's side that block must be invisible.
+    const mine = await request(app.getHttpServer())
+      .get('/v1/blocks')
+      .set('Authorization', auth(aToken))
+      .expect(200);
+    expect(mine.body.result.items.map((i: { student: { id: string } }) => i.student.id)).toContain(
+      cId,
+    );
+
+    const theirs = await request(app.getHttpServer())
+      .get('/v1/blocks')
+      .set('Authorization', auth(cToken))
+      .expect(200);
+    expect(theirs.body.result.items).toHaveLength(0);
+  });
+
+  it('refuses to delete a message you did not send (§18)', async () => {
+    const mine = await prisma.message.findFirstOrThrow({
+      where: { conversationId, senderId: aId, deletedAt: null },
+    });
+    const res = await request(app.getHttpServer())
+      .delete(`/v1/messages/${mine.id}`)
+      .set('Authorization', auth(bToken)) // B is a member, but not the sender
+      .expect(403);
+    expect(res.body.error.code).toBe('FORBIDDEN');
+  });
+
+  it('404s a message in a conversation you do not belong to (§18)', async () => {
+    const mine = await prisma.message.findFirstOrThrow({ where: { conversationId } });
+    const res = await request(app.getHttpServer())
+      .delete(`/v1/messages/${mine.id}`)
+      .set('Authorization', auth(cToken))
+      .expect(404);
+    expect(res.body.error.code).toBe('MESSAGE_NOT_FOUND');
+  });
+
+  it('soft-deletes your own message and drops it from unread (§18)', async () => {
+    // A fresh unread message from A to B, so the unread delta is unambiguous.
+    const sent = await request(app.getHttpServer())
+      .post(`/v1/conversations/${conversationId}/messages`)
+      .set('Authorization', auth(aToken))
+      .send({ body: 'xato yubordim' })
+      .expect(201);
+    const messageId = sent.body.result.id as string;
+
+    const before = await request(app.getHttpServer())
+      .get('/v1/conversations/unread-count')
+      .set('Authorization', auth(bToken))
+      .expect(200);
+
+    const deleted = await request(app.getHttpServer())
+      .delete(`/v1/messages/${messageId}`)
+      .set('Authorization', auth(aToken))
+      .expect(200);
+    expect(deleted.body.result.body).toBeNull();
+    expect(deleted.body.result.deletedAt).not.toBeNull();
+    expect(deleted.body.result.seq).toBe(sent.body.result.seq); // the seq stays put
+
+    // Idempotent.
+    await request(app.getHttpServer())
+      .delete(`/v1/messages/${messageId}`)
+      .set('Authorization', auth(aToken))
+      .expect(200);
+
+    const after = await request(app.getHttpServer())
+      .get('/v1/conversations/unread-count')
+      .set('Authorization', auth(bToken))
+      .expect(200);
+    expect(after.body.result.total).toBe(before.body.result.total - 1);
+
+    // Still in the history, as a tombstone — the row must not vanish or `seq` gains a hole.
+    const history = await request(app.getHttpServer())
+      .get(`/v1/conversations/${conversationId}/messages?size=50`)
+      .set('Authorization', auth(bToken))
+      .expect(200);
+    const tombstone = history.body.result.items.find(
+      (item: { id: string }) => item.id === messageId,
+    );
+    expect(tombstone).toBeDefined();
+    expect(tombstone.body).toBeNull();
+    expect(tombstone.deletedAt).not.toBeNull();
+  });
+
   it('sorts conversations that never received a message last (§17.7)', async () => {
     // Created straight through Prisma on purpose: what is under test is the list ordering, not the
     // connection gate that `POST /v1/conversations` enforces (A has blocked C by now).

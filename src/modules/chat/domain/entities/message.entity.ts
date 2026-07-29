@@ -10,5 +10,10 @@ export interface Message {
   body: string | null;
   /** The sender's idempotency key (C6). Null for server/system messages. */
   clientMsgId: string | null;
+  /**
+   * When the sender deleted it (§18). The row survives so `seq` has no holes; `body` is blanked and
+   * the message stops counting as unread. Clients render a "message deleted" tombstone.
+   */
+  deletedAt: Date | null;
   createdAt: Date;
 }

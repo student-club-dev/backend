@@ -11,6 +11,18 @@ export interface ConnectionPage {
   total: number;
 }
 
+/** One row of the blocked-students screen: who, and when they were blocked. */
+export interface BlockedStudent {
+  studentId: string;
+  blockedAt: Date;
+}
+
+/** A page of blocked students plus the unpaginated total. */
+export interface BlockPage {
+  items: BlockedStudent[];
+  total: number;
+}
+
 /**
  * Connection-edge and block data access. The application layer depends on this interface only; the
  * Prisma implementation lives in infrastructure. All reads/writes are on `students`-scoped rows.
@@ -71,4 +83,11 @@ export interface ConnectionsRepository {
 
   /** The ids `viewerId` has blocked or been blocked by — excluded from discovery search. */
   blockedIds(viewerId: string): Promise<string[]>;
+
+  /**
+   * The students `blockerId` has blocked, newest first (§18). One-directional on purpose: this
+   * powers the "Blocked" screen, and who blocked *you* is not yours to see — unlike `blockedIds`,
+   * which is a search filter and must work both ways.
+   */
+  listBlocked(blockerId: string, page: number, size: number): Promise<BlockPage>;
 }

@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConnectionStatus as PrismaConnectionStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
-import { ConnectionPage, ConnectionsRepository } from '../domain/connections.repository';
+import { BlockPage, ConnectionPage, ConnectionsRepository } from '../domain/connections.repository';
 import { Connection } from '../domain/entities/connection.entity';
 import { ConnectionStatus } from '../domain/enums/connection-status.enum';
 import { ConnectionView } from '../domain/enums/connection-view.enum';
@@ -154,6 +154,23 @@ export class ConnectionPrismaRepository implements ConnectionsRepository {
 
   async unblock(blockerId: string, blockedId: string): Promise<void> {
     await this.prisma.block.deleteMany({ where: { blockerId, blockedId } });
+  }
+
+  async listBlocked(blockerId: string, page: number, size: number): Promise<BlockPage> {
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.block.findMany({
+        where: { blockerId },
+        select: { blockedId: true, createdAt: true },
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip: (page - 1) * size,
+        take: size,
+      }),
+      this.prisma.block.count({ where: { blockerId } }),
+    ]);
+    return {
+      items: rows.map((row) => ({ studentId: row.blockedId, blockedAt: row.createdAt })),
+      total,
+    };
   }
 
   async blockedIds(viewerId: string): Promise<string[]> {

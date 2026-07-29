@@ -28,6 +28,12 @@ export interface ConnectionListItem {
   connectedAt: Date;
 }
 
+/** A blocked student, from the blocker's side: who, and when they were blocked (§18). */
+export interface BlockedListItem {
+  student: StudentSummary;
+  blockedAt: Date;
+}
+
 /** A pending request: the edge id (to accept/decline) + the other student + when it was sent. */
 export interface RequestListItem {
   connectionId: string;

@@ -12,6 +12,12 @@ export interface ConversationPage {
   total: number;
 }
 
+/** Tab-badge counters: unread messages, and how many conversations hold at least one (§18). */
+export interface UnreadSummary {
+  total: number;
+  conversations: number;
+}
+
 /**
  * Chat data-access port. The application layer depends on this interface only; the Prisma
  * implementation lives in infrastructure.
@@ -57,6 +63,25 @@ export interface ChatRepository {
 
   /** The caller's conversations (other member + last message + unread), by `lastMessageAt` desc. */
   listConversations(studentId: string, page: number, size: number): Promise<ConversationPage>;
+
+  /** One conversation-list row for a member — the same shape a list page returns (§18). */
+  findConversationItem(
+    conversationId: string,
+    studentId: string,
+  ): Promise<ConversationListItem | null>;
+
+  /** Unread totals across every conversation the student belongs to — for the tab badge (§18). */
+  unreadSummary(studentId: string): Promise<UnreadSummary>;
+
+  /** A message with its conversation id — for the ownership checks a delete has to make. */
+  findMessage(messageId: string): Promise<Message | null>;
+
+  /**
+   * Blanks the body and stamps `deletedAt` (§18). The row is kept: `seq` is the ordering axis every
+   * cursor walks, so removing it would tear holes in history and in the unread arithmetic.
+   * Idempotent — deleting an already-deleted message changes nothing.
+   */
+  softDeleteMessage(messageId: string): Promise<Message>;
 
   /** Advances a member's `read`/`delivered` cursor to at least `seq` (never backwards). */
   advanceCursor(

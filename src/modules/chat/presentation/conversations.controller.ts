@@ -15,7 +15,12 @@ import {
 import type { AuthenticatedUser } from '../../../common/types/authenticated-user';
 import { ChatService } from '../application/chat.service';
 import { ChatGateway } from '../chat.gateway';
-import { ConversationDto, ConversationPageDto } from './dto/conversation.dto';
+import {
+  ConversationDto,
+  ConversationListItemDto,
+  ConversationPageDto,
+  UnreadCountDto,
+} from './dto/conversation.dto';
 import { MessageDto, MessageListDto } from './dto/message.dto';
 import { ConversationsQueryDto, HistoryQueryDto } from './dto/queries.dto';
 import { MarkDeliveredDto, MarkReadDto, OpenDirectDto, SendMessageDto } from './dto/requests.dto';
@@ -60,6 +65,38 @@ export class ConversationsController {
     const size = query.size ?? 20;
     const result = await this.chat.listConversations(user, page, size);
     return ConversationPageDto.fromPage(result, page, size, user.id);
+  }
+
+  // Declared before `:id` — Nest matches routes in declaration order, and `:id` would otherwise
+  // swallow `unread-count` as a conversation id.
+  @Get('unread-count')
+  @ApiOperation({
+    summary: 'Unread totals for the tab badge',
+    description:
+      'Both counters in one query. Without it the client loads the whole conversation list just ' +
+      'to add up unread messages (§18).',
+  })
+  @ApiOkEnvelope(UnreadCountDto)
+  async unreadCount(@CurrentUser() user: AuthenticatedUser): Promise<UnreadCountDto> {
+    return UnreadCountDto.from(await this.chat.unreadSummary(user));
+  }
+
+  @Get(':id')
+  @ApiOperation({
+    summary: 'One conversation — the same row the list returns',
+    description:
+      'For opening a conversation from a push without reloading the whole list (§18). The shape is ' +
+      'identical to an item of `GET /v1/conversations`, so the client can slot it straight in.',
+  })
+  @ApiParam({ name: 'id', description: 'Conversation id' })
+  @ApiOkEnvelope(ConversationListItemDto)
+  @ApiNotFoundEnvelope(ERROR_CODE.CONVERSATION_NOT_FOUND, 'Not a member.', 'Suhbat topilmadi')
+  async one(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+  ): Promise<ConversationListItemDto> {
+    const item = await this.chat.conversationItem(user, id);
+    return ConversationListItemDto.fromItem(item, user.id);
   }
 
   @Get(':id/messages')
