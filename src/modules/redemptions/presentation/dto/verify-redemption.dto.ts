@@ -11,10 +11,10 @@ export class RedemptionDiscountDto {
   @ApiProperty()
   value!: number;
 
-  @ApiProperty({ format: 'int64' })
+  @ApiProperty({ type: 'integer', format: 'int64' })
   finalPrice!: number;
 
-  @ApiProperty({ format: 'int64' })
+  @ApiProperty({ type: 'integer', format: 'int64' })
   originalPrice!: number;
 
   static fromBrief(discount: DiscountBrief): RedemptionDiscountDto {

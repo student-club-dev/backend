@@ -21,7 +21,11 @@ export class AdminListingSummaryDto {
   @ApiProperty()
   title!: string;
 
-  @ApiProperty({ nullable: true, description: 'Cover image (images[0]), null when there is none.' })
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: 'Cover image (images[0]), null when there is none.',
+  })
   imageUrl!: string | null;
 
   @ApiProperty({ example: 'PIZZA' })
@@ -30,10 +34,10 @@ export class AdminListingSummaryDto {
   @ApiProperty({ enum: PriceUnit, enumName: 'PriceUnitDto' })
   priceUnit!: PriceUnit;
 
-  @ApiProperty({ format: 'int64', example: 55000 })
+  @ApiProperty({ type: 'integer', format: 'int64', example: 55000 })
   originalPrice!: number;
 
-  @ApiProperty({ format: 'int64', example: 44000 })
+  @ApiProperty({ type: 'integer', format: 'int64', example: 44000 })
   finalPrice!: number;
 
   @ApiProperty({ enum: ListingStatus, enumName: 'ListingStatusDto' })
@@ -42,7 +46,7 @@ export class AdminListingSummaryDto {
   @ApiProperty()
   isDiscount!: boolean;
 
-  @ApiProperty({ format: 'int32', example: 0 })
+  @ApiProperty({ type: 'integer', format: 'int32', example: 0 })
   viewsCount!: number;
 
   @ApiProperty({ format: 'date-time' })
@@ -76,13 +80,13 @@ export class AdminListingPageDto {
   @ApiProperty({ type: [AdminListingSummaryDto] })
   items!: AdminListingSummaryDto[];
 
-  @ApiProperty({ format: 'int32', example: 1 })
+  @ApiProperty({ type: 'integer', format: 'int32', example: 1 })
   page!: number;
 
-  @ApiProperty({ format: 'int32', example: 20 })
+  @ApiProperty({ type: 'integer', format: 'int32', example: 20 })
   size!: number;
 
-  @ApiProperty({ format: 'int64', example: 42 })
+  @ApiProperty({ type: 'integer', format: 'int64', example: 42 })
   total!: number;
 
   @ApiProperty({ example: true })
@@ -123,13 +127,17 @@ export class AdminListingDto {
   @ApiProperty({ example: 'PIZZA' })
   categoryKey!: string;
 
-  @ApiPropertyOptional({ nullable: true, description: 'Required when categoryKey = OTHER' })
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    description: 'Required when categoryKey = OTHER',
+  })
   customCategoryName!: string | null;
 
   @ApiProperty({ minLength: 3, maxLength: 120 })
   title!: string;
 
-  @ApiPropertyOptional({ nullable: true, maxLength: 2000 })
+  @ApiPropertyOptional({ type: String, nullable: true, maxLength: 2000 })
   description!: string | null;
 
   @ApiProperty({ type: [String], maxItems: 10, description: 'The first one is the cover' })
@@ -138,7 +146,12 @@ export class AdminListingDto {
   @ApiProperty({ enum: PriceUnit, enumName: 'PriceUnitDto' })
   priceUnit!: PriceUnit;
 
-  @ApiProperty({ format: 'int64', description: 'Whole soums (no tiyin)', example: 55000 })
+  @ApiProperty({
+    type: 'integer',
+    format: 'int64',
+    description: 'Whole soums (no tiyin)',
+    example: 55000,
+  })
   originalPrice!: number;
 
   @ApiProperty({ default: 'UZS' })
@@ -165,10 +178,10 @@ export class AdminListingDto {
   @ApiProperty({ enum: ListingStatus, enumName: 'ListingStatusDto' })
   status!: ListingStatus;
 
-  @ApiPropertyOptional({ nullable: true })
+  @ApiPropertyOptional({ type: String, nullable: true })
   rejectionReason!: string | null;
 
-  @ApiProperty({ format: 'int32' })
+  @ApiProperty({ type: 'integer', format: 'int32' })
   viewsCount!: number;
 
   @ApiProperty({ format: 'date-time' })

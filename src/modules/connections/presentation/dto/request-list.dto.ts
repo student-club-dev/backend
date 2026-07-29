@@ -27,13 +27,13 @@ export class RequestItemPageDto {
   @ApiProperty({ type: [RequestItemDto] })
   items!: RequestItemDto[];
 
-  @ApiProperty()
+  @ApiProperty({ type: 'integer', format: 'int32' })
   page!: number;
 
-  @ApiProperty()
+  @ApiProperty({ type: 'integer', format: 'int32' })
   size!: number;
 
-  @ApiProperty()
+  @ApiProperty({ type: 'integer', format: 'int32' })
   total!: number;
 
   @ApiProperty()

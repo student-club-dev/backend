@@ -106,6 +106,9 @@ export const ERROR_CODE = {
   CONVERSATION_NOT_FOUND: 'CONVERSATION_NOT_FOUND',
   NOT_CONNECTED: 'NOT_CONNECTED',
   MESSAGE_EMPTY: 'MESSAGE_EMPTY',
+  // Returned as 422, not the usual 404 for `*_NOT_FOUND`: the mobile contract (§17.4) specifies
+  // 422 for an unreportable messageId, and it is a body-validation failure rather than a bad route.
+  MESSAGE_NOT_FOUND: 'MESSAGE_NOT_FOUND',
   // infra
   RATE_LIMITED: 'RATE_LIMITED',
   FILE_TOO_LARGE: 'FILE_TOO_LARGE',

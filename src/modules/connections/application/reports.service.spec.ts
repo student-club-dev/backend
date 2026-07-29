@@ -4,6 +4,10 @@ import type { AuthenticatedUser } from '../../../common/types/authenticated-user
 import { Report } from '../domain/entities/report.entity';
 import { ReportReason } from '../domain/enums/report-reason.enum';
 import { ReportStatus } from '../domain/enums/report-status.enum';
+import {
+  MessageDirectoryRepository,
+  ReportableMessage,
+} from '../domain/message-directory.repository';
 import { ReportsRepository } from '../domain/reports.repository';
 import { StudentDirectoryRepository } from '../domain/student-directory.repository';
 import { ReportInput, ReportsService } from './reports.service';
@@ -42,11 +46,18 @@ function makeDirectory(exists = true): StudentDirectoryRepository {
   };
 }
 
+function makeMessages(
+  found: ReportableMessage | null = { id: 'm1', body: 'yomon gap' },
+): MessageDirectoryRepository {
+  return { findReportable: jest.fn().mockResolvedValue(found) };
+}
+
 function makeService(
   reports: ReportsRepository = makeReports(),
   directory: StudentDirectoryRepository = makeDirectory(),
+  messages: MessageDirectoryRepository = makeMessages(),
 ): ReportsService {
-  return new ReportsService(reports, directory);
+  return new ReportsService(reports, directory, messages);
 }
 
 function input(overrides: Partial<ReportInput> = {}): ReportInput {
@@ -114,5 +125,46 @@ describe('ReportsService', () => {
     expect(reports.create).toHaveBeenCalledWith(
       expect.objectContaining({ targetStudentId: null, messageId: 'm1' }),
     );
+  });
+
+  // §17.4 — an unknown id, or one from someone else's conversation, used to be accepted, filling
+  // the moderation queue with rows nobody could open.
+  describe('message reports (§17.4)', () => {
+    it('throws 422 MESSAGE_NOT_FOUND when the reporter cannot see the message', async () => {
+      const reports = makeReports();
+      const service = makeService(reports, makeDirectory(), makeMessages(null));
+
+      await expect(
+        service.report(me, input({ targetStudentId: null, messageId: 'msg_x' })),
+      ).rejects.toMatchObject({ code: ERROR_CODE.MESSAGE_NOT_FOUND, status: 422 });
+
+      expect(reports.create).not.toHaveBeenCalled();
+    });
+
+    it('looks the message up as the reporter, not globally', async () => {
+      const messages = makeMessages();
+      await makeService(makeReports(), makeDirectory(), messages).report(
+        me,
+        input({ targetStudentId: null, messageId: 'm1' }),
+      );
+      expect(messages.findReportable).toHaveBeenCalledWith('m1', 'me');
+    });
+
+    it('snapshots the reported body so moderation can read it later', async () => {
+      const reports = makeReports();
+      await makeService(reports, makeDirectory(), makeMessages()).report(
+        me,
+        input({ targetStudentId: null, messageId: 'm1' }),
+      );
+      expect(reports.create).toHaveBeenCalledWith(
+        expect.objectContaining({ messageId: 'm1', contentSnapshot: 'yomon gap' }),
+      );
+    });
+
+    it('does not look up a message when the target is a student', async () => {
+      const messages = makeMessages();
+      await makeService(makeReports(), makeDirectory(), messages).report(me, input());
+      expect(messages.findReportable).not.toHaveBeenCalled();
+    });
   });
 });

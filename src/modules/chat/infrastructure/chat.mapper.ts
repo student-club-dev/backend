@@ -49,6 +49,7 @@ export class ChatMapper {
       seq: row.seq,
       type: MessageType[row.type],
       body: row.body,
+      clientMsgId: row.clientMsgId,
       createdAt: row.createdAt,
     };
   }

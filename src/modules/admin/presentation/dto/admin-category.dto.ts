@@ -25,10 +25,10 @@ export class AdminCategoryDto {
   @ApiProperty({ example: 'Pitsa' })
   nameUz!: string;
 
-  @ApiProperty({ required: false, nullable: true })
+  @ApiProperty({ type: String, required: false, nullable: true })
   nameRu!: string | null;
 
-  @ApiProperty({ required: false, nullable: true })
+  @ApiProperty({ type: String, required: false, nullable: true })
   iconUrl!: string | null;
 
   @ApiProperty({ example: 0 })

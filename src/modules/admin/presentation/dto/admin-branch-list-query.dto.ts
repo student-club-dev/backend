@@ -134,6 +134,7 @@ export class AdminBranchListQueryDto {
   lng?: number;
 
   @ApiPropertyOptional({
+    type: 'integer',
     format: 'int32',
     minimum: 1,
     maximum: MAX_RADIUS_METERS,
@@ -157,7 +158,12 @@ export class AdminBranchListQueryDto {
   @IsEnum(AdminBranchSort)
   sort?: AdminBranchSort;
 
-  @ApiPropertyOptional({ minimum: 1, default: ADMIN_LIST_DEFAULT_PAGE })
+  @ApiPropertyOptional({
+    type: 'integer',
+    format: 'int32',
+    minimum: 1,
+    default: ADMIN_LIST_DEFAULT_PAGE,
+  })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
@@ -165,6 +171,8 @@ export class AdminBranchListQueryDto {
   page?: number;
 
   @ApiPropertyOptional({
+    type: 'integer',
+    format: 'int32',
     minimum: 1,
     maximum: ADMIN_LIST_MAX_SIZE,
     default: ADMIN_LIST_DEFAULT_SIZE,

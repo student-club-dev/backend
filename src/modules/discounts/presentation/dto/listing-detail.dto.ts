@@ -28,7 +28,7 @@ class DetailBranchDto {
   @ApiProperty({ example: 'Yunusobod 5-kvartal, 12-uy' })
   address!: string;
 
-  @ApiProperty({ required: false, nullable: true, example: 'Metro yonida' })
+  @ApiProperty({ type: String, required: false, nullable: true, example: 'Metro yonida' })
   landmark!: string | null;
 
   @ApiProperty({ example: 41.352 })
@@ -38,6 +38,8 @@ class DetailBranchDto {
   lng!: number;
 
   @ApiProperty({
+    type: 'integer',
+    format: 'int32',
     required: false,
     nullable: true,
     example: 640,
@@ -82,7 +84,7 @@ class DetailBusinessDto {
   @ApiProperty({ example: 'Choyxona Navruz' })
   name!: string;
 
-  @ApiProperty({ required: false, nullable: true })
+  @ApiProperty({ type: String, required: false, nullable: true })
   logoUrl!: string | null;
 
   @ApiProperty({ example: '+998901234567' })
@@ -91,7 +93,7 @@ class DetailBusinessDto {
   @ApiProperty({ required: false, nullable: true, type: BusinessContactsDto })
   contacts!: BusinessContactsDto | null;
 
-  @ApiProperty({ required: false, nullable: true, example: 4.6 })
+  @ApiProperty({ type: Number, format: 'double', required: false, nullable: true, example: 4.6 })
   rating!: number | null;
 
   static fromDomain(business: DetailBusiness): DetailBusinessDto {
@@ -110,6 +112,7 @@ class DetailRedemptionDto {
   method!: RedemptionMethod;
 
   @ApiProperty({
+    type: String,
     required: false,
     nullable: true,
     example: 'STUD30',
@@ -117,10 +120,10 @@ class DetailRedemptionDto {
   })
   promoCode!: string | null;
 
-  @ApiProperty({ required: false, nullable: true, description: 'For ONLINE_LINK.' })
+  @ApiProperty({ type: String, required: false, nullable: true, description: 'For ONLINE_LINK.' })
   url!: string | null;
 
-  @ApiProperty({ required: false, nullable: true, example: 1 })
+  @ApiProperty({ type: 'integer', format: 'int32', required: false, nullable: true, example: 1 })
   perUserLimit!: number | null;
 
   @ApiProperty({
@@ -131,13 +134,21 @@ class DetailRedemptionDto {
   })
   perUserPeriod!: RedemptionPeriod | null;
 
-  @ApiProperty({ required: false, nullable: true, description: 'null = unlimited.' })
+  @ApiProperty({
+    type: 'integer',
+    format: 'int32',
+    required: false,
+    nullable: true,
+    description: 'null = unlimited.',
+  })
   totalLimit!: number | null;
 
   @ApiProperty({ example: 12 })
   usedCount!: number;
 
   @ApiProperty({
+    type: 'integer',
+    format: 'int32',
     required: false,
     nullable: true,
     example: 1,
@@ -158,7 +169,12 @@ class DetailRedemptionDto {
  * never disagree about a price, a badge or a distance, and adds what only the detail screen shows.
  */
 export class ListingDetailDto extends DiscountCardDto {
-  @ApiProperty({ required: false, nullable: true, example: 'Talabalar uchun maxsus taklif.' })
+  @ApiProperty({
+    type: String,
+    required: false,
+    nullable: true,
+    example: 'Talabalar uchun maxsus taklif.',
+  })
   description!: string | null;
 
   @ApiProperty({ type: [String], description: 'Every image; the card carries only the cover.' })

@@ -11,13 +11,15 @@ class NearestBranchDto {
   @ApiProperty({ example: 'Yunusobod 5-kvartal, 12-uy' })
   address!: string;
 
-  @ApiProperty({ required: false, nullable: true, example: 41.352 })
+  @ApiProperty({ type: Number, format: 'double', required: false, nullable: true, example: 41.352 })
   lat!: number | null;
 
-  @ApiProperty({ required: false, nullable: true, example: 69.273 })
+  @ApiProperty({ type: Number, format: 'double', required: false, nullable: true, example: 69.273 })
   lng!: number | null;
 
   @ApiProperty({
+    type: 'integer',
+    format: 'int32',
     required: false,
     nullable: true,
     example: 640,
@@ -28,10 +30,10 @@ class NearestBranchDto {
   @ApiProperty({ example: true, description: 'Evaluated in Tashkent time (UTC+5).' })
   isOpenNow!: boolean;
 
-  @ApiProperty({ required: false, nullable: true, example: '23:00' })
+  @ApiProperty({ type: String, required: false, nullable: true, example: '23:00' })
   closesAt!: string | null;
 
-  @ApiProperty({ required: false, nullable: true })
+  @ApiProperty({ type: String, required: false, nullable: true })
   tradeCenterName!: string | null;
 }
 
@@ -45,7 +47,7 @@ class CardDiscountDto {
   @ApiProperty({ example: '−30%', description: 'Rendered server-side; print as-is.' })
   badge!: string;
 
-  @ApiProperty({ required: false, nullable: true, example: 'Talaba ID bilan' })
+  @ApiProperty({ type: String, required: false, nullable: true, example: 'Talaba ID bilan' })
   conditions!: string | null;
 }
 
@@ -60,7 +62,7 @@ export class DiscountCardDto {
   @ApiProperty({ example: 'Choyxona Navruz' })
   businessName!: string;
 
-  @ApiProperty({ required: false, nullable: true })
+  @ApiProperty({ type: String, required: false, nullable: true })
   businessLogoUrl!: string | null;
 
   @ApiProperty({ example: 'NATIONAL_FOOD' })
@@ -85,7 +87,7 @@ export class DiscountCardDto {
   @ApiProperty({ example: 'Osh (1 porsiya)' })
   title!: string;
 
-  @ApiProperty({ required: false, nullable: true })
+  @ApiProperty({ type: String, required: false, nullable: true })
   imageUrl!: string | null;
 
   @ApiProperty({ example: 4 })
@@ -104,6 +106,8 @@ export class DiscountCardDto {
   finalPrice!: number;
 
   @ApiProperty({
+    type: 'integer',
+    format: 'int64',
     required: false,
     nullable: true,
     example: 9000,

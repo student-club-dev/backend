@@ -11,25 +11,25 @@ export class AdminStudentSummaryDto {
   @ApiProperty()
   id!: string;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   firstName!: string | null;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   lastName!: string | null;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   username!: string | null;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   avatarUrl!: string | null;
 
-  @ApiProperty({ nullable: true, description: 'E.164 format' })
+  @ApiProperty({ type: String, nullable: true, description: 'E.164 format' })
   phoneNumber!: string | null;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   email!: string | null;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   universityId!: string | null;
 
   @ApiProperty({ enum: CourseYear, enumName: 'CourseYearDto', nullable: true })
@@ -38,10 +38,15 @@ export class AdminStudentSummaryDto {
   @ApiProperty({ enum: AdminUserStatus, enumName: 'AdminUserStatusDto' })
   status!: AdminUserStatus;
 
-  @ApiProperty({ format: 'date-time', nullable: true, description: 'When the account was banned.' })
+  @ApiProperty({
+    type: String,
+    format: 'date-time',
+    nullable: true,
+    description: 'When the account was banned.',
+  })
   bannedAt!: string | null;
 
-  @ApiProperty({ nullable: true, description: 'Admin-supplied ban reason.' })
+  @ApiProperty({ type: String, nullable: true, description: 'Admin-supplied ban reason.' })
   banReason!: string | null;
 
   @ApiProperty({ format: 'date-time' })
@@ -71,13 +76,13 @@ export class AdminStudentPageDto {
   @ApiProperty({ type: [AdminStudentSummaryDto] })
   items!: AdminStudentSummaryDto[];
 
-  @ApiProperty({ format: 'int32', example: 1 })
+  @ApiProperty({ type: 'integer', format: 'int32', example: 1 })
   page!: number;
 
-  @ApiProperty({ format: 'int32', example: 20 })
+  @ApiProperty({ type: 'integer', format: 'int32', example: 20 })
   size!: number;
 
-  @ApiProperty({ format: 'int64', example: 42 })
+  @ApiProperty({ type: 'integer', format: 'int64', example: 42 })
   total!: number;
 
   @ApiProperty({ example: true })
@@ -99,10 +104,10 @@ export class AdminStudentDto {
   @ApiProperty()
   id!: string;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   email!: string | null;
 
-  @ApiProperty({ nullable: true, description: 'E.164 format' })
+  @ApiProperty({ type: String, nullable: true, description: 'E.164 format' })
   phoneNumber!: string | null;
 
   @ApiProperty()
@@ -111,34 +116,34 @@ export class AdminStudentDto {
   @ApiProperty()
   emailVerified!: boolean;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   firstName!: string | null;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   lastName!: string | null;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   avatarUrl!: string | null;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   username!: string | null;
 
   @ApiProperty({ enum: Gender, enumName: 'GenderDto', nullable: true })
   gender!: Gender | null;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   universityId!: string | null;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   universityEmail!: string | null;
 
-  @ApiProperty({ nullable: true, example: 2004 })
+  @ApiProperty({ type: 'integer', format: 'int32', nullable: true, example: 2004 })
   birthYear!: number | null;
 
   @ApiProperty({ enum: CourseYear, enumName: 'CourseYearDto', nullable: true })
   courseYear!: CourseYear | null;
 
-  @ApiProperty({ format: 'date-time', nullable: true })
+  @ApiProperty({ type: String, format: 'date-time', nullable: true })
   lastSeenAt!: string | null;
 
   @ApiProperty({ enum: LastSeenVisibility, enumName: 'LastSeenVisibilityDto' })
@@ -147,10 +152,15 @@ export class AdminStudentDto {
   @ApiProperty({ enum: AdminUserStatus, enumName: 'AdminUserStatusDto' })
   status!: AdminUserStatus;
 
-  @ApiProperty({ format: 'date-time', nullable: true, description: 'When the account was banned.' })
+  @ApiProperty({
+    type: String,
+    format: 'date-time',
+    nullable: true,
+    description: 'When the account was banned.',
+  })
   bannedAt!: string | null;
 
-  @ApiProperty({ nullable: true, description: 'Admin-supplied ban reason.' })
+  @ApiProperty({ type: String, nullable: true, description: 'Admin-supplied ban reason.' })
   banReason!: string | null;
 
   @ApiProperty({ format: 'date-time' })

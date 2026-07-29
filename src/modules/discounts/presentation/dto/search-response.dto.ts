@@ -12,13 +12,13 @@ export class SearchListResponseDto {
   @ApiProperty({ type: [DiscountCardDto] })
   items!: DiscountCardDto[];
 
-  @ApiProperty({ format: 'int32', example: 0 })
+  @ApiProperty({ type: 'integer', format: 'int32', example: 0 })
   page!: number;
 
-  @ApiProperty({ format: 'int32', example: 20 })
+  @ApiProperty({ type: 'integer', format: 'int32', example: 20 })
   size!: number;
 
-  @ApiProperty({ format: 'int64', example: 137 })
+  @ApiProperty({ type: 'integer', format: 'int64', example: 137 })
   total!: number;
 
   @ApiProperty({ example: true })
@@ -39,7 +39,7 @@ class FacetCountDto {
   @ApiProperty({ example: 'PERCENT' })
   key!: string;
 
-  @ApiProperty({ example: 88 })
+  @ApiProperty({ type: 'integer', format: 'int32', example: 88 })
   count!: number;
 }
 
@@ -50,7 +50,7 @@ class CategoryFacetDto {
   @ApiProperty({ example: 'Osh' })
   label!: string;
 
-  @ApiProperty({ example: 54 })
+  @ApiProperty({ type: 'integer', format: 'int32', example: 54 })
   count!: number;
 }
 
@@ -58,7 +58,7 @@ class AttributeValueFacetDto {
   @ApiProperty({ example: 'VIP' })
   value!: string;
 
-  @ApiProperty({ example: 22 })
+  @ApiProperty({ type: 'integer', format: 'int32', example: 22 })
   count!: number;
 }
 
@@ -125,7 +125,7 @@ class SearchFacetsDto {
  * shows.
  */
 export class SearchCountResponseDto {
-  @ApiProperty({ format: 'int64', example: 137 })
+  @ApiProperty({ type: 'integer', format: 'int64', example: 137 })
   total!: number;
 
   @ApiProperty({ type: SearchFacetsDto })
@@ -180,16 +180,21 @@ class MapMarkerDto {
   @ApiProperty({ example: '21k', description: 'Short label for the pin; rendered server-side.' })
   priceLabel!: string;
 
-  @ApiProperty({ format: 'int64', example: 21000 })
+  @ApiProperty({ type: 'integer', format: 'int64', example: 21000 })
   finalPrice!: number;
 
-  @ApiProperty({ nullable: true, example: '−30%', description: 'Null on a regular listing (Q0).' })
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    example: '−30%',
+    description: 'Null on a regular listing (Q0).',
+  })
   discountBadge!: string | null;
 
   @ApiProperty({ example: 'PLAYSTATION' })
   businessType!: string;
 
-  @ApiProperty({ nullable: true, example: '#7C5CFF' })
+  @ApiProperty({ type: String, nullable: true, example: '#7C5CFF' })
   accentColor!: string | null;
 
   @ApiProperty({ example: true })
@@ -223,16 +228,18 @@ class MapClusterDto {
   @ApiProperty({ example: 69.24 })
   lng!: number;
 
-  @ApiProperty({ format: 'int32', example: 42 })
+  @ApiProperty({ type: 'integer', format: 'int32', example: 42 })
   count!: number;
 
   @ApiProperty({ type: GeoBoxDto })
   bbox!: GeoBoxDto;
 
-  @ApiProperty({ format: 'int64', example: 15000 })
+  @ApiProperty({ type: 'integer', format: 'int64', example: 15000 })
   minPrice!: number;
 
   @ApiProperty({
+    type: 'integer',
+    format: 'int32',
     nullable: true,
     example: 45,
     description: 'Null when no listing in the cluster is discounted.',
@@ -274,6 +281,7 @@ export class SearchMapResponseDto {
   bounds!: GeoBoxDto | null;
 
   @ApiProperty({
+    type: 'integer',
     format: 'int64',
     example: 137,
     description: 'Listings — equals LIST/COUNT (D15).',
@@ -281,6 +289,7 @@ export class SearchMapResponseDto {
   total!: number;
 
   @ApiProperty({
+    type: 'integer',
     format: 'int64',
     example: 214,
     description: 'Markers (listing × branch); may exceed `total` (D15).',

@@ -7,13 +7,13 @@ export class RedemptionStudentDto {
   @ApiProperty()
   id!: string;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   fullName!: string | null;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   username!: string | null;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   universityId!: string | null;
 
   static fromBrief(student: StudentBrief): RedemptionStudentDto {
@@ -34,16 +34,21 @@ export class RedemptionDto {
   @ApiProperty()
   listingId!: string;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   branchId!: string | null;
 
   @ApiProperty({ type: RedemptionStudentDto })
   student!: RedemptionStudentDto;
 
-  @ApiProperty({ nullable: true, format: 'int64', description: 'Whole soums applied at the till' })
+  @ApiProperty({
+    type: 'integer',
+    nullable: true,
+    format: 'int64',
+    description: 'Whole soums applied at the till',
+  })
   amount!: number | null;
 
-  @ApiProperty({ nullable: true, format: 'date-time' })
+  @ApiProperty({ type: String, nullable: true, format: 'date-time' })
   redeemedAt!: string | null;
 
   static fromView(view: RedemptionView): RedemptionDto {
@@ -64,13 +69,13 @@ export class RedemptionPageDto {
   @ApiProperty({ type: [RedemptionDto] })
   items!: RedemptionDto[];
 
-  @ApiProperty()
+  @ApiProperty({ type: 'integer', format: 'int32' })
   page!: number;
 
-  @ApiProperty()
+  @ApiProperty({ type: 'integer', format: 'int32' })
   size!: number;
 
-  @ApiProperty()
+  @ApiProperty({ type: 'integer', format: 'int32' })
   total!: number;
 
   @ApiProperty()

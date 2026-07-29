@@ -22,7 +22,11 @@ export class ConfirmRedemptionRequestDto {
   @IsString()
   branchId?: string;
 
-  @ApiPropertyOptional({ format: 'int64', description: 'Whole soums applied at the till' })
+  @ApiPropertyOptional({
+    type: 'integer',
+    format: 'int64',
+    description: 'Whole soums applied at the till',
+  })
   @IsOptional()
   @IsInt()
   @Min(0)

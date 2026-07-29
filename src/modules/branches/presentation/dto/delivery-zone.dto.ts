@@ -12,6 +12,7 @@ export class DeliveryZoneDto {
   enabled!: boolean;
 
   @ApiPropertyOptional({
+    type: 'integer',
     format: 'int32',
     nullable: true,
     minimum: 1000,
@@ -24,17 +25,17 @@ export class DeliveryZoneDto {
   @Max(30000)
   radiusMeters?: number;
 
-  @ApiPropertyOptional({ format: 'int64', nullable: true })
+  @ApiPropertyOptional({ type: 'integer', format: 'int64', nullable: true })
   @IsOptional()
   @IsInt()
   minOrderAmount?: number;
 
-  @ApiPropertyOptional({ format: 'int64', nullable: true })
+  @ApiPropertyOptional({ type: 'integer', format: 'int64', nullable: true })
   @IsOptional()
   @IsInt()
   deliveryFee?: number;
 
-  @ApiPropertyOptional({ format: 'int64', nullable: true })
+  @ApiPropertyOptional({ type: 'integer', format: 'int64', nullable: true })
   @IsOptional()
   @IsInt()
   freeDeliveryFrom?: number;

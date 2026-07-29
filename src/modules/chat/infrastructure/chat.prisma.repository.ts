@@ -171,7 +171,15 @@ export class ChatPrismaRepository implements ChatRepository {
             },
           },
         },
-        orderBy: { conversation: { lastMessageAt: 'desc' } },
+        // Newest-active first. Postgres sorts NULL first on DESC, which floated conversations that
+        // never received a message to the top of the list (§17.7). `createdAt`/`id` are the
+        // tiebreaker, not decoration: with NULLS LAST alone every empty conversation compares equal,
+        // leaving OFFSET paging free to repeat or drop rows between pages.
+        orderBy: [
+          { conversation: { lastMessageAt: { sort: 'desc', nulls: 'last' } } },
+          { conversation: { createdAt: 'desc' } },
+          { conversationId: 'desc' },
+        ],
         skip: (page - 1) * size,
         take: size,
       }),

@@ -11,20 +11,26 @@ import { ProfileRole } from '../../domain/enums/profile-role.enum';
  * `lastSeenVisibility` are `null` for a business owner; `gender` is carried by both account types.
  */
 export class UserProfileDto {
-  @ApiProperty({ nullable: true, example: 'Quvonchbek' })
+  @ApiProperty({ type: String, nullable: true, example: 'Quvonchbek' })
   firstName!: string | null;
 
-  @ApiProperty({ nullable: true, example: "G'afurov" })
+  @ApiProperty({ type: String, nullable: true, example: "G'afurov" })
   lastName!: string | null;
 
   @ApiProperty({
+    type: String,
     nullable: true,
     description: 'Unique handle (students only)',
     example: 'quvonchbek',
   })
   username!: string | null;
 
-  @ApiProperty({ nullable: true, description: 'E.164 format', example: '+998901234567' })
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: 'E.164 format',
+    example: '+998901234567',
+  })
   phoneNumber!: string | null;
 
   @ApiProperty({ enum: Gender, enumName: 'GenderDto', nullable: true })
@@ -33,13 +39,13 @@ export class UserProfileDto {
   @ApiProperty({ enum: ProfileRole, enumName: 'ProfileRoleDto', nullable: true })
   role!: ProfileRole | null;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   universityId!: string | null;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   universityEmail!: string | null;
 
-  @ApiProperty({ nullable: true, example: 2004 })
+  @ApiProperty({ type: 'integer', format: 'int32', nullable: true, example: 2004 })
   birthYear!: number | null;
 
   @ApiProperty({ enum: CourseYear, enumName: 'CourseYearDto', nullable: true })
@@ -56,6 +62,7 @@ export class UserProfileDto {
   lastSeenVisibility!: LastSeenVisibility | null;
 
   @ApiProperty({
+    type: String,
     nullable: true,
     description: 'Public URL of the profile picture',
     example: 'https://cdn.elon.uz/avatars/abc123.jpg',

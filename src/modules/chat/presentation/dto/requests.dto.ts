@@ -27,7 +27,20 @@ export class SendMessageDto {
 
 /** Body of `POST /v1/conversations/:id/read`. */
 export class MarkReadDto {
-  @ApiProperty({ description: 'Highest read `seq`' })
+  @ApiProperty({ type: 'integer', format: 'int32', minimum: 0, description: 'Highest read `seq`' })
+  @IsInt()
+  @Min(0)
+  seq!: number;
+}
+
+/** Body of `POST /v1/conversations/:id/delivered` — the REST twin of the `message:delivered` event. */
+export class MarkDeliveredDto {
+  @ApiProperty({
+    type: 'integer',
+    format: 'int32',
+    minimum: 0,
+    description: 'Highest delivered `seq`',
+  })
   @IsInt()
   @Min(0)
   seq!: number;

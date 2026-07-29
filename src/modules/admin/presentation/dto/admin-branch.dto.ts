@@ -44,7 +44,11 @@ export class AdminBranchSummaryDto {
   @ApiProperty()
   isActive!: boolean;
 
-  @ApiProperty({ nullable: true, description: 'Trade center name, or null when not in a center.' })
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: 'Trade center name, or null when not in a center.',
+  })
   tradeCenterName!: string | null;
 
   static fromDomain(branch: AdminBranchSummary): AdminBranchSummaryDto {
@@ -70,13 +74,13 @@ export class AdminBranchPageDto {
   @ApiProperty({ type: [AdminBranchSummaryDto] })
   items!: AdminBranchSummaryDto[];
 
-  @ApiProperty({ format: 'int32', example: 1 })
+  @ApiProperty({ type: 'integer', format: 'int32', example: 1 })
   page!: number;
 
-  @ApiProperty({ format: 'int32', example: 20 })
+  @ApiProperty({ type: 'integer', format: 'int32', example: 20 })
   size!: number;
 
-  @ApiProperty({ format: 'int64', example: 42 })
+  @ApiProperty({ type: 'integer', format: 'int64', example: 42 })
   total!: number;
 
   @ApiProperty({ example: true })
@@ -111,7 +115,7 @@ export class AdminBranchDto {
   @ApiProperty()
   name!: string;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   phone!: string | null;
 
   @ApiProperty({ type: LocationDto })

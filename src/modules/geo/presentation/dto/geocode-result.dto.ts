@@ -9,10 +9,10 @@ export class GeocodeResultDto {
   @ApiProperty({ format: 'double', example: 69.240562 })
   lng!: number;
 
-  @ApiProperty({ required: false, nullable: true })
+  @ApiProperty({ type: String, required: false, nullable: true })
   regionId!: string | null;
 
-  @ApiProperty({ required: false, nullable: true })
+  @ApiProperty({ type: String, required: false, nullable: true })
   districtId!: string | null;
 
   @ApiProperty({ example: 'Toshkent, Chilonzor 9-kvartal, 42' })

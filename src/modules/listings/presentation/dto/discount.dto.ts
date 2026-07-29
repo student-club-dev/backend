@@ -7,17 +7,18 @@ export class DiscountDto {
   @ApiProperty({ enum: DiscountType, enumName: 'DiscountTypeDto' })
   type!: DiscountType;
 
-  @ApiProperty({ format: 'int64', example: 20 })
+  @ApiProperty({ type: 'integer', format: 'int64', example: 20 })
   value!: number;
 
   @ApiProperty({
+    type: 'integer',
     format: 'int64',
     description: 'Computed by the SERVER. finalPrice < originalPrice (except for FREE_ITEM).',
     example: 44000,
   })
   finalPrice!: number;
 
-  @ApiPropertyOptional({ nullable: true })
+  @ApiPropertyOptional({ type: String, nullable: true })
   conditions!: string | null;
 
   @ApiProperty({ default: false })

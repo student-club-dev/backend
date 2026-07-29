@@ -8,16 +8,17 @@ export class StudentSummaryDto {
   @ApiProperty()
   id!: string;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   username!: string | null;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   fullName!: string | null;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   avatarUrl!: string | null;
 
   @ApiProperty({
+    type: String,
     nullable: true,
     description:
       'The value the student set on their own profile — the same string `GET /v1/students` ' +
@@ -42,6 +43,7 @@ export class StudentSummaryDto {
   online!: boolean;
 
   @ApiProperty({
+    type: String,
     nullable: true,
     format: 'date-time',
     description: 'When the student last closed their last socket. `null` while online or hidden.',

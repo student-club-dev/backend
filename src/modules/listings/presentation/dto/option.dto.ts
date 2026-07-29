@@ -5,7 +5,7 @@ import { ListingOption } from '../../domain/entities/listing.entity';
 
 /** OptionDto — a single add-on option (matches elon-uz.json). Shared by request and response. */
 export class OptionDto {
-  @ApiPropertyOptional({ nullable: true })
+  @ApiPropertyOptional({ type: String, nullable: true })
   @IsOptional()
   @IsString()
   id?: string | null;
@@ -15,6 +15,7 @@ export class OptionDto {
   name!: string;
 
   @ApiProperty({
+    type: 'integer',
     format: 'int64',
     description: 'Amount added to the base price (may be negative)',
     example: 12000,
@@ -27,7 +28,7 @@ export class OptionDto {
   @IsBoolean()
   isAvailable?: boolean;
 
-  @ApiPropertyOptional({ nullable: true, format: 'int32' })
+  @ApiPropertyOptional({ type: 'integer', nullable: true, format: 'int32' })
   @IsOptional()
   @IsInt()
   sortOrder?: number | null;

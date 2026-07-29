@@ -79,14 +79,24 @@ export class AdminListingListQueryDto {
   @IsString()
   districtId?: string;
 
-  @ApiPropertyOptional({ format: 'int64', minimum: 0, description: 'Lower price bound (so‘m).' })
+  @ApiPropertyOptional({
+    type: 'integer',
+    format: 'int64',
+    minimum: 0,
+    description: 'Lower price bound (so‘m).',
+  })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(0)
   priceMin?: number;
 
-  @ApiPropertyOptional({ format: 'int64', minimum: 0, description: 'Upper price bound (so‘m).' })
+  @ApiPropertyOptional({
+    type: 'integer',
+    format: 'int64',
+    minimum: 0,
+    description: 'Upper price bound (so‘m).',
+  })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
@@ -169,7 +179,12 @@ export class AdminListingListQueryDto {
   @IsEnum(AdminListingSort)
   sort?: AdminListingSort;
 
-  @ApiPropertyOptional({ minimum: 1, default: ADMIN_LIST_DEFAULT_PAGE })
+  @ApiPropertyOptional({
+    type: 'integer',
+    format: 'int32',
+    minimum: 1,
+    default: ADMIN_LIST_DEFAULT_PAGE,
+  })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
@@ -177,6 +192,8 @@ export class AdminListingListQueryDto {
   page?: number;
 
   @ApiPropertyOptional({
+    type: 'integer',
+    format: 'int32',
     minimum: 1,
     maximum: ADMIN_LIST_MAX_SIZE,
     default: ADMIN_LIST_DEFAULT_SIZE,

@@ -13,19 +13,35 @@ export class MessageDto {
   @ApiProperty()
   senderId!: string;
 
-  @ApiProperty({ description: 'Per-conversation monotonic sequence' })
+  @ApiProperty({
+    type: 'integer',
+    format: 'int32',
+    description: 'Per-conversation monotonic sequence',
+  })
   seq!: number;
 
   @ApiProperty({ enum: MessageType, enumName: 'MessageTypeDto' })
   type!: MessageType;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   body!: string | null;
 
-  @ApiProperty({ format: 'date-time' })
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description:
+      'Your own idempotency key, echoed back — set only when you are the sender, `null` for ' +
+      'everyone else. Match your optimistic ("sending") copy against this rather than against the ' +
+      'message text: two identical texts in a row are indistinguishable, and a media message has ' +
+      'no text at all (§17.1).',
+  })
+  clientMsgId!: string | null;
+
+  @ApiProperty({ type: String, format: 'date-time' })
   createdAt!: string;
 
-  static fromDomain(message: Message): MessageDto {
+  /** `viewerId` is whoever will read this DTO — `clientMsgId` is private to the sender. */
+  static fromDomain(message: Message, viewerId: string | null): MessageDto {
     const dto = new MessageDto();
     dto.id = message.id;
     dto.conversationId = message.conversationId;
@@ -33,6 +49,7 @@ export class MessageDto {
     dto.seq = message.seq;
     dto.type = message.type;
     dto.body = message.body;
+    dto.clientMsgId = message.senderId === viewerId ? message.clientMsgId : null;
     dto.createdAt = message.createdAt.toISOString();
     return dto;
   }
@@ -43,13 +60,20 @@ export class MessageListDto {
   @ApiProperty({ type: [MessageDto], description: 'Newest-first' })
   items!: MessageDto[];
 
-  @ApiProperty({ description: 'More history exists before the oldest item' })
+  @ApiProperty({
+    type: Boolean,
+    description:
+      'More messages exist past this page, in the direction you are paging. Exact — the server ' +
+      'reads one row beyond `size` rather than inferring it from the page length, so a last page ' +
+      'that happens to fill exactly still reports `false` (§17.5).',
+  })
   hasMore!: boolean;
 
-  static from(messages: Message[], size: number): MessageListDto {
+  static from(messages: Message[], hasMore: boolean, viewerId: string): MessageListDto {
     const dto = new MessageListDto();
-    dto.items = messages.map(MessageDto.fromDomain);
-    dto.hasMore = messages.length === size;
+    // Not `map(MessageDto.fromDomain)` — that would feed the array index into the second parameter.
+    dto.items = messages.map((message) => MessageDto.fromDomain(message, viewerId));
+    dto.hasMore = hasMore;
     return dto;
   }
 }

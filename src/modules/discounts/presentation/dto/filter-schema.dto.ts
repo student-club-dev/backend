@@ -6,7 +6,7 @@ class FacetCountDto {
   @ApiProperty({ example: 'PERCENT' })
   key!: string;
 
-  @ApiProperty({ example: 188 })
+  @ApiProperty({ type: 'integer', format: 'int32', example: 188 })
   count!: number;
 }
 
@@ -25,7 +25,7 @@ class SchemaTypeDto {
   @ApiProperty({ example: 'Milliy taomlar' })
   nameUz!: string;
 
-  @ApiProperty({ required: false, nullable: true, example: '🍛' })
+  @ApiProperty({ type: String, required: false, nullable: true, example: '🍛' })
   emoji!: string | null;
 
   @ApiProperty({ example: 187 })
@@ -42,7 +42,7 @@ class SchemaCategoryDto {
   @ApiProperty({ example: 'NATIONAL_FOOD' })
   typeKey!: string;
 
-  @ApiProperty({ example: 54 })
+  @ApiProperty({ type: 'integer', format: 'int32', example: 54 })
   count!: number;
 }
 
@@ -50,7 +50,7 @@ class AttributeValueDto {
   @ApiProperty({ example: 'VIP' })
   value!: string;
 
-  @ApiProperty({ example: 22 })
+  @ApiProperty({ type: 'integer', format: 'int32', example: 22 })
   count!: number;
 }
 
@@ -64,7 +64,7 @@ class SchemaAttributeDto {
   @ApiProperty({ enum: AttributeFieldType, enumName: 'AttributeFieldTypeDto' })
   kind!: AttributeFieldType;
 
-  @ApiProperty({ required: false, nullable: true, example: 'gramm' })
+  @ApiProperty({ type: String, required: false, nullable: true, example: 'gramm' })
   suffix!: string | null;
 
   @ApiProperty({ type: [String], example: ['NATIONAL_FOOD', 'FAST_FOOD'] })
@@ -136,7 +136,7 @@ export class FilterSchemaDto {
   @ApiProperty({ type: [SortOptionDto] })
   sorts!: SortOptionDto[];
 
-  @ApiProperty({ example: 312 })
+  @ApiProperty({ type: 'integer', format: 'int32', example: 312 })
   total!: number;
 
   static fromDomain(schema: FilterSchema): FilterSchemaDto {

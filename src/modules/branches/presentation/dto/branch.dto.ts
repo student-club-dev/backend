@@ -19,7 +19,7 @@ export class BranchDto {
   @ApiProperty({ type: LocationDto })
   location!: LocationDto;
 
-  @ApiPropertyOptional({ nullable: true })
+  @ApiPropertyOptional({ type: String, nullable: true })
   phone!: string | null;
 
   @ApiProperty({ type: [WorkingHoursDto] })

@@ -99,7 +99,12 @@ export class AdminBusinessListQueryDto {
   @IsEnum(AdminBusinessSort)
   sort?: AdminBusinessSort;
 
-  @ApiPropertyOptional({ minimum: 1, default: ADMIN_LIST_DEFAULT_PAGE })
+  @ApiPropertyOptional({
+    type: 'integer',
+    format: 'int32',
+    minimum: 1,
+    default: ADMIN_LIST_DEFAULT_PAGE,
+  })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
@@ -107,6 +112,8 @@ export class AdminBusinessListQueryDto {
   page?: number;
 
   @ApiPropertyOptional({
+    type: 'integer',
+    format: 'int32',
     minimum: 1,
     maximum: ADMIN_LIST_MAX_SIZE,
     default: ADMIN_LIST_DEFAULT_SIZE,

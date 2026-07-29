@@ -24,14 +24,20 @@ export class ListListingsQueryDto {
   @IsString()
   categoryKey?: string;
 
-  @ApiPropertyOptional({ minimum: 1, default: DEFAULT_PAGE })
+  @ApiPropertyOptional({ type: 'integer', format: 'int32', minimum: 1, default: DEFAULT_PAGE })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
   page?: number;
 
-  @ApiPropertyOptional({ minimum: 1, maximum: MAX_SIZE, default: DEFAULT_SIZE })
+  @ApiPropertyOptional({
+    type: 'integer',
+    format: 'int32',
+    minimum: 1,
+    maximum: MAX_SIZE,
+    default: DEFAULT_SIZE,
+  })
   @IsOptional()
   @Type(() => Number)
   @IsInt()

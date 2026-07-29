@@ -22,16 +22,16 @@ export class AdminBusinessSummaryDto {
   @ApiProperty()
   ownerId!: string;
 
-  @ApiProperty({ nullable: true, description: "Owner's joined first + last name." })
+  @ApiProperty({ type: String, nullable: true, description: "Owner's joined first + last name." })
   ownerFullName!: string | null;
 
   @ApiProperty({ enum: BusinessStatus, enumName: 'BusinessStatusDto' })
   status!: BusinessStatus;
 
-  @ApiProperty({ format: 'int32', example: 5 })
+  @ApiProperty({ type: 'integer', format: 'int32', example: 5 })
   listingsCount!: number;
 
-  @ApiProperty({ format: 'int32', example: 2 })
+  @ApiProperty({ type: 'integer', format: 'int32', example: 2 })
   branchesCount!: number;
 
   @ApiProperty({ format: 'date-time' })
@@ -57,13 +57,13 @@ export class AdminBusinessPageDto {
   @ApiProperty({ type: [AdminBusinessSummaryDto] })
   items!: AdminBusinessSummaryDto[];
 
-  @ApiProperty({ format: 'int32', example: 1 })
+  @ApiProperty({ type: 'integer', format: 'int32', example: 1 })
   page!: number;
 
-  @ApiProperty({ format: 'int32', example: 20 })
+  @ApiProperty({ type: 'integer', format: 'int32', example: 20 })
   size!: number;
 
-  @ApiProperty({ format: 'int64', example: 42 })
+  @ApiProperty({ type: 'integer', format: 'int64', example: 42 })
   total!: number;
 
   @ApiProperty({ example: true })
@@ -85,10 +85,10 @@ export class AdminBusinessOwnerRefDto {
   @ApiProperty()
   ownerId!: string;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   ownerFullName!: string | null;
 
-  @ApiProperty({ nullable: true, description: 'E.164 format' })
+  @ApiProperty({ type: String, nullable: true, description: 'E.164 format' })
   ownerPhone!: string | null;
 
   static fromDomain(owner: AdminBusinessOwnerRef): AdminBusinessOwnerRefDto {
@@ -117,19 +117,19 @@ export class AdminBusinessDto {
   @ApiProperty()
   name!: string;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   legalName!: string | null;
 
-  @ApiProperty({ nullable: true, description: '9 digits' })
+  @ApiProperty({ type: String, nullable: true, description: '9 digits' })
   inn!: string | null;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   description!: string | null;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   logoUrl!: string | null;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   coverUrl!: string | null;
 
   @ApiProperty({ description: 'E.164' })
@@ -144,22 +144,22 @@ export class AdminBusinessDto {
   @ApiProperty({ enum: BusinessStatus, enumName: 'BusinessStatusDto' })
   status!: BusinessStatus;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   rejectionReason!: string | null;
 
-  @ApiProperty({ nullable: true, format: 'double' })
+  @ApiProperty({ type: Number, nullable: true, format: 'double' })
   rating!: number | null;
 
-  @ApiProperty({ format: 'int32', example: 0 })
+  @ApiProperty({ type: 'integer', format: 'int32', example: 0 })
   reviewsCount!: number;
 
-  @ApiProperty({ format: 'int32', example: 0 })
+  @ApiProperty({ type: 'integer', format: 'int32', example: 0 })
   listingsCount!: number;
 
   @ApiProperty({ type: AdminBusinessOwnerRefDto })
   owner!: AdminBusinessOwnerRefDto;
 
-  @ApiProperty({ format: 'int32', example: 2 })
+  @ApiProperty({ type: 'integer', format: 'int32', example: 2 })
   branchesCount!: number;
 
   @ApiProperty({ format: 'date-time' })

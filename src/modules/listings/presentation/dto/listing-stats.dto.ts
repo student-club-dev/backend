@@ -6,19 +6,23 @@ export class ListingStatsDto {
   @ApiProperty({ example: 'lst_01H8XZ' })
   listingId!: string;
 
-  @ApiProperty({ format: 'int32', description: 'Detail views' })
+  @ApiProperty({ type: 'integer', format: 'int32', description: 'Detail views' })
   viewsCount!: number;
 
-  @ApiProperty({ format: 'int32', description: 'Students who saved this listing' })
+  @ApiProperty({ type: 'integer', format: 'int32', description: 'Students who saved this listing' })
   favoritesCount!: number;
 
-  @ApiProperty({ format: 'int32', description: 'Confirmed redemptions' })
+  @ApiProperty({ type: 'integer', format: 'int32', description: 'Confirmed redemptions' })
   redemptionsCount!: number;
 
   @ApiProperty({ format: 'double', description: 'redemptionsCount / viewsCount (0 when no views)' })
   conversionRate!: number;
 
-  @ApiProperty({ format: 'int64', description: 'Total value of confirmed redemptions, in so‘m' })
+  @ApiProperty({
+    type: 'integer',
+    format: 'int64',
+    description: 'Total value of confirmed redemptions, in so‘m',
+  })
   totalRevenue!: number;
 
   static fromResult(result: ListingStatsResult): ListingStatsDto {

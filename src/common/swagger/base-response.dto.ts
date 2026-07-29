@@ -11,6 +11,7 @@ import { ApiProperty } from '@nestjs/swagger';
  */
 export class ApiErrorDto {
   @ApiProperty({
+    type: String,
     example: 'BUSINESS_NOT_FOUND',
     nullable: true,
     description: 'Machine-readable error code — switch on this, not on `message`.',
@@ -18,6 +19,7 @@ export class ApiErrorDto {
   code!: string | null;
 
   @ApiProperty({
+    type: String,
     example: 'Biznes topilmadi',
     nullable: true,
     description: 'User-facing Uzbek text, safe to show directly.',
@@ -40,10 +42,20 @@ export class BaseResponseDto {
   @ApiProperty({ example: 200, description: 'Always equal to the HTTP status code.' })
   status!: number;
 
-  @ApiProperty({ example: null, nullable: true, description: 'Reserved; currently always null.' })
+  @ApiProperty({
+    type: String,
+    example: null,
+    nullable: true,
+    description: 'Reserved; currently always null.',
+  })
   code!: string | null;
 
-  @ApiProperty({ example: 'OK', nullable: true, description: 'User-facing Uzbek text.' })
+  @ApiProperty({
+    type: String,
+    example: 'OK',
+    nullable: true,
+    description: 'User-facing Uzbek text.',
+  })
   message!: string | null;
 
   @ApiProperty({

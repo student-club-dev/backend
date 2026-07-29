@@ -54,6 +54,7 @@ export class LocationDto {
   lng!: number;
 
   @ApiPropertyOptional({
+    type: String,
     nullable: true,
     description: 'Computed by the server (7 characters ~150 m). Not accepted from the client.',
   })
@@ -65,7 +66,7 @@ export class LocationDto {
   @IsString()
   mapUrl?: string;
 
-  @ApiPropertyOptional({ nullable: true, description: 'Tashkent city only' })
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'Tashkent city only' })
   @IsOptional()
   @IsString()
   metroStation?: string;

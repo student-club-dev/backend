@@ -23,13 +23,13 @@ export class ConnectionSummaryPageDto {
   @ApiProperty({ type: [ConnectionSummaryDto] })
   items!: ConnectionSummaryDto[];
 
-  @ApiProperty()
+  @ApiProperty({ type: 'integer', format: 'int32' })
   page!: number;
 
-  @ApiProperty()
+  @ApiProperty({ type: 'integer', format: 'int32' })
   size!: number;
 
-  @ApiProperty()
+  @ApiProperty({ type: 'integer', format: 'int32' })
   total!: number;
 
   @ApiProperty()

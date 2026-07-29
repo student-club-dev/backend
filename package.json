@@ -19,6 +19,7 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:e2e": "OTP_CHANNEL=dev SMS_PROVIDER=dev jest --config ./test/jest-e2e.json",
+    "openapi:dump": "ts-node scripts/dump-openapi.ts",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",

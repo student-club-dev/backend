@@ -32,6 +32,7 @@ function message(overrides: Partial<Message> = {}): Message {
     seq: 1,
     type: MessageType.TEXT,
     body: 'salom',
+    clientMsgId: null,
     createdAt: new Date('2026-07-01T00:00:00Z'),
     ...overrides,
   };
@@ -211,8 +212,9 @@ describe('ChatService', () => {
     it('returns messages after the cursor for a member', async () => {
       const chat = makeChat({ listSince: jest.fn().mockResolvedValue([message({ seq: 4 })]) });
       const result = await makeService(chat).messagesSince(me, 'conv-1', 3, 20);
-      expect(chat.listSince).toHaveBeenCalledWith('conv-1', 3, 20);
-      expect(result).toHaveLength(1);
+      expect(chat.listSince).toHaveBeenCalledWith('conv-1', 3, 21);
+      expect(result.items).toHaveLength(1);
+      expect(result.hasMore).toBe(false);
     });
   });
 
@@ -227,14 +229,57 @@ describe('ChatService', () => {
     it('history: returns the repository page for a member', async () => {
       const chat = makeChat({ listMessages: jest.fn().mockResolvedValue([message()]) });
       const result = await makeService(chat).history(me, 'conv-1', 5, 20);
-      expect(chat.listMessages).toHaveBeenCalledWith('conv-1', 5, 20);
-      expect(result).toHaveLength(1);
+      expect(chat.listMessages).toHaveBeenCalledWith('conv-1', 5, 21);
+      expect(result.items).toHaveLength(1);
     });
 
     it('markRead: advances the read cursor', async () => {
       const chat = makeChat();
       await makeService(chat).markRead(me, 'conv-1', 7);
       expect(chat.advanceCursor).toHaveBeenCalledWith('conv-1', 'me', 'read', 7);
+    });
+  });
+
+  // §17.5 — `hasMore` used to be `rows.length === size`, which reported "more history" on a last
+  // page that happened to fill exactly. The client then paged forever into an empty result.
+  describe('hasMore (§17.5)', () => {
+    it('asks the repository for size + 1 and reports hasMore when the extra row comes back', async () => {
+      const rows = [
+        message({ seq: 10 }),
+        message({ seq: 9 }),
+        message({ seq: 8 }),
+        message({ seq: 7 }),
+      ];
+      const chat = makeChat({ listMessages: jest.fn().mockResolvedValue(rows) });
+
+      const page = await makeService(chat).history(me, 'conv-1', null, 3);
+
+      expect(chat.listMessages).toHaveBeenCalledWith('conv-1', null, 4);
+      expect(page.items).toHaveLength(3);
+      expect(page.hasMore).toBe(true);
+    });
+
+    it('reports hasMore = false on a last page that is exactly `size` long', async () => {
+      const chat = makeChat({
+        listMessages: jest.fn().mockResolvedValue([message({ seq: 3 }), message({ seq: 2 })]),
+      });
+
+      const page = await makeService(chat).history(me, 'conv-1', null, 2);
+
+      expect(page.items).toHaveLength(2);
+      expect(page.hasMore).toBe(false);
+    });
+
+    it('applies the same rule to the catch-up direction', async () => {
+      const chat = makeChat({
+        listSince: jest.fn().mockResolvedValue([message({ seq: 1 }), message({ seq: 2 })]),
+      });
+
+      const page = await makeService(chat).messagesSince(me, 'conv-1', 0, 1);
+
+      expect(chat.listSince).toHaveBeenCalledWith('conv-1', 0, 2);
+      expect(page.items).toHaveLength(1);
+      expect(page.hasMore).toBe(true);
     });
   });
 

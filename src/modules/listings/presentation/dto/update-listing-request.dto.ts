@@ -60,7 +60,12 @@ export class UpdateListingRequestDto {
   @IsEnum(PriceUnit)
   priceUnit!: PriceUnit;
 
-  @ApiProperty({ format: 'int64', example: 55000, description: 'Whole soums (no tiyin)' })
+  @ApiProperty({
+    type: 'integer',
+    format: 'int64',
+    example: 55000,
+    description: 'Whole soums (no tiyin)',
+  })
   @IsInt()
   originalPrice!: number;
 

@@ -22,14 +22,14 @@ const csv = ({ value }: { value: unknown }): unknown => {
 
 /** Shared pagination query — absent `page`/`size` default to 1/20 in the controller. */
 export class PaginationQueryDto {
-  @ApiPropertyOptional({ minimum: 1, default: 1 })
+  @ApiPropertyOptional({ type: 'integer', format: 'int32', minimum: 1, default: 1 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(1)
   page?: number;
 
-  @ApiPropertyOptional({ minimum: 1, maximum: 100, default: 20 })
+  @ApiPropertyOptional({ type: 'integer', format: 'int32', minimum: 1, maximum: 100, default: 20 })
   @IsOptional()
   @Type(() => Number)
   @IsInt()

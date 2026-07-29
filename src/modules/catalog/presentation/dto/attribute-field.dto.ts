@@ -21,6 +21,7 @@ export class AttributeFieldDto {
   required!: boolean;
 
   @ApiProperty({
+    type: String,
     required: false,
     nullable: true,
     example: '60',
@@ -29,6 +30,7 @@ export class AttributeFieldDto {
   hint!: string | null;
 
   @ApiProperty({
+    type: String,
     required: false,
     nullable: true,
     example: 'daqiqa',
@@ -37,6 +39,7 @@ export class AttributeFieldDto {
   suffix!: string | null;
 
   @ApiProperty({
+    type: Boolean,
     required: false,
     nullable: true,
     description: 'True for MULTI_SELECT. The value is stored comma-separated: "S,M,L"',

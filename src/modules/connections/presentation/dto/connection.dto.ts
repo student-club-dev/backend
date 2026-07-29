@@ -19,7 +19,7 @@ export class ConnectionDto {
   @ApiProperty({ format: 'date-time' })
   createdAt!: string;
 
-  @ApiProperty({ nullable: true, format: 'date-time' })
+  @ApiProperty({ type: String, nullable: true, format: 'date-time' })
   respondedAt!: string | null;
 
   static fromDomain(connection: Connection): ConnectionDto {

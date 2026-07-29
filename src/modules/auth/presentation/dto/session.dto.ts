@@ -6,13 +6,13 @@ export class SessionDto {
   @ApiProperty({ description: 'Session id — pass to DELETE /sessions/:id to revoke it' })
   id!: string;
 
-  @ApiProperty({ nullable: true, example: 'iPhone 15' })
+  @ApiProperty({ type: String, nullable: true, example: 'iPhone 15' })
   deviceName!: string | null;
 
-  @ApiProperty({ nullable: true, example: 'iOS' })
+  @ApiProperty({ type: String, nullable: true, example: 'iOS' })
   platform!: string | null;
 
-  @ApiProperty({ nullable: true, example: '178.218.201.5' })
+  @ApiProperty({ type: String, nullable: true, example: '178.218.201.5' })
   ipAddress!: string | null;
 
   @ApiProperty({ nullable: true, type: String, format: 'date-time' })

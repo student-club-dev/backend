@@ -17,19 +17,25 @@ export class BusinessDto {
   @ApiProperty({ minLength: 2, maxLength: 80 })
   name!: string;
 
-  @ApiProperty({ required: false, nullable: true })
+  @ApiProperty({ type: String, required: false, nullable: true })
   legalName!: string | null;
 
-  @ApiProperty({ required: false, nullable: true, description: '9 digits', example: '301234567' })
+  @ApiProperty({
+    type: String,
+    required: false,
+    nullable: true,
+    description: '9 digits',
+    example: '301234567',
+  })
   inn!: string | null;
 
-  @ApiProperty({ required: false, nullable: true, maxLength: 1000 })
+  @ApiProperty({ type: String, required: false, nullable: true, maxLength: 1000 })
   description!: string | null;
 
-  @ApiProperty({ required: false, nullable: true })
+  @ApiProperty({ type: String, required: false, nullable: true })
   logoUrl!: string | null;
 
-  @ApiProperty({ required: false, nullable: true })
+  @ApiProperty({ type: String, required: false, nullable: true })
   coverUrl!: string | null;
 
   @ApiProperty({ description: 'E.164', example: '+998901234567' })
@@ -47,10 +53,10 @@ export class BusinessDto {
   @ApiProperty({ enum: BusinessStatus, enumName: 'BusinessStatusDto' })
   status!: BusinessStatus;
 
-  @ApiProperty({ required: false, nullable: true })
+  @ApiProperty({ type: String, required: false, nullable: true })
   rejectionReason!: string | null;
 
-  @ApiProperty({ required: false, nullable: true, format: 'double' })
+  @ApiProperty({ type: Number, required: false, nullable: true, format: 'double' })
   rating!: number | null;
 
   @ApiProperty({ example: 0 })

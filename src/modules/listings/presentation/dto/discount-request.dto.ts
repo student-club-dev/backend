@@ -10,13 +10,14 @@ export class DiscountRequestDto {
   type!: DiscountType;
 
   @ApiProperty({
+    type: 'integer',
     format: 'int64',
     description: 'PERCENT: 1..90. FIXED_AMOUNT/SPECIAL_PRICE: soums.',
   })
   @IsInt()
   value!: number;
 
-  @ApiPropertyOptional({ nullable: true })
+  @ApiPropertyOptional({ type: String, nullable: true })
   @IsOptional()
   @IsString()
   conditions?: string | null;

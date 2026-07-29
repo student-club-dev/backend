@@ -24,7 +24,7 @@ import {
 } from './application/chat-events';
 import { ChatService } from './application/chat.service';
 import { Message } from './domain/entities/message.entity';
-import { verifyStudentSocket } from './infrastructure/ws-jwt';
+import { VerifiedSocket, verifyStudentSocket } from './infrastructure/ws-jwt';
 import { MessageDto } from './presentation/dto/message.dto';
 
 /** All of a student's devices share this room — 1:1 delivery targets a member's personal room. */
@@ -53,18 +53,19 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
   ) {}
 
   async handleConnection(client: Socket): Promise<void> {
-    let user: AuthenticatedUser;
+    let verified: VerifiedSocket;
     try {
-      user = await verifyStudentSocket(client, this.jwt, this.config);
+      verified = await verifyStudentSocket(client, this.jwt, this.config);
     } catch {
       this.logger.warn('Rejected an unauthenticated /chat socket');
       client.disconnect(true);
       return;
     }
-    client.data.user = user;
-    await client.join(personalRoom(user.id));
-    await this.chat.goOnline(user.id);
-    await this.emitPresence(user.id, true, null);
+    client.data.user = verified.user;
+    client.data.tokenExp = verified.expiresAt;
+    await client.join(personalRoom(verified.user.id));
+    await this.chat.goOnline(verified.user.id);
+    await this.emitPresence(verified.user.id, true, null);
   }
 
   async handleDisconnect(client: Socket): Promise<void> {
@@ -88,6 +89,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
       return { clientMsgId: payload?.clientMsgId, status: 'error', error: unauthorized() };
     }
     try {
+      assertTokenFresh(client);
       const message = await this.chat.sendMessage(
         user,
         payload.conversationId,
@@ -107,36 +109,46 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
+  /**
+   * Acks with the cursor it stored (§17.8). Socket.IO only delivers an ack when the client passed a
+   * callback, so returning one is invisible to clients that do not ask — but it lets those that do
+   * re-send a cursor that was lost in flight instead of carrying a stale unread badge until restart.
+   */
   @SubscribeMessage(CHAT_EVENT.MESSAGE_READ)
   async onRead(
     @ConnectedSocket() client: Socket,
     @MessageBody() payload: CursorPayload,
-  ): Promise<void> {
+  ): Promise<Record<string, unknown>> {
     const user = userOf(client);
     if (user === undefined) {
-      return;
+      return { status: 'error', error: unauthorized() };
     }
-    await this.chat.markRead(user, payload.conversationId, payload.seq);
-    await this.broadcastRead(payload.conversationId, user.id, payload.seq);
+    try {
+      assertTokenFresh(client);
+      await this.chat.markRead(user, payload.conversationId, payload.seq);
+      await this.broadcastRead(payload.conversationId, user.id, payload.seq);
+      return { conversationId: payload.conversationId, seq: payload.seq, status: 'ok' };
+    } catch (error) {
+      return { status: 'error', error: toError(error) };
+    }
   }
 
   @SubscribeMessage(CHAT_EVENT.MESSAGE_DELIVERED)
   async onDelivered(
     @ConnectedSocket() client: Socket,
     @MessageBody() payload: CursorPayload,
-  ): Promise<void> {
+  ): Promise<Record<string, unknown>> {
     const user = userOf(client);
     if (user === undefined) {
-      return;
+      return { status: 'error', error: unauthorized() };
     }
-    await this.chat.markDelivered(user, payload.conversationId, payload.seq);
-    const otherId = await this.chat.otherMemberId(payload.conversationId, user.id);
-    if (otherId !== null) {
-      this.server.to(personalRoom(otherId)).emit(CHAT_EVENT.DELIVERED_RECEIPT, {
-        conversationId: payload.conversationId,
-        seq: payload.seq,
-        byStudentId: user.id,
-      });
+    try {
+      assertTokenFresh(client);
+      await this.chat.markDelivered(user, payload.conversationId, payload.seq);
+      await this.broadcastDelivered(payload.conversationId, user.id, payload.seq);
+      return { conversationId: payload.conversationId, seq: payload.seq, status: 'ok' };
+    } catch (error) {
+      return { status: 'error', error: toError(error) };
     }
   }
 
@@ -156,18 +168,24 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     await this.emitTyping(client, payload.conversationId, false);
   }
 
-  /** Broadcast a new message to both members' personal rooms (used by WS send + the REST fallback). */
+  /**
+   * Broadcast a new message to both members' personal rooms (used by WS send + the REST fallback).
+   * Each side gets its own payload rather than a shared one: `clientMsgId` is echoed only to the
+   * sender's devices, so they can retire the optimistic copy by id instead of by text (§17.1).
+   */
   async broadcastMessage(message: Message): Promise<void> {
     const otherId = await this.chat.otherMemberId(message.conversationId, message.senderId);
     // WS fan-out to both members' devices (only when a socket server is bound).
     if (this.server !== undefined) {
-      const payload = {
+      this.server.to(personalRoom(message.senderId)).emit(CHAT_EVENT.MESSAGE_NEW, {
         conversationId: message.conversationId,
-        message: MessageDto.fromDomain(message),
-      };
-      this.server.to(personalRoom(message.senderId)).emit(CHAT_EVENT.MESSAGE_NEW, payload);
+        message: MessageDto.fromDomain(message, message.senderId),
+      });
       if (otherId !== null) {
-        this.server.to(personalRoom(otherId)).emit(CHAT_EVENT.MESSAGE_NEW, payload);
+        this.server.to(personalRoom(otherId)).emit(CHAT_EVENT.MESSAGE_NEW, {
+          conversationId: message.conversationId,
+          message: MessageDto.fromDomain(message, otherId),
+        });
       }
     }
     // Offline push to the recipient (C8) — best-effort; only when they have no open socket.
@@ -192,6 +210,26 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         seq,
         byStudentId: readerId,
       });
+    }
+  }
+
+  /**
+   * Broadcast a delivered receipt to the other member (the sender whose messages arrived). Shared by
+   * the `message:delivered` event and its REST fallback, so both move the single tick to a double one.
+   */
+  async broadcastDelivered(
+    conversationId: string,
+    byStudentId: string,
+    seq: number,
+  ): Promise<void> {
+    if (this.server === undefined) {
+      return;
+    }
+    const otherId = await this.chat.otherMemberId(conversationId, byStudentId);
+    if (otherId !== null) {
+      this.server
+        .to(personalRoom(otherId))
+        .emit(CHAT_EVENT.DELIVERED_RECEIPT, { conversationId, seq, byStudentId });
     }
   }
 
@@ -237,4 +275,17 @@ function toError(error: unknown): { code: string; message: string } {
 
 function unauthorized(): { code: string; message: string } {
   return { code: ERROR_CODE.UNAUTHORIZED, message: 'Avtorizatsiyadan o‘tilmagan' };
+}
+
+/**
+ * The handshake token is verified once, at connect, but a socket can stay open long past that
+ * token's lifetime — so every client→server event re-checks the stored `exp`. Failing with the same
+ * code REST uses lets the client run its existing refresh path and reconnect with a fresh
+ * `auth.token`, instead of showing "Xabar yuborilmadi" forever (§17.3).
+ */
+function assertTokenFresh(client: Socket): void {
+  const exp = client.data.tokenExp as number | undefined;
+  if (exp === undefined || exp * 1000 <= Date.now()) {
+    throw new AppException(ERROR_CODE.TOKEN_EXPIRED, 401, 'Sessiya muddati tugadi');
+  }
 }

@@ -14,28 +14,38 @@ export class AdminBusinessOwnerSummaryDto {
   @ApiProperty()
   id!: string;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   firstName!: string | null;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   lastName!: string | null;
 
-  @ApiProperty({ nullable: true, description: 'E.164 format' })
+  @ApiProperty({ type: String, nullable: true, description: 'E.164 format' })
   phoneNumber!: string | null;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   email!: string | null;
 
-  @ApiProperty({ format: 'int32', example: 3, description: 'How many businesses this owner has.' })
+  @ApiProperty({
+    type: 'integer',
+    format: 'int32',
+    example: 3,
+    description: 'How many businesses this owner has.',
+  })
   businessesCount!: number;
 
   @ApiProperty({ enum: AdminUserStatus, enumName: 'AdminUserStatusDto' })
   status!: AdminUserStatus;
 
-  @ApiProperty({ format: 'date-time', nullable: true, description: 'When the account was banned.' })
+  @ApiProperty({
+    type: String,
+    format: 'date-time',
+    nullable: true,
+    description: 'When the account was banned.',
+  })
   bannedAt!: string | null;
 
-  @ApiProperty({ nullable: true, description: 'Admin-supplied ban reason.' })
+  @ApiProperty({ type: String, nullable: true, description: 'Admin-supplied ban reason.' })
   banReason!: string | null;
 
   @ApiProperty({ format: 'date-time' })
@@ -62,13 +72,13 @@ export class AdminBusinessOwnerPageDto {
   @ApiProperty({ type: [AdminBusinessOwnerSummaryDto] })
   items!: AdminBusinessOwnerSummaryDto[];
 
-  @ApiProperty({ format: 'int32', example: 1 })
+  @ApiProperty({ type: 'integer', format: 'int32', example: 1 })
   page!: number;
 
-  @ApiProperty({ format: 'int32', example: 20 })
+  @ApiProperty({ type: 'integer', format: 'int32', example: 20 })
   size!: number;
 
-  @ApiProperty({ format: 'int64', example: 42 })
+  @ApiProperty({ type: 'integer', format: 'int64', example: 42 })
   total!: number;
 
   @ApiProperty({ example: true })
@@ -94,10 +104,10 @@ export class AdminBusinessOwnerDto {
   @ApiProperty()
   id!: string;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   email!: string | null;
 
-  @ApiProperty({ nullable: true, description: 'E.164 format' })
+  @ApiProperty({ type: String, nullable: true, description: 'E.164 format' })
   phoneNumber!: string | null;
 
   @ApiProperty()
@@ -106,28 +116,33 @@ export class AdminBusinessOwnerDto {
   @ApiProperty()
   emailVerified!: boolean;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   firstName!: string | null;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   lastName!: string | null;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ type: String, nullable: true })
   avatarUrl!: string | null;
 
   @ApiProperty({ enum: Gender, enumName: 'GenderDto', nullable: true })
   gender!: Gender | null;
 
-  @ApiProperty({ format: 'int32', example: 3 })
+  @ApiProperty({ type: 'integer', format: 'int32', example: 3 })
   businessesCount!: number;
 
   @ApiProperty({ enum: AdminUserStatus, enumName: 'AdminUserStatusDto' })
   status!: AdminUserStatus;
 
-  @ApiProperty({ format: 'date-time', nullable: true, description: 'When the account was banned.' })
+  @ApiProperty({
+    type: String,
+    format: 'date-time',
+    nullable: true,
+    description: 'When the account was banned.',
+  })
   bannedAt!: string | null;
 
-  @ApiProperty({ nullable: true, description: 'Admin-supplied ban reason.' })
+  @ApiProperty({ type: String, nullable: true, description: 'Admin-supplied ban reason.' })
   banReason!: string | null;
 
   @ApiProperty({ format: 'date-time' })
@@ -171,7 +186,7 @@ export class AdminOwnerBusinessDto {
   @ApiProperty({ enum: BusinessStatus, enumName: 'BusinessStatusDto' })
   status!: BusinessStatus;
 
-  @ApiProperty({ format: 'int32', example: 5 })
+  @ApiProperty({ type: 'integer', format: 'int32', example: 5 })
   listingsCount!: number;
 
   @ApiProperty({ format: 'date-time' })

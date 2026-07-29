@@ -14,17 +14,17 @@ export class RedemptionInfoDto {
   @IsEnum(RedemptionMethod)
   method!: RedemptionMethod;
 
-  @ApiPropertyOptional({ nullable: true })
+  @ApiPropertyOptional({ type: String, nullable: true })
   @IsOptional()
   @IsString()
   promoCode?: string | null;
 
-  @ApiPropertyOptional({ nullable: true, description: 'For ONLINE_LINK' })
+  @ApiPropertyOptional({ type: String, nullable: true, description: 'For ONLINE_LINK' })
   @IsOptional()
   @IsString()
   url?: string | null;
 
-  @ApiPropertyOptional({ nullable: true, format: 'int32', example: 1 })
+  @ApiPropertyOptional({ type: 'integer', nullable: true, format: 'int32', example: 1 })
   @IsOptional()
   @IsInt()
   perUserLimit?: number | null;
@@ -35,6 +35,7 @@ export class RedemptionInfoDto {
   perUserPeriod?: RedemptionPeriod;
 
   @ApiPropertyOptional({
+    type: 'integer',
     nullable: true,
     format: 'int32',
     description: 'null = unlimited. The listing moves to SOLD_OUT once usedCount >= totalLimit.',
@@ -43,7 +44,7 @@ export class RedemptionInfoDto {
   @IsInt()
   totalLimit?: number | null;
 
-  @ApiPropertyOptional({ format: 'int32', description: 'Computed by the server' })
+  @ApiPropertyOptional({ type: 'integer', format: 'int32', description: 'Computed by the server' })
   @Allow()
   usedCount?: number;
 

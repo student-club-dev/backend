@@ -13,7 +13,7 @@ import { CONNECTION_CHECK, ConnectionCheckRepository } from '../domain/connectio
 import { Conversation } from '../domain/entities/conversation.entity';
 import { ConversationListItem } from '../domain/entities/conversation-view.entity';
 import { Message } from '../domain/entities/message.entity';
-import { directKeyOf, Page } from './chat.io';
+import { directKeyOf, MessagePage, Page } from './chat.io';
 
 /**
  * Chat use-cases (docs/architecture/chat.md). 1:1 DIRECT conversations gated by an accepted
@@ -62,15 +62,18 @@ export class ChatService {
     return this.chat.appendMessage(conversationId, user.id, text, clientMsgId);
   }
 
-  /** Reconnect catch-up (C6): messages after `afterSeq`, oldest-first, for a conversation member. */
+  /**
+   * Reconnect catch-up (C6): messages after `afterSeq`, oldest-first, for a conversation member.
+   * Reads one row past `size` so `hasMore` is exact on the last page too (§17.5).
+   */
   async messagesSince(
     user: AuthenticatedUser,
     conversationId: string,
     afterSeq: number,
     size: number,
-  ): Promise<Message[]> {
+  ): Promise<MessagePage> {
     await this.assertMember(conversationId, user.id);
-    return this.chat.listSince(conversationId, afterSeq, size);
+    return trim(await this.chat.listSince(conversationId, afterSeq, size + 1), size);
   }
 
   /** History for a conversation the caller belongs to (newest-first, `seq`-cursor). */
@@ -79,9 +82,9 @@ export class ChatService {
     conversationId: string,
     beforeSeq: number | null,
     size: number,
-  ): Promise<Message[]> {
+  ): Promise<MessagePage> {
     await this.assertMember(conversationId, user.id);
-    return this.chat.listMessages(conversationId, beforeSeq, size);
+    return trim(await this.chat.listMessages(conversationId, beforeSeq, size + 1), size);
   }
 
   /** Advances the caller's read cursor. */
@@ -167,4 +170,13 @@ export class ChatService {
       throw AppException.notFound(ERROR_CODE.CONVERSATION_NOT_FOUND, 'Suhbat topilmadi');
     }
   }
+}
+
+/**
+ * Turns a `size + 1` read into an exact page: the extra row is the proof that more exist, and it is
+ * dropped from the result. `hasMore` means "more rows past this page in the direction you are
+ * paging", so the same rule holds for `before` (scroll-up) and `after` (catch-up) alike (§17.5).
+ */
+function trim(rows: Message[], size: number): MessagePage {
+  return { items: rows.slice(0, size), hasMore: rows.length > size };
 }

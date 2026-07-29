@@ -43,10 +43,16 @@ export interface ChatRepository {
     clientMsgId: string | null,
   ): Promise<Message>;
 
-  /** History strictly before `beforeSeq` (null = latest), newest-first, capped at `size`. */
+  /**
+   * History strictly before `beforeSeq` (null = latest), newest-first, capped at `size`. Callers
+   * pass `size + 1` and drop the extra row to compute `hasMore` exactly (§17.5).
+   */
   listMessages(conversationId: string, beforeSeq: number | null, size: number): Promise<Message[]>;
 
-  /** Messages strictly after `afterSeq`, oldest-first — for reconnect catch-up (C6). */
+  /**
+   * Messages strictly after `afterSeq`, oldest-first — for reconnect catch-up (C6). Same `size + 1`
+   * convention as `listMessages`.
+   */
   listSince(conversationId: string, afterSeq: number, size: number): Promise<Message[]>;
 
   /** The caller's conversations (other member + last message + unread), by `lastMessageAt` desc. */

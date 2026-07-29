@@ -691,7 +691,13 @@ export class SearchPageDto {
   @Min(0)
   number?: number;
 
-  @ApiProperty({ required: false, default: DEFAULT_PAGE_SIZE, minimum: 1 })
+  @ApiProperty({
+    type: 'integer',
+    format: 'int32',
+    required: false,
+    default: DEFAULT_PAGE_SIZE,
+    minimum: 1,
+  })
   @IsOptional()
   @IsInt()
   @Min(1)

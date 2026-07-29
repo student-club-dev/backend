@@ -12,6 +12,7 @@ export class AdminAttributeSpecDto {
   businessType!: string;
 
   @ApiProperty({
+    type: String,
     required: false,
     nullable: true,
     description: 'null = a type-level attribute; set for a category-level one.',
@@ -31,10 +32,16 @@ export class AdminAttributeSpecDto {
   @ApiProperty({ example: true })
   required!: boolean;
 
-  @ApiProperty({ required: false, nullable: true, description: 'Placeholder for TEXT/NUMBER' })
+  @ApiProperty({
+    type: String,
+    required: false,
+    nullable: true,
+    description: 'Placeholder for TEXT/NUMBER',
+  })
   hint!: string | null;
 
   @ApiProperty({
+    type: String,
     required: false,
     nullable: true,
     description: 'Unit for NUMBER',
@@ -42,7 +49,12 @@ export class AdminAttributeSpecDto {
   })
   suffix!: string | null;
 
-  @ApiProperty({ required: false, nullable: true, description: 'True for MULTI_SELECT' })
+  @ApiProperty({
+    type: Boolean,
+    required: false,
+    nullable: true,
+    description: 'True for MULTI_SELECT',
+  })
   multiple!: boolean | null;
 
   @ApiProperty({

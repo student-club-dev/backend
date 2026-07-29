@@ -14,7 +14,7 @@ export class ConversationDto {
   @ApiProperty({ enum: ConversationType, enumName: 'ConversationTypeDto' })
   type!: ConversationType;
 
-  @ApiProperty({ nullable: true, format: 'date-time' })
+  @ApiProperty({ type: String, nullable: true, format: 'date-time' })
   lastMessageAt!: string | null;
 
   static fromDomain(conversation: Conversation): ConversationDto {
@@ -38,10 +38,16 @@ export class ConversationListItemDto {
   @ApiProperty({ type: MessageDto, nullable: true })
   lastMessage!: MessageDto | null;
 
-  @ApiProperty({ description: 'Messages from the other member with `seq > myReadSeq`.' })
+  @ApiProperty({
+    type: 'integer',
+    format: 'int32',
+    description: 'Messages from the other member with `seq > myReadSeq`.',
+  })
   unreadCount!: number;
 
   @ApiProperty({
+    type: 'integer',
+    format: 'int32',
     description:
       'How far you have read (`ConversationMember.lastReadSeq`). The persisted counterpart of ' +
       '`unreadCount` — advanced by `POST /v1/conversations/{id}/read` or the `message:read` event.',
@@ -49,6 +55,8 @@ export class ConversationListItemDto {
   myReadSeq!: number;
 
   @ApiProperty({
+    type: 'integer',
+    format: 'int32',
     description:
       'How far the other member has read. Every message you sent with `seq <= peerReadSeq` is ' +
       'read (✓✓). Restores receipt state after a restart, when the live `message:read` event is gone.',
@@ -56,16 +64,19 @@ export class ConversationListItemDto {
   peerReadSeq!: number;
 
   @ApiProperty({
+    type: 'integer',
+    format: 'int32',
     description:
       'How far the other member’s device has received. `seq <= peerDeliveredSeq` is delivered (✓).',
   })
   peerDeliveredSeq!: number;
 
-  static fromItem(item: ConversationListItem): ConversationListItemDto {
+  static fromItem(item: ConversationListItem, viewerId: string): ConversationListItemDto {
     const dto = new ConversationListItemDto();
     dto.conversation = ConversationDto.fromDomain(item.conversation);
     dto.other = StudentSummaryDto.fromDomain(item.other);
-    dto.lastMessage = item.lastMessage === null ? null : MessageDto.fromDomain(item.lastMessage);
+    dto.lastMessage =
+      item.lastMessage === null ? null : MessageDto.fromDomain(item.lastMessage, viewerId);
     dto.unreadCount = item.unreadCount;
     dto.myReadSeq = item.myReadSeq;
     dto.peerReadSeq = item.peerReadSeq;
@@ -79,13 +90,13 @@ export class ConversationPageDto {
   @ApiProperty({ type: [ConversationListItemDto] })
   items!: ConversationListItemDto[];
 
-  @ApiProperty()
+  @ApiProperty({ type: 'integer', format: 'int32' })
   page!: number;
 
-  @ApiProperty()
+  @ApiProperty({ type: 'integer', format: 'int32' })
   size!: number;
 
-  @ApiProperty()
+  @ApiProperty({ type: 'integer', format: 'int32' })
   total!: number;
 
   @ApiProperty()
@@ -95,9 +106,10 @@ export class ConversationPageDto {
     result: Page<ConversationListItem>,
     page: number,
     size: number,
+    viewerId: string,
   ): ConversationPageDto {
     const dto = new ConversationPageDto();
-    dto.items = result.items.map(ConversationListItemDto.fromItem);
+    dto.items = result.items.map((item) => ConversationListItemDto.fromItem(item, viewerId));
     dto.page = page;
     dto.size = size;
     dto.total = result.total;

@@ -14,19 +14,21 @@ export class SuggestionDto {
   @ApiProperty({ example: 'Osh / Palov' })
   label!: string;
 
-  @ApiProperty({ required: false, nullable: true, example: 'NATIONAL_FOOD' })
+  @ApiProperty({ type: String, required: false, nullable: true, example: 'NATIONAL_FOOD' })
   typeKey!: string | null;
 
-  @ApiProperty({ required: false, nullable: true, example: 'PALOV' })
+  @ApiProperty({ type: String, required: false, nullable: true, example: 'PALOV' })
   categoryKey!: string | null;
 
-  @ApiProperty({ required: false, nullable: true, example: 'biz_01H8X' })
+  @ApiProperty({ type: String, required: false, nullable: true, example: 'biz_01H8X' })
   businessId!: string | null;
 
-  @ApiProperty({ required: false, nullable: true, example: 'lst_01H8X' })
+  @ApiProperty({ type: String, required: false, nullable: true, example: 'lst_01H8X' })
   listingId!: string | null;
 
   @ApiProperty({
+    type: 'integer',
+    format: 'int32',
     example: 54,
     description: 'Visible listings this suggestion would yield. Never 0 — such a row is dropped.',
   })

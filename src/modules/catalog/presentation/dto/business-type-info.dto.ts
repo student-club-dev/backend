@@ -10,19 +10,25 @@ export class BusinessTypeInfoDto {
   @ApiProperty({ example: 'Kafe va Restoran' })
   nameUz!: string;
 
-  @ApiProperty({ required: false, nullable: true })
+  @ApiProperty({ type: String, required: false, nullable: true })
   nameRu!: string | null;
 
-  @ApiProperty({ required: false, nullable: true })
+  @ApiProperty({ type: String, required: false, nullable: true })
   iconUrl!: string | null;
 
   @ApiProperty({ enum: PriceUnit, enumName: 'PriceUnitDto' })
   defaultPriceUnit!: PriceUnit;
 
-  @ApiProperty({ required: false, nullable: true, example: '🎮' })
+  @ApiProperty({ type: String, required: false, nullable: true, example: '🎮' })
   emoji!: string | null;
 
-  @ApiProperty({ required: false, nullable: true, description: 'HEX colour', example: '#7C5CFF' })
+  @ApiProperty({
+    type: String,
+    required: false,
+    nullable: true,
+    description: 'HEX colour',
+    example: '#7C5CFF',
+  })
   accentColor!: string | null;
 
   @ApiProperty({

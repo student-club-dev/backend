@@ -10,6 +10,7 @@ export class MediaUploadResponseDto {
   url!: string;
 
   @ApiProperty({
+    type: String,
     required: false,
     nullable: true,
     description: '200px variant — always null in v1 (deferred)',
@@ -17,6 +18,7 @@ export class MediaUploadResponseDto {
   thumbUrl!: string | null;
 
   @ApiProperty({
+    type: String,
     required: false,
     nullable: true,
     description: '800px variant — always null in v1 (deferred)',

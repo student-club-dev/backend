@@ -8,5 +8,7 @@ export interface Message {
   seq: number;
   type: MessageType;
   body: string | null;
+  /** The sender's idempotency key (C6). Null for server/system messages. */
+  clientMsgId: string | null;
   createdAt: Date;
 }

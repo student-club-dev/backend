@@ -12,7 +12,7 @@ export class DistrictDto {
   @ApiProperty({ example: 'Chilonzor tumani' })
   nameUz!: string;
 
-  @ApiProperty({ required: false, nullable: true })
+  @ApiProperty({ type: String, required: false, nullable: true })
   nameRu!: string | null;
 
   @ApiProperty({ required: false, nullable: true, type: Number, format: 'double' })

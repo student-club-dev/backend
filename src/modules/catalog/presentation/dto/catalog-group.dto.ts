@@ -9,16 +9,22 @@ export class CatalogGroupDto {
   @ApiProperty({ example: 'Ovqatlanish' })
   nameUz!: string;
 
-  @ApiProperty({ required: false, nullable: true })
+  @ApiProperty({ type: String, required: false, nullable: true })
   nameRu!: string | null;
 
-  @ApiProperty({ required: false, nullable: true, example: '🍽' })
+  @ApiProperty({ type: String, required: false, nullable: true, example: '🍽' })
   emoji!: string | null;
 
-  @ApiProperty({ required: false, nullable: true, example: 'cafe' })
+  @ApiProperty({ type: String, required: false, nullable: true, example: 'cafe' })
   icon!: string | null;
 
-  @ApiProperty({ required: false, nullable: true, description: 'HEX colour', example: '#F97316' })
+  @ApiProperty({
+    type: String,
+    required: false,
+    nullable: true,
+    description: 'HEX colour',
+    example: '#F97316',
+  })
   accentColor!: string | null;
 
   @ApiProperty({ example: 1 })

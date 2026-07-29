@@ -14,10 +14,16 @@ export class CatalogTypeDto {
   @ApiProperty({ example: 'Milliy taomlar' })
   nameUz!: string;
 
-  @ApiProperty({ required: false, nullable: true, example: '🍛' })
+  @ApiProperty({ type: String, required: false, nullable: true, example: '🍛' })
   emoji!: string | null;
 
-  @ApiProperty({ required: false, nullable: true, description: 'HEX colour', example: '#EA580C' })
+  @ApiProperty({
+    type: String,
+    required: false,
+    nullable: true,
+    description: 'HEX colour',
+    example: '#EA580C',
+  })
   accentColor!: string | null;
 
   @ApiProperty({ enum: PriceUnit, enumName: 'PriceUnitDto' })
@@ -30,6 +36,7 @@ export class CatalogTypeDto {
   availableForGenders!: Gender[];
 
   @ApiProperty({
+    type: String,
     required: false,
     nullable: true,
     description: 'Label for the type-wide "ALL" category',
@@ -37,7 +44,7 @@ export class CatalogTypeDto {
   })
   allCategoryLabel!: string | null;
 
-  @ApiProperty({ required: false, nullable: true, example: 'Porsiya, tarkib' })
+  @ApiProperty({ type: String, required: false, nullable: true, example: 'Porsiya, tarkib' })
   optionGroupHint!: string | null;
 
   @ApiProperty({ example: 8, description: 'Base categories (gender-specific lists excluded)' })

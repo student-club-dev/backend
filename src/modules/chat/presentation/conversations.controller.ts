@@ -18,7 +18,7 @@ import { ChatGateway } from '../chat.gateway';
 import { ConversationDto, ConversationPageDto } from './dto/conversation.dto';
 import { MessageDto, MessageListDto } from './dto/message.dto';
 import { ConversationsQueryDto, HistoryQueryDto } from './dto/queries.dto';
-import { MarkReadDto, OpenDirectDto, SendMessageDto } from './dto/requests.dto';
+import { MarkDeliveredDto, MarkReadDto, OpenDirectDto, SendMessageDto } from './dto/requests.dto';
 
 /**
  * REST surface for chat: open/list conversations, history (cursor by `seq`), send (WS fallback) and
@@ -59,7 +59,7 @@ export class ConversationsController {
     const page = query.page ?? 1;
     const size = query.size ?? 20;
     const result = await this.chat.listConversations(user, page, size);
-    return ConversationPageDto.fromPage(result, page, size);
+    return ConversationPageDto.fromPage(result, page, size, user.id);
   }
 
   @Get(':id/messages')
@@ -73,11 +73,11 @@ export class ConversationsController {
     @Query() query: HistoryQueryDto,
   ): Promise<MessageListDto> {
     const size = query.size ?? 30;
-    const messages =
+    const page =
       query.after === undefined
         ? await this.chat.history(user, id, query.before ?? null, size)
         : await this.chat.messagesSince(user, id, query.after, size);
-    return MessageListDto.from(messages, size);
+    return MessageListDto.from(page.items, page.hasMore, user.id);
   }
 
   @Post(':id/messages')
@@ -94,7 +94,7 @@ export class ConversationsController {
   ): Promise<MessageDto> {
     const message = await this.chat.sendMessage(user, id, dto.body, dto.clientMsgId ?? null);
     await this.gateway.broadcastMessage(message);
-    return MessageDto.fromDomain(message);
+    return MessageDto.fromDomain(message, user.id);
   }
 
   @Post(':id/read')
@@ -111,5 +111,27 @@ export class ConversationsController {
   ): Promise<void> {
     await this.chat.markRead(user, id, dto.seq);
     await this.gateway.broadcastRead(id, user.id, dto.seq);
+  }
+
+  @Post(':id/delivered')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Advance the delivered cursor',
+    description:
+      'REST twin of the `message:delivered` event, for when the socket is down. Without it the ' +
+      'delivered cursor is only reachable over WS, so a dropped connection left the sender ' +
+      'looking at a single tick forever (§17.6).',
+  })
+  @ApiParam({ name: 'id', description: 'Conversation id' })
+  @ApiOkEnvelope(undefined, 'Delivered; `result` is null.')
+  @ApiNotFoundEnvelope(ERROR_CODE.CONVERSATION_NOT_FOUND, 'Not a member.', 'Suhbat topilmadi')
+  @ApiValidationEnvelope()
+  async delivered(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Body() dto: MarkDeliveredDto,
+  ): Promise<void> {
+    await this.chat.markDelivered(user, id, dto.seq);
+    await this.gateway.broadcastDelivered(id, user.id, dto.seq);
   }
 }

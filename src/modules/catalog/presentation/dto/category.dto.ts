@@ -13,10 +13,10 @@ export class CategoryDto {
   @ApiProperty({ example: 'Pitsa' })
   nameUz!: string;
 
-  @ApiProperty({ required: false, nullable: true })
+  @ApiProperty({ type: String, required: false, nullable: true })
   nameRu!: string | null;
 
-  @ApiProperty({ required: false, nullable: true })
+  @ApiProperty({ type: String, required: false, nullable: true })
   iconUrl!: string | null;
 
   @ApiProperty({ example: 0 })
@@ -29,6 +29,7 @@ export class CategoryDto {
   fields!: AttributeFieldDto[];
 
   @ApiProperty({
+    type: Boolean,
     required: false,
     nullable: true,
     description: 'True for OTHER — `customCategoryName` then becomes required',

@@ -42,7 +42,8 @@ export class ReportsController {
     'Foydalanuvchi topilmadi',
   )
   @ApiValidationEnvelope(
-    'Neither or both targets given (`REPORT_TARGET_INVALID`), or a bad reason.',
+    'Neither or both targets given (`REPORT_TARGET_INVALID`), a bad reason, or a `messageId` that ' +
+      'does not exist in a conversation you belong to (`MESSAGE_NOT_FOUND`).',
   )
   async report(
     @CurrentUser() user: AuthenticatedUser,

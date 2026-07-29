@@ -5,16 +5,21 @@ import { AdminDashboardStats } from '../../domain/entities/admin-dashboard-stats
 
 /** A `{ total, banned }` count block (students, business owners). */
 export class AdminDashboardTotalDto {
-  @ApiProperty({ format: 'int32', example: 42 })
+  @ApiProperty({ type: 'integer', format: 'int32', example: 42 })
   total!: number;
 
-  @ApiProperty({ format: 'int32', example: 3, description: 'Accounts with status=BANNED.' })
+  @ApiProperty({
+    type: 'integer',
+    format: 'int32',
+    example: 3,
+    description: 'Accounts with status=BANNED.',
+  })
   banned!: number;
 }
 
 /** Business totals plus the per-status breakdown (every BusinessStatus key present, 0 default). */
 export class AdminDashboardBusinessesDto {
-  @ApiProperty({ format: 'int32', example: 12 })
+  @ApiProperty({ type: 'integer', format: 'int32', example: 12 })
   total!: number;
 
   @ApiProperty({
@@ -28,7 +33,7 @@ export class AdminDashboardBusinessesDto {
 
 /** Listing totals plus the per-status breakdown (every ListingStatus key present, 0 default). */
 export class AdminDashboardListingsDto {
-  @ApiProperty({ format: 'int32', example: 34 })
+  @ApiProperty({ type: 'integer', format: 'int32', example: 34 })
   total!: number;
 
   @ApiProperty({
@@ -41,25 +46,25 @@ export class AdminDashboardListingsDto {
 
 /** Redemption totals with the two states the dashboard highlights. */
 export class AdminDashboardRedemptionsDto {
-  @ApiProperty({ format: 'int32', example: 120 })
+  @ApiProperty({ type: 'integer', format: 'int32', example: 120 })
   total!: number;
 
-  @ApiProperty({ format: 'int32', example: 100 })
+  @ApiProperty({ type: 'integer', format: 'int32', example: 100 })
   confirmed!: number;
 
-  @ApiProperty({ format: 'int32', example: 15 })
+  @ApiProperty({ type: 'integer', format: 'int32', example: 15 })
   pending!: number;
 }
 
 /** The pending moderation queues. */
 export class AdminDashboardModerationDto {
-  @ApiProperty({ format: 'int32', example: 2 })
+  @ApiProperty({ type: 'integer', format: 'int32', example: 2 })
   pendingBusinesses!: number;
 
-  @ApiProperty({ format: 'int32', example: 4 })
+  @ApiProperty({ type: 'integer', format: 'int32', example: 4 })
   pendingListings!: number;
 
-  @ApiProperty({ format: 'int32', example: 6 })
+  @ApiProperty({ type: 'integer', format: 'int32', example: 6 })
   openReports!: number;
 }
 

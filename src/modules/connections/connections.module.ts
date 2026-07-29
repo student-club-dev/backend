@@ -7,9 +7,11 @@ import { PresenceModule } from '../../infrastructure/presence/presence.module';
 import { ConnectionsService } from './application/connections.service';
 import { ReportsService } from './application/reports.service';
 import { CONNECTIONS_REPOSITORY } from './domain/connections.repository';
+import { MESSAGE_DIRECTORY } from './domain/message-directory.repository';
 import { REPORTS_REPOSITORY } from './domain/reports.repository';
 import { STUDENT_DIRECTORY } from './domain/student-directory.repository';
 import { ConnectionPrismaRepository } from './infrastructure/connection.prisma.repository';
+import { MessageDirectoryPrismaRepository } from './infrastructure/message-directory.prisma.repository';
 import { ReportPrismaRepository } from './infrastructure/report.prisma.repository';
 import { StudentDirectoryPrismaRepository } from './infrastructure/student-directory.prisma.repository';
 import { BlocksController } from './presentation/blocks.controller';
@@ -37,6 +39,7 @@ import { StudentSearchController } from './presentation/student-search.controlle
     { provide: CONNECTIONS_REPOSITORY, useClass: ConnectionPrismaRepository },
     { provide: REPORTS_REPOSITORY, useClass: ReportPrismaRepository },
     { provide: STUDENT_DIRECTORY, useClass: StudentDirectoryPrismaRepository },
+    { provide: MESSAGE_DIRECTORY, useClass: MessageDirectoryPrismaRepository },
   ],
 })
 export class ConnectionsModule {}

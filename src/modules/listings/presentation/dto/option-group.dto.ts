@@ -20,7 +20,7 @@ import { OptionDto } from './option.dto';
  * Max 30 options per group; the group count and select-range coherence are enforced in the service.
  */
 export class OptionGroupDto {
-  @ApiPropertyOptional({ nullable: true })
+  @ApiPropertyOptional({ type: String, nullable: true })
   @IsOptional()
   @IsString()
   id?: string | null;
@@ -38,17 +38,17 @@ export class OptionGroupDto {
   @IsBoolean()
   isRequired?: boolean;
 
-  @ApiPropertyOptional({ nullable: true, format: 'int32' })
+  @ApiPropertyOptional({ type: 'integer', nullable: true, format: 'int32' })
   @IsOptional()
   @IsInt()
   minSelect?: number | null;
 
-  @ApiPropertyOptional({ nullable: true, format: 'int32' })
+  @ApiPropertyOptional({ type: 'integer', nullable: true, format: 'int32' })
   @IsOptional()
   @IsInt()
   maxSelect?: number | null;
 
-  @ApiPropertyOptional({ nullable: true, format: 'int32' })
+  @ApiPropertyOptional({ type: 'integer', nullable: true, format: 'int32' })
   @IsOptional()
   @IsInt()
   sortOrder?: number | null;

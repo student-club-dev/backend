@@ -182,9 +182,9 @@ Auth: the socket handshake carries the **access JWT** (`auth: { token }`); the g
 | Event | Payload | Ack |
 |-------|---------|-----|
 | `message:send` | `{ conversationId, clientMsgId, type, body, replyToId? }` | `{ clientMsgId, id, seq, createdAt, status:"sent" }` |
-| `message:read` | `{ conversationId, seq }` | — |
-| `message:delivered` | `{ conversationId, seq }` | — |
-| `typing:start` / `typing:stop` | `{ conversationId }` | — |
+| `message:read` | `{ conversationId, seq }` | `{ conversationId, seq, status:"ok" }` |
+| `message:delivered` | `{ conversationId, seq }` | `{ conversationId, seq, status:"ok" }` |
+| `typing:start` / `typing:stop` | `{ conversationId }` | — (ephemeral; losing one costs nothing) |
 
 **Server → Client**
 | Event | Payload |
@@ -195,6 +195,29 @@ Auth: the socket handshake carries the **access JWT** (`auth: { token }`); the g
 | `typing` | `{ conversationId, studentId, isTyping }` |
 | `presence:update` | `{ studentId, online, lastSeenAt }` |
 | `connection:request` / `connection:accepted` | `{ from/with student }` (real-time social notifications) |
+
+#### Errors on the socket
+
+Every client → server event acks `{ status: "error", error: { code, message } }` on failure. The
+`code` values are **the same set REST uses** (`ERROR_CODE`), so one error path covers both
+transports. The shape deliberately differs from the REST `BaseResponse` envelope — clients in the
+field parse `status` as `"sent" | "ok" | "error"`, and turning it into an HTTP number would break
+them.
+
+The handshake token is verified once, at connect, but a socket outlives its access token. Every
+client → server event therefore re-checks the token's `exp` and fails with
+`{ code: "TOKEN_EXPIRED" }` once it has passed. The socket stays open; the client refreshes and
+reconnects with a fresh `auth.token`.
+
+#### `message:new` carries the sender's `clientMsgId`
+
+`message.clientMsgId` is echoed **only to the sender's own devices**; every other member sees
+`null`. The sender retires its optimistic ("sending") bubble by matching this id.
+
+Matching by message text instead is wrong twice over: two identical texts in a row are
+indistinguishable, and a media message has no text at all. The same rule applies to
+`GET /v1/conversations/{id}/messages`, so the reconciliation also works after a reconnect that
+missed the live event.
 
 ### Send sequence (1:1)
 
@@ -218,11 +241,20 @@ sequenceDiagram
 | Method | Path | Purpose |
 |--------|------|---------|
 | `GET`  | `/v1/conversations` | List (last message + `unreadCount`), newest-active first, paginated |
-| `GET`  | `/v1/conversations/{id}` | Conversation + members |
 | `GET`  | `/v1/conversations/{id}/messages?before={seq}&size=` | History (paginated, `seq`-cursor) |
 | `POST` | `/v1/conversations/{id}/messages` | Send (REST fallback; same idempotency) |
 | `POST` | `/v1/conversations/{id}/read` `{ seq }` | Advance read cursor |
-| *(v2)* | `PUT /v1/messages/{id}` · `DELETE /v1/messages/{id}` · `POST /v1/messages/{id}/reactions` | Edit / delete / react |
+| `POST` | `/v1/conversations/{id}/delivered` `{ seq }` | Advance delivered cursor (REST twin of the WS event) |
+| *(v2)* | `GET /v1/conversations/{id}` · `PUT /v1/messages/{id}` · `DELETE /v1/messages/{id}` · `POST /v1/messages/{id}/reactions` | Single conversation · edit / delete / react |
+
+`hasMore` on the history page is exact: the server reads one row past `size` and drops it, rather
+than inferring "more exist" from a page that happened to fill. It means "more messages past this
+page **in the direction you are paging**", so it is correct for `before` and `after` alike.
+
+The conversation list is ordered `lastMessageAt DESC NULLS LAST`, then `createdAt DESC, id DESC`.
+Postgres sorts `NULL` first on a `DESC` sort, which used to float never-used conversations to the
+top; the tiebreaker is what keeps OFFSET paging from repeating or dropping rows, since every empty
+conversation compares equal on the first key alone.
 
 REST follows the project envelope (`BaseResponse`, `{ items, page, size, total, hasNext }`, ISO-8601, Uzbek `message`). WS events use their own documented JSON schema (not envelope-wrapped).
 
