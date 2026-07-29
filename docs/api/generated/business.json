@@ -16357,6 +16357,124 @@
         "required": [
           "url"
         ]
+      },
+      "MediaKindDto": {
+        "type": "string",
+        "enum": [
+          "IMAGE",
+          "GIF",
+          "VIDEO",
+          "VOICE",
+          "FILE"
+        ]
+      },
+      "MediaStatusDto": {
+        "type": "string",
+        "description": "`PROCESSING` only ever appears on video that is still transcoding. Show the `thumbUrl` and wait for the `media:ready` event, which carries the finished attachment.",
+        "enum": [
+          "PROCESSING",
+          "READY",
+          "FAILED"
+        ]
+      },
+      "MediaProviderDto": {
+        "type": "string",
+        "description": "Set when the GIF came from provider search rather than an upload.",
+        "enum": [
+          "TENOR",
+          "GIPHY"
+        ]
+      },
+      "AttachmentDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/MediaKindDto"
+          },
+          "status": {
+            "$ref": "#/components/schemas/MediaStatusDto"
+          },
+          "url": {
+            "type": "string",
+            "description": "Full-size media. Requires the same bearer token as any other call."
+          },
+          "thumbUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "mimeType": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "height": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "durationMs": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "waveform": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "description": "Voice notes only: 48 amplitude points in 0..100, computed server-side. Empty for every other kind — the client cannot derive it from an already-compressed file."
+          },
+          "fileName": {
+            "type": "string",
+            "nullable": true,
+            "description": "Original name, FILE only."
+          },
+          "blurHash": {
+            "type": "string",
+            "nullable": true,
+            "description": "BlurHash placeholder."
+          },
+          "isAnimated": {
+            "type": "boolean",
+            "description": "Play muted and looping when true (GIF and converted GIF-as-MP4)."
+          },
+          "provider": {
+            "nullable": true,
+            "$ref": "#/components/schemas/MediaProviderDto"
+          },
+          "externalId": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "status",
+          "url",
+          "thumbUrl",
+          "mimeType",
+          "sizeBytes",
+          "width",
+          "height",
+          "durationMs",
+          "waveform",
+          "fileName",
+          "blurHash",
+          "isAnimated",
+          "provider",
+          "externalId"
+        ]
       }
     }
   }
