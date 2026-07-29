@@ -28,12 +28,20 @@ export class NotificationsService {
     return this.devices.remove(user.id, token);
   }
 
-  /** Push to all of a student's devices (best-effort; a no-op when they have no tokens). */
+  /**
+   * Push to all of a student's devices (best-effort; a no-op when they have no tokens).
+   *
+   * Tokens the provider rejects as permanently dead are deleted here. Without that they pile up on
+   * every account that ever reinstalled the app, and each later send pays to retry them.
+   */
   async pushToStudent(studentId: string, notification: PushNotification): Promise<void> {
     const tokens = await this.devices.tokensFor(studentId);
     if (tokens.length === 0) {
       return;
     }
-    await this.push.send(tokens, notification);
+    const dead = await this.push.send(tokens, notification);
+    if (dead.length > 0) {
+      await this.devices.removeMany(dead);
+    }
   }
 }

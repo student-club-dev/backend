@@ -52,6 +52,14 @@ export const envSchema = z
     YANDEX_GEOCODER_API_KEY: z.string().optional(),
     YANDEX_GEOCODER_BASE_URL: z.string().url().default('https://geocode-maps.yandex.ru/1.x'),
 
+    // Push delivery. `dev` only writes a log line, so it refuses to boot in production — otherwise
+    // every offline notification would be dropped silently. FCM covers Android and iOS alike
+    // (Firebase forwards to APNs); VoIP pushes for calls will need a direct APNs client later.
+    PUSH_PROVIDER: z.enum(['dev', 'fcm']).default('dev'),
+    FCM_PROJECT_ID: z.string().optional(),
+    FCM_CLIENT_EMAIL: z.string().optional(),
+    FCM_PRIVATE_KEY: z.string().optional(),
+
     UPLOADS_DIR: z.string().min(1).default('./uploads'),
     PUBLIC_MEDIA_BASE_URL: z.string().url().default('http://localhost:3000/uploads'),
 

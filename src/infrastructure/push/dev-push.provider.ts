@@ -9,12 +9,13 @@ import { PushNotification, PushProvider } from './push-provider';
 export class DevPushProvider implements PushProvider {
   private readonly logger = new Logger(DevPushProvider.name);
 
-  async send(tokens: string[], notification: PushNotification): Promise<void> {
-    if (tokens.length === 0) {
-      return;
+  async send(tokens: string[], notification: PushNotification): Promise<string[]> {
+    if (tokens.length > 0) {
+      this.logger.log(
+        `[dev-push] → ${tokens.length} device(s): "${notification.title}" — ${notification.body}`,
+      );
     }
-    this.logger.log(
-      `[dev-push] → ${tokens.length} device(s): "${notification.title}" — ${notification.body}`,
-    );
+    // Nothing was really sent, so nothing can be known to be dead.
+    return [];
   }
 }

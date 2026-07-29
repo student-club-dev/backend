@@ -7,40 +7,31 @@ Holat: 2026-07-29.
 
 ---
 
-## 1. 🔴 Ma'lumotlar bazasi migratsiyalari — qo'llanmagan
+## 1. ✅ Migratsiyalar — qo'llandi (lokal)
 
-Ikkita migratsiya yozilgan, lekin **hech qachon bazaga qo'llanmagan** (ishlab chiqish mashinasida
-Docker ishlamayotgani uchun):
+To'rtta migratsiya lokal bazaga muvaffaqiyatli qo'llandi, jumladan qo'lda yozilgan uchtasi:
+`message_soft_delete`, `chat_media_and_stickers`, `media_provider_klipy`.
 
-| Migratsiya | Nima qiladi |
-|---|---|
-| `20260729090000_message_soft_delete` | `messages.deleted_at` — bitta nullable ustun |
-| `20260729120000_chat_media_and_stickers` | `media_assets`, `sticker_packs`, `stickers` jadvallari; `messages` ga `sticker_id`/`album_id`; 4 ta yangi enum |
+Hammasi qo'shuvchi (additive) — hech narsa o'chirilmaydi, jadval qayta yozilmaydi, uzoq qulf yo'q.
+Eski kod yangi ustunlarni e'tiborsiz qoldiradi, ya'ni rolling deploy xavfsiz.
 
-```bash
-docker compose up -d db          # yoki bazangizni ko'taring
-npx prisma migrate deploy        # prod: hech qachon `migrate dev` emas
-npx prisma generate
-```
+**Serverda hali qo'llanmagan** — deploy paytida `npx prisma migrate deploy` (prod'da **hech qachon**
+`migrate dev` emas).
 
-Ikkalasi ham qo'shuvchi (additive) — hech narsa o'chirilmaydi, jadval qayta yozilmaydi, uzoq qulf
-yo'q. Eski kod yangi ustunlarni e'tiborsiz qoldiradi, ya'ni rolling deploy xavfsiz.
+## 2. ✅ E2E testlar — o'tdi
 
-**Bloklaydi:** e2e testlar, media va o'chirish funksiyalarining ishlashi.
-
-## 2. 🔴 E2E testlar — bir marta ham ishlamagan
-
-`test/chat.e2e-spec.ts` da 24 ta test bor, shundan **15 tasi shu ishda yozilgan** va hech qachon
-bajarilmagan (baza yo'q). Ular tipdan o'tgan, lekin bu ishlashini isbotlamaydi.
+**11 suite, 114 test** haqiqiy Postgres va Redis bilan. `chat.e2e-spec.ts` dagi 24 tadan
+**15 tasi shu ishda yozilgan** va hammasi yashil: §17.1 `clientMsgId`, §17.4 reports, §17.5
+`hasMore`, §17.6 `/delivered`, §17.7 tartib, §18 ning to'rtta endpointi.
 
 ```bash
 docker compose up -d db redis
-npx prisma migrate deploy
 npm run test:e2e
 ```
 
-Bu **birinchi navbatdagi ish** — unit testlar (779 ta) yashil, lekin ular haqiqiy so'rov-javob
-yo'lini, marshrut tartibini va Prisma so'rovlarini tekshirmaydi.
+⚠️ **Sizning `.env` da `DATABASE_URL` hosti `db`** — bu Docker tarmog'i ichidagi nom, host'dan
+ishlamaydi. `localhost` ga o'zgartiring; containerlar buzilmaydi, chunki `docker-compose.yml`
+ular uchun `db:5432` ni qayta belgilaydi. Batafsil: `RUNBOOK.md` A2.
 
 ## 3. 🟠 Nginx — WebSocket upgrade
 
@@ -95,17 +86,44 @@ ishi. Mobil jamoaning tavsiyasi (va u to'g'ri): **Microsoft Fluent Emoji, MIT li
 ⛔ **Telegram stikerlarini olib ishlatmang.** Mobil jamoa buni to'g'ri ogohlantirgan: mualliflik
 huquqi buzilishi va ilovaning App Store / Google Play dan olib tashlanishi xavfi.
 
-## 7. 🔵 Real FCM / APNs push provayderi
+## 7. 🟠 FCM push — kod tayyor, kredensiallar kerak
 
-Hozir `DevPushProvider` — **faqat log yozadi**. Ya'ni bugun hech qanday push, hatto oddiy xabar
-push'i ham, haqiqiy qurilmaga bormaydi.
+`FcmPushProvider` yozildi va testlangan. **Hali `dev` rejimida ishlayapti** — ya'ni push haqiqiy
+qurilmaga bormaydi, faqat log yoziladi.
 
-Kerak bo'ladi:
-- Firebase loyihasi + service account JSON (Android FCM v1)
-- Apple Developer: APNs kaliti (`.p8`) yoki sertifikat, Team ID, Key ID
-- Qo'ng'iroq uchun alohida: **VoIP Services** sertifikati (`apns-topic: <bundleId>.voip`)
+`PUSH_PROVIDER=dev` **production'da boot'ni to'xtatadi** (SMS provayderi kabi) — jimgina tashlab
+yuborilgan bildirishnoma foydalanuvchilar shikoyat qilmaguncha ko'rinmaydi.
 
-**Bloklaydi:** offline xabar push'i (hozir ham ishlamaydi) va butun qo'ng'iroq funksiyasi.
+### Yoqish
+
+Firebase Console → Project settings → **Service accounts** → *Generate new private key* → JSON:
+
+```dotenv
+PUSH_PROVIDER=fcm
+FCM_PROJECT_ID=<json.project_id>
+FCM_CLIENT_EMAIL=<json.client_email>
+FCM_PRIVATE_KEY=<json.private_key>     # \n belgilarini o'zgartirmang
+```
+
+### iOS uchun alohida integratsiya kerak emas
+
+FCM Android **va** iOS ga yetkazadi — Firebase loyihasiga APNs kalitini yuklaganingizdan keyin u
+o'zi APNs ga uzatadi. Ya'ni ikkita emas, bitta integratsiya.
+
+**Apple Developer → Keys → APNs kaliti (`.p8`)** kerak bo'ladi, lekin u bizning `.env` ga emas,
+**Firebase konsoliga** yuklanadi (Project settings → Cloud Messaging → APNs Authentication Key).
+
+### Qo'ng'iroq uchun keyinroq
+
+Yopiq ilovada jiringlash uchun **VoIP push (PushKit)** kerak, uni FCM yubora olmaydi — u APNs ga
+to'g'ridan-to'g'ri, `apns-push-type: voip` bilan ketishi shart. Bu alohida adapter va qo'ng'iroq
+bosqichida yoziladi. Unda **VoIP Services sertifikati** kerak bo'ladi.
+
+### O'lik tokenlar
+
+FCM `UNREGISTERED`/`INVALID_ARGUMENT` qaytarsa (ilova o'chirilgan, token qayta berilgan), token
+bazadan **avtomatik o'chiriladi**. Vaqtinchalik nosozliklarda (500, tarmoq) token saqlanadi —
+aks holda bitta uzilish tirik foydalanuvchilarni yo'qotardi.
 
 ## 8. ⚪ coturn (TURN/STUN) — qo'ng'iroq bosqichida
 
@@ -210,5 +228,5 @@ bermay, jimgina bo'sh ro'yxat qaytaraverardi.
 | 4 | Nginx WS upgrade | devops | chat sifati, keyin qo'ng'iroq |
 | 5 | KLIPY **production access** (test kaliti 100/soat) | siz | GIF qidiruvi prod'da |
 | 6 | Stiker tasvirlari | dizayn/kontent | faqat stikerlar |
-| 7 | FCM/APNs | backend + Apple/Google hisoblari | push va qo'ng'iroq |
+| 7 | FCM kredensiallari (kod ✅) | siz: Firebase + Apple APNs kaliti | push; qo'ng'iroq uchun keyin VoIP |
 | 8 | coturn | devops | qo'ng'iroq (keyinroq) |

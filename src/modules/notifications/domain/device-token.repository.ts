@@ -16,4 +16,11 @@ export interface DeviceTokenRepository {
 
   /** All push tokens for a student (empty when none). */
   tokensFor(studentId: string): Promise<string[]>;
+
+  /**
+   * Deletes tokens the provider reported as permanently invalid — an uninstalled app or a reissued
+   * token. Not scoped to a student on purpose: the provider knows the token is dead wherever it
+   * happens to be registered.
+   */
+  removeMany(tokens: string[]): Promise<void>;
 }

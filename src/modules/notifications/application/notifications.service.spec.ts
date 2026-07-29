@@ -12,12 +12,13 @@ function makeDevices(overrides: Partial<DeviceTokenRepository> = {}): DeviceToke
     upsert: jest.fn().mockResolvedValue(undefined),
     remove: jest.fn().mockResolvedValue(undefined),
     tokensFor: jest.fn().mockResolvedValue([]),
+    removeMany: jest.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }
 
-function makePush(): PushProvider {
-  return { send: jest.fn().mockResolvedValue(undefined) };
+function makePush(dead: string[] = []): PushProvider {
+  return { send: jest.fn().mockResolvedValue(dead) };
 }
 
 function makeService(
@@ -51,5 +52,24 @@ describe('NotificationsService', () => {
     const push = makePush();
     await makeService(makeDevices(), push).pushToStudent('stu-1', { title: 'Hi', body: 'there' });
     expect(push.send).not.toHaveBeenCalled();
+  });
+
+  // Without this every account that ever reinstalled the app keeps a dead token forever, and each
+  // later send pays to retry it.
+  it('deletes the tokens the provider reports as dead', async () => {
+    const devices = makeDevices({ tokensFor: jest.fn().mockResolvedValue(['live', 'dead']) });
+    const push = makePush(['dead']);
+
+    await makeService(devices, push).pushToStudent('stu-1', { title: 'Hi', body: 'there' });
+
+    expect(devices.removeMany).toHaveBeenCalledWith(['dead']);
+  });
+
+  it('leaves the store alone when every token was accepted', async () => {
+    const devices = makeDevices({ tokensFor: jest.fn().mockResolvedValue(['a']) });
+
+    await makeService(devices, makePush([])).pushToStudent('stu-1', { title: 'Hi', body: 'x' });
+
+    expect(devices.removeMany).not.toHaveBeenCalled();
   });
 });

@@ -48,15 +48,16 @@ guard testi turibdi — noto'g'ri tipdagi yangi DTO qo'shilsa, test qizil bo'lad
    Batafsil: `03-WEBSOCKET.md`. Bu sizning §17.1 dagi xatoyingizni yopadi
 2. **GIF panelida atribut** — `04-GIF-INTEGRATION.md`
 
-## ⚠️ Halol ogohlantirish
+## Tekshirilganlik holati
 
-Backend **e2e testlari hali bir marta ham ishlamagan** — ishlab chiqish mashinasida baza
-ko'tarilmadi. 793 ta unit test yashil, tiplar va build toza, lekin bu haqiqiy so'rov-javob yo'lini
-isbotlamaydi.
+Backend **haqiqiy baza bilan tekshirildi**: 11 e2e suite / 114 test o'tdi, migratsiyalar qo'llandi.
+Bu yerda tasvirlangan har bir yangi endpoint va xatti-harakat e2e test bilan qoplangan.
 
-Shuningdek uchta migratsiya **hali qo'llanmagan** va Docker image `ffmpeg` bilan qayta qurilmagan.
-Ya'ni siz integratsiyani boshlashingizdan oldin backend jamoasi bularni bajarishi kerak — aks holda
-media endpointlari ishlamaydi.
+Unit testlar: 808 ta, tiplar va build toza.
+
+⚠️ Bir narsa qoldi: **serverdagi Docker image `ffmpeg` bilan qayta qurilishi kerak**. Busiz rasm
+yuklash ishlaydi, lekin GIF, video va ovoz ish vaqtida yiqiladi. Integratsiyani boshlashdan oldin
+backend jamoasidan buni so'rang.
 
 Nima qolganining to'liq ro'yxati backend repo'sida: `docs/handoff/PENDING_ACTIONS.md` — u
 backend/DevOps uchun va bu papkaga ataylab kiritilmagan.

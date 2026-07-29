@@ -29,4 +29,11 @@ export class DeviceTokenPrismaRepository implements DeviceTokenRepository {
     });
     return rows.map((row) => row.token);
   }
+
+  async removeMany(tokens: string[]): Promise<void> {
+    if (tokens.length === 0) {
+      return;
+    }
+    await this.prisma.deviceToken.deleteMany({ where: { token: { in: tokens } } });
+  }
 }
