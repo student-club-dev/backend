@@ -296,7 +296,9 @@ export class ChatMediaService {
         status: alreadyPlayable ? MediaStatus.READY : MediaStatus.PROCESSING,
         storageKey: await this.storage.save(file.buffer, extension),
         thumbStorageKey: await this.storage.save(thumb, 'jpg'),
-        mimeType: alreadyPlayable ? base.mimeType : 'video/mp4',
+        // Keep the real type until the transcode actually runs — the bytes on disk are still the
+        // original container, and the transcoder sets `video/mp4` when it has produced one.
+        mimeType: base.mimeType,
         width: probe.width,
         height: probe.height,
         durationMs: probe.durationMs,

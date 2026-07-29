@@ -10,8 +10,8 @@ Bu hujjat uch narsani beradi:
 2. **Bugun bajarilgan** ishlar va o'zgargan kontrakt, to'liq endpoint hujjati bilan — §2–§4.
 3. Qolgan bosqichlar va ular **nimaga bog'liqligi** — §5.
 
-**Holat: Bosqich 0 va Bosqich 2 bajarildi.** Media (A qism) va qo'ng'iroq (B qism) hali
-boshlanmagan — sabablari §5 da.
+**Holat: Bosqich 0, 2 va A qism (media) bajarildi.** Qo'ng'iroq (B qism) hali boshlanmagan —
+sabablari §5 da.
 
 ---
 
@@ -53,7 +53,15 @@ qo'shish emas — avval butun FCM/APNs integratsiyasi yozilishi kerak.
 | §19.5 WS protokoli hujjati | ✅ `docs/architecture/chat.md` yangilandi | — |
 | §18 — 4 ta endpoint | ✅ Bajarildi | §4b |
 | §18 — qolganlari (tahrirlash, arxiv, qidiruv, reply, reaksiya, forward, guruh, universitetlar) | ⏳ Talab qilinmagan | §5 |
-| A qism (media) | ⏳ Bosqich 3 | §5 |
+| §1 media yuklash | ✅ Bajarildi | §4c |
+| §2 tipli xabar | ✅ Bajarildi | §4c |
+| §3 albom | ✅ Bajarildi | §4c |
+| §4 stiker + GIF | ✅ Endpointlar tayyor; stiker **tasvirlari** kontent ishi | §4c |
+| §5 ovozli xabar | ✅ Bajarildi (48 nuqtali waveform) | §4c |
+| §6 WS o'zgarishlari | ✅ Bajarildi (`media:ready`) | §4c |
+| §7 push matnlari | ✅ Bajarildi (albom uchun bitta push) | §4c |
+| §8 xato kodlari | ✅ Hammasi qo'shildi | §4c |
+| §9 limitlar va kvota | ✅ Bajarildi | §4c |
 | B qism (qo'ng'iroq) | ⏳ Bloklangan | §5 |
 
 ---
@@ -63,8 +71,9 @@ qo'shish emas — avval butun FCM/APNs integratsiyasi yozilishi kerak.
 > Barcha yangi maydonlar **nullable**, WS ack shakli **o'zgarmadi**, `MessageDto.body` **string
 > bo'lib qoldi**. Tarqatilgan eski klientlar buzilmaydi.
 >
-> `MessageDto` ga jami ikkita maydon qo'shildi: `clientMsgId` (§3.1) va `deletedAt` (§4b).
-> Mavjud maydonlarning birortasi ham o'zgarmadi.
+> `MessageDto` ga jami beshta maydon qo'shildi: `clientMsgId` (§3.1), `deletedAt` (§4b),
+> `albumId`, `attachment` va `sticker` (§4c). **Mavjud maydonlarning birortasi ham o'zgarmadi**,
+> va hammasi nullable.
 
 ### 3.1 `MessageDto` — `+clientMsgId` (§17.1)
 
@@ -104,11 +113,16 @@ qaytarsa ham `hasMore = false` keladi.
 > *yangiroq* xabarlar borligini bildiradi va eng eski `seq` ga umuman aloqasi yo'q. `size + 1` usuli
 > ikkala yo'nalishda ham to'g'ri.
 
-### 3.3 `MessageTypeDto` — hozircha o'zgarmadi
+### 3.3 `MessageTypeDto` — kengaydi
 
-`TEXT | IMAGE | FILE | VOICE | SYSTEM`. `GIF`, `VIDEO`, `STICKER`, `CALL` — media va qo'ng'iroq
-bosqichlarida qo'shiladi. Hozir enum'da bo'lgan `IMAGE`/`FILE`/`VOICE` ni server hali **yarata
-olmaydi** (yuborish DTO'sida `type` yo'q) — bu Bosqich 3 da yopiladi.
+`TEXT | IMAGE | GIF | VIDEO | FILE | VOICE | STICKER | SYSTEM`.
+
+`CALL` hali yo'q — u qo'ng'iroq bosqichida qo'shiladi. `SYSTEM` server tomonidan yoziladi; klient
+uni yuborsa `422` qaytadi.
+
+Ilgari enum'da `IMAGE`/`FILE`/`VOICE` bor edi, lekin server ularni **yarata olmasdi** (yuborish
+DTO'sida `type` yo'q edi) — siz «yarim yo'l qilingan» deb to'g'ri yozgansiz. Endi yo'l oxirigacha
+olib borildi (§4c).
 
 ### 3.4 `message:read` / `message:delivered` endi ack qaytaradi (§17.8)
 
@@ -344,6 +358,145 @@ kerakligini o'zingiz tanlaysiz.
 
 ---
 
+## 4c. A qism — media (bajarildi)
+
+### Oqim: avval yuklash, keyin yuborish
+
+```
+POST /v1/media/chat-upload   (multipart: file, kind, conversationId)  →  { id: "med_..." }
+POST /v1/conversations/{id}/messages   { type: "IMAGE", mediaId: "med_...", body: "izoh" }
+```
+
+`conversationId` yuklashda **majburiy** — bu ruxsat tekshiruvi. A'zo bo'lmasangiz, ulanish uzilgan
+bo'lsa yoki bloklangan bo'lsangiz `403 NOT_CONNECTED`. Shu bilan server begona odam uchun fayl
+xostingiga aylanmaydi.
+
+### `POST /v1/media/chat-upload`
+
+| `kind` | Limit | Server nima qiladi |
+|---|---|---|
+| `IMAGE` | 12 MB, tomoni ≤ 8192px | **EXIF butunlay tozalanadi (GPS ham!)**, orientatsiya pikselga qo'llanadi, 1920px ga siqiladi, WebP, 320px thumb, `blurHash` |
+| `GIF` | 20 MB, ≤ 30s | **Ovozsiz, takrorlanuvchi MP4** ga o'giriladi, `isAnimated: true`, birinchi kadrdan thumb |
+| `VIDEO` | 64 MB, ≤ 3 daq | `ffprobe` metadata, poster kadr; H.264/AAC bo'lsa darhol `READY`, aks holda `PROCESSING` + navbat |
+| `VOICE` | 16 MB, ≤ 5 daq | Davomiylik + **48 nuqtali waveform** (`0..100`) |
+| `FILE` | 48 MB | Oq ro'yxat; asl nom tozalanib saqlanadi |
+
+**Tur faylning baytlaridan aniqlanadi** — `Content-Type` sarlavhasiga ham, fayl nomiga ham
+ishonilmaydi. Testlar bilan tasdiqlangan: ELF va MZ bajariladigan fayllar **har qanday `kind`**
+ostida rad etiladi; PDF deb atalgan PNG rad etiladi; matn niqobidagi binar rad etiladi;
+`../../etc/passwd` → `passwd`. `.apk`/`.exe`/`.sh`/`.jar`/`.ipa` va boshqalar kengaytma bo'yicha ham
+rad etiladi.
+
+**Tekshiruvlar tartibi:** ruxsat → kvota → hajm → haqiqiy tip → davomiylik → **shundan keyingina**
+dekodlash. Protsessor sarflaydigan hech narsa, so'rovni bepul rad eta oladigan tekshiruvlardan
+oldin ishlamaydi.
+
+**Kvota:** daqiqasiga 20 ta yuklash, kuniga 500 MB (`429 UPLOAD_RATE_LIMIT`).
+
+### `GET /v1/media/{id}/raw` — fayllar ochiq emas
+
+Siz taklif qilgan ikkinchi variant (proksi) tanlandi, chunki hozirgi storage — lokal disk.
+Endpoint suhbat a'zoligini tekshirib, faylni oqim qilib beradi. `?variant=thumb` — kichik nusxa.
+
+- `Cache-Control: private, max-age=31536000, immutable` — bayt hech qachon o'zgarmaydi, lekin ruxsat
+  foydalanuvchiga bog'liq, shuning uchun umumiy keshga tushmasligi kerak.
+- Hujjatlar uchun `Content-Disposition: attachment` — brauzerda inline ochilmasin.
+- Begona odamga va mavjud bo'lmagan id ga **bir xil 404**.
+
+Biriktirilmagan yuklamalar 24 soatdan keyin tozalanadi (kunlik cron).
+
+### `SendMessageDto` — kengaydi
+
+```jsonc
+{
+  "type": "IMAGE",              // berilmasa TEXT — eski klient buzilmaydi
+  "body": "Kecha universitetda", // TEXT: majburiy; IMAGE/VIDEO/FILE: izoh ≤1024; GIF/VOICE/STICKER: taqiqlangan
+  "mediaId": "med_...",
+  "gif": { "provider": "TENOR", "externalId": "...", "url": "...", "thumbUrl": "...", "width": 498, "height": 280 },
+  "stickerId": "st_...",
+  "albumId": "alb_...",
+  "clientMsgId": "..."
+}
+```
+
+`GIF`/`VOICE`/`STICKER` da izoh **ataylab rad etiladi** — uni chizadigan joy yo'q, ya'ni qabul
+qilsak, foydalanuvchining matni jimgina yo'qolardi.
+
+### `MessageDto` — `attachment` va `sticker`
+
+```jsonc
+{
+  "type": "VOICE", "body": null,
+  "attachment": {
+    "id": "med_...", "kind": "VOICE", "status": "READY",
+    "url": "/v1/media/med_.../raw", "thumbUrl": null,
+    "mimeType": "audio/mp4", "sizeBytes": 284100,
+    "width": null, "height": null, "durationMs": 12400,
+    "waveform": [12, 40, 88, ...],   // aynan 48 ta
+    "fileName": null, "blurHash": null,
+    "isAnimated": false, "provider": null, "externalId": null
+  },
+  "sticker": null, "albumId": null
+}
+```
+
+Yuklangan fayl ham, Tenor'dan tanlangan GIF ham **bir xil `attachment` shaklida** keladi — siz
+ikkalasini ajratishingiz shart emas.
+
+### Albom (§3)
+
+Sizning qaroringiz qabul qilindi: har bir rasm — alohida xabar, alohida `seq`, umumiy `albumId`.
+Maksimum 10 (`422 ALBUM_TOO_LARGE`). Push **bitta** ketadi.
+
+> ⚠️ Push matni sizdagidan farq qiladi: siz «📷 5 ta rasm» yozgansiz, bizda birinchi rasmga
+> «📷 Rasm», qolganlariga push yo'q. Sababi — nechta rasm kelishini bilish uchun 3 soniya kutish,
+> ya'ni **birinchi push'ni ataylab kechiktirish** kerak. Kerak bo'lsa qo'shamiz — ayting.
+
+### Stikerlar
+
+`GET /v1/stickers/packs` — butun katalog bitta javobda, `ETag` bilan. `If-None-Match` yuborsangiz
+o'zgarmagan katalog **304** va tanasiz javob beradi. `version` — keshni yangilash uchun.
+
+⚠️ **Stiker tasvirlari hali yo'q** — sxema, endpoint va seed skripti tayyor, lekin WebP fayllarni
+ishlab chiqish kerak. Sizning Telegram stikerlaridan foydalanmaslik haqidagi ogohlantiringiz qabul
+qilindi; **Fluent Emoji (MIT)** yo'nalishi bilan boramiz. Batafsil: `docs/handoff/PENDING_ACTIONS.md`.
+
+### GIF (Tenor)
+
+`GET /v1/gifs/search?q=&limit=&pos=&locale=` va `POST /v1/gifs/{id}/share`. Kalit serverda qoladi va
+javobda **hech qachon** chiqmaydi. Kalit sozlanmagan bo'lsa **503**, Tenor javob bermasa **502**.
+Natijalarda **`.mp4`** havolasi beriladi, `.gif` emas.
+
+`gif.url` domen oq ro'yxatidan o'tadi — `422 GIF_URL_NOT_ALLOWED`. Bu jiddiy: siz `gif` obyektini
+bizga qaytarib yuborasiz, ya'ni tekshirmasak, maydon ixtiyoriy havola joylash teshigiga aylanadi.
+Rad etiladi: `media.tenor.com.evil.example` (lookalike), `evil.example/media.tenor.com/...`,
+`media.tenor.com@evil.example` (authority'dagi credential), `http://` (shifrsiz), `javascript:`,
+`data:`. Tekshiruv **ikki joyda** — qidiruv natijasini qaytarishda ham, yuborishda ham.
+
+Tenor fayllari **ko'chirilmaydi** (shartlarga zid) — `externalUrl` bilan havola qilinadi, shuning
+uchun Tenor GIF'ida `mediaId` yo'q. «Powered by Tenor» atributi klient tomonda kerak.
+
+### Video (asinxron)
+
+H.264/AAC bo'lmagan video `status: "PROCESSING"` bilan qaytadi — poster kadr allaqachon bor,
+shuning uchun xabarni darhol yuborsangiz bo'ladi. Transkodlash tugagach:
+
+```jsonc
+// WS: media:ready
+{ "mediaId": "med_...", "conversationId": "cnv_...", "messageId": "msg_...", "attachment": { "...": "..." } }
+```
+
+Xatolik bo'lsa `status: "FAILED"` — hech qachon jim `READY` emas.
+
+### Xato kodlari (§8)
+
+Hammasi qo'shildi: `FILE_TOO_LARGE` (413) · `FILE_TYPE_NOT_ALLOWED` · `MEDIA_TOO_LONG` ·
+`MEDIA_TOO_LARGE_DIMENSIONS` · `MEDIA_NOT_FOUND` · `MEDIA_ALREADY_USED` · `MEDIA_NOT_READY` ·
+`MEDIA_KIND_MISMATCH` · `STICKER_NOT_FOUND` · `GIF_URL_NOT_ALLOWED` · `ALBUM_TOO_LARGE` (422) ·
+`GIF_PROVIDER_ERROR` (502/503) · `NOT_CONNECTED` (403) · `UPLOAD_RATE_LIMIT` (429).
+
+---
+
 ## 5. Keyingi bosqichlar
 
 ### §18 dagi qolganlar
@@ -354,20 +507,6 @@ qo'yilmagan. Kerak bo'lsa ayting, navbatga qo'yamiz.
 
 `ConversationTypeDto.GROUP` «o'lik enum» ekani haqidagi kuzatuvingiz to'g'ri. Lekin uni olib tashlash
 generatsiya qilingan klientni buzadi, shuning uchun alohida kelishuv kerak — o'z-o'zidan qilmadik.
-
-### Bosqich 3 — A qism (media)
-
-Rasm + stiker + GIF birinchi to'lqin. Bu bosqich **yangi bog'liqliklarni** talab qiladi:
-`sharp` (EXIF tozalash, thumbnail, blurHash), `file-type` (magic bytes), GIF→MP4 uchun `ffmpeg`
-Docker image'da. Video va ovoz keyingi to'lqin (transkodlash navbati kerak).
-
-Bitta ochiq savol siz uchun: **chat fayllariga kirish huquqi** (§1.3). Hozirgi storage — lokal disk
-(`LocalDiskStorage`, `/uploads` statik). Imzolangan URL bunga tabiiy tushmaydi, shuning uchun sizning
-ikkinchi variantingiz — `GET /v1/media/{id}/raw` proksisi — ancha mos keladi. Bosqich 3 spec'ida
-shuni taklif qilamiz.
-
-Stikerlar bo'yicha: **Telegram stikerlarini ishlatmaslik** haqidagi ogohlantirishingiz to'g'ri va
-qabul qilindi. Fluent Emoji (MIT) yo'nalishi bilan boramiz.
 
 ### B qism — qo'ng'iroq: bloklovchilar
 

@@ -191,6 +191,7 @@ Auth: the socket handshake carries the **access JWT** (`auth: { token }`); the g
 |-------|---------|
 | `message:new` | `{ conversationId, message }` |
 | `message:deleted` | `{ conversationId, messageId, seq }` — sent to **both** members |
+| `media:ready` | `{ mediaId, conversationId, messageId, attachment }` — a transcode finished |
 | `message:delivered` | `{ conversationId, seq, byStudentId }` |
 | `message:read` | `{ conversationId, seq, byStudentId }` |
 | `typing` | `{ conversationId, studentId, isTyping }` |
@@ -253,6 +254,40 @@ sequenceDiagram
 
 `unread-count` is declared **before** `:id` in the controller — Nest matches routes in declaration
 order, and `:id` would otherwise capture `unread-count` as a conversation id.
+
+### Media messages
+
+`message:send` gained `type`, `mediaId`, `gif`, `stickerId` and `albumId`; all are optional, and an
+omitted `type` means `TEXT` — which is exactly the payload an older client sends.
+
+The flow is two steps, always: **upload first** (`POST /v1/media/chat-upload`, scoped to a
+conversation), then **send** with the returned `mediaId`. An attachment is single-use — the
+`media_assets.message_id` unique constraint is what enforces it, claimed inside the same transaction
+that writes the message, so two concurrent sends cannot both believe they own it.
+
+| Type | Carries |
+|---|---|
+| `IMAGE` `VIDEO` `VOICE` `FILE` | `mediaId` (required), optional caption on the first three |
+| `GIF` | `mediaId` (uploaded) **or** `gif` (picked from provider search) — never both |
+| `STICKER` | `stickerId` from `GET /v1/stickers/packs` |
+
+Uploads are normalised server-side: images lose their **EXIF, GPS included** — forwarding the
+coordinates a photo was taken at is a leak the sender never agreed to — GIFs become silent looping
+MP4 (~20× smaller than the GIF), and voice notes get a 48-point waveform the client cannot compute
+itself from an already-compressed file.
+
+Video is the one asynchronous case. A clip that is not already H.264/AAC is stored, answered with
+`status: PROCESSING` and a poster frame, and re-encoded on a queue; `media:ready` carries the
+finished attachment. On failure the asset becomes `FAILED`, never a silent `READY`.
+
+Chat media is **private**: `GET /v1/media/{id}/raw` checks conversation membership on every read.
+Nothing is on the static `/uploads` path, so a leaked link is useless without a token. Uploads that
+are never attached to a message are swept after 24 hours (`OrphanMediaCron`).
+
+**Albums.** Each image of a multi-image send is its own message with its own `seq`, tied together by
+a shared `albumId` — putting several files in one message would break unread counts and `?after=`
+paging, which both walk that sequence. Maximum 10, and the recipient gets **one** push for the album
+rather than one per image.
 
 ### Deleting a message
 

@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Queue, Worker } from 'bullmq';
+import IORedis from 'ioredis';
 import type { Env } from '../../../config/env';
 import { MediaQueuePort } from '../application/chat-media.io';
 import { VideoTranscoderService } from '../application/video-transcoder.service';
@@ -22,6 +23,7 @@ export class MediaQueue implements MediaQueuePort, OnModuleInit, OnModuleDestroy
   private readonly redisUrl: string | undefined;
   private queue: Queue | null = null;
   private worker: Worker | null = null;
+  private connection: IORedis | null = null;
 
   constructor(
     private readonly transcoder: VideoTranscoderService,
@@ -37,14 +39,21 @@ export class MediaQueue implements MediaQueuePort, OnModuleInit, OnModuleDestroy
       );
       return;
     }
-    const connection = { url: this.redisUrl };
-    this.queue = new Queue(QUEUE_NAME, { connection });
+    // BullMQ takes ioredis *options*, and `RedisOptions` has no `url` field — passing one is
+    // silently ignored and every connection goes to localhost instead. Build the client from the
+    // URL ourselves, the same way RedisIoAdapter does.
+    // `maxRetriesPerRequest: null` is required by BullMQ for the blocking commands a Worker uses.
+    this.connection = new IORedis(this.redisUrl, { maxRetriesPerRequest: null });
+    this.connection.on('error', (error) =>
+      this.logger.error(`Transcode queue Redis error: ${error.message}`),
+    );
+    this.queue = new Queue(QUEUE_NAME, { connection: this.connection });
     this.worker = new Worker(
       QUEUE_NAME,
       async (job) => this.transcoder.transcode(job.data.assetId as string),
       // One at a time: ffmpeg already saturates the CPU, and running several would just make every
       // clip slower rather than any of them finish sooner.
-      { connection, concurrency: 1 },
+      { connection: this.connection, concurrency: 1 },
     );
     this.worker.on('failed', (job, error) => {
       this.logger.error(`Transcode job ${job?.id ?? '?'} failed: ${error.message}`);
@@ -54,6 +63,7 @@ export class MediaQueue implements MediaQueuePort, OnModuleInit, OnModuleDestroy
   async onModuleDestroy(): Promise<void> {
     await this.worker?.close();
     await this.queue?.close();
+    await this.connection?.quit().catch(() => undefined);
   }
 
   async enqueueTranscode(assetId: string): Promise<void> {

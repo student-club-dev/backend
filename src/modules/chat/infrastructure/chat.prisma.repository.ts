@@ -4,6 +4,8 @@ import {
   MessageType as PrismaMessageType,
   Prisma,
 } from '@prisma/client';
+import { ERROR_CODE } from '../../../common/errors/error-code';
+import { AppException } from '../../../common/exceptions/app.exception';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { LastSeenVisibility } from '../../profiles/domain/enums/last-seen-visibility.enum';
 import { LAST_SEEN_VISIBILITY_TO_DOMAIN } from '../../profiles/infrastructure/profile-enums.mapper';
@@ -145,6 +147,17 @@ export class ChatPrismaRepository implements ChatRepository {
       });
       return ChatMapper.toMessage(row);
     } catch (error) {
+      // The `message_id` unique index is what actually makes an attachment single-use. The
+      // service's `messageId !== null` check happens before the transaction, so two sends racing
+      // on the same mediaId both pass it and the loser lands here — a 409, not a 500.
+      if (
+        mediaId !== null &&
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002' &&
+        targetsMessageId(error)
+      ) {
+        throw new AppException(ERROR_CODE.MEDIA_ALREADY_USED, 422, 'Bu fayl allaqachon yuborilgan');
+      }
       // A concurrent send with the same clientMsgId won the unique race — return the stored one.
       if (
         clientMsgId !== null &&
@@ -387,4 +400,11 @@ export class ChatPrismaRepository implements ChatRepository {
       ? LastSeenVisibility.NOBODY
       : LAST_SEEN_VISIBILITY_TO_DOMAIN[row.lastSeenVisibility];
   }
+}
+
+/** Whether a P2002 came from the attachment's `message_id` index rather than `clientMsgId`. */
+function targetsMessageId(error: Prisma.PrismaClientKnownRequestError): boolean {
+  const target = error.meta?.target;
+  const fields = Array.isArray(target) ? target : typeof target === 'string' ? [target] : [];
+  return fields.some((field) => String(field).includes('message_id'));
 }

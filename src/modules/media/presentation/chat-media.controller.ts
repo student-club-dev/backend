@@ -147,19 +147,36 @@ export class ChatMediaController {
       throw AppException.notFound(ERROR_CODE.MEDIA_NOT_FOUND, 'Fayl topilmadi');
     }
 
-    response.setHeader('Content-Type', wantsThumb ? 'image/webp' : asset.mimeType);
+    // Image thumbs are WebP but video and GIF posters are JPEG — claiming one type for both would
+    // mislabel every video thumbnail. The stored key's extension is the source of truth.
+    response.setHeader('Content-Type', wantsThumb ? thumbContentType(key) : asset.mimeType);
     // Immutable: an asset's bytes never change, so the client may cache them forever. Private:
     // it must never land in a shared cache, since the authorisation is per-user.
     response.setHeader('Cache-Control', 'private, max-age=31536000, immutable');
     if (asset.fileName !== null && !wantsThumb) {
-      // `attachment` + a quoted name: never let a stored document render inline in a browser.
-      response.setHeader(
-        'Content-Disposition',
-        `attachment; filename="${asset.fileName.replace(/"/g, '')}"`,
-      );
+      // `attachment`: never let a stored document render inline in a browser.
+      response.setHeader('Content-Disposition', contentDisposition(asset.fileName));
     }
     this.storage.read(key).pipe(response);
   }
+}
+
+/**
+ * RFC 6266 `Content-Disposition` for a filename that may not be ASCII.
+ *
+ * Header values are latin-1: handing Node a Cyrillic name — or even the `ʻ` of Uzbek Latin —
+ * throws `ERR_INVALID_CHAR` and turns the download into a 500. So the quoted form carries an ASCII
+ * fallback and `filename*` carries the real name, percent-encoded as UTF-8.
+ */
+function contentDisposition(fileName: string): string {
+  // eslint-disable-next-line no-control-regex
+  const ascii = fileName.replace(/[^ -~]/g, '_').replace(/["\\]/g, '_');
+  const encoded = encodeURIComponent(fileName);
+  return `attachment; filename="${ascii}"; filename*=UTF-8''${encoded}`;
+}
+
+function thumbContentType(key: string): string {
+  return key.endsWith('.jpg') || key.endsWith('.jpeg') ? 'image/jpeg' : 'image/webp';
 }
 
 function isMediaKind(value: string): value is MediaKind {
