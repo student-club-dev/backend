@@ -15,11 +15,18 @@ export const CHAT_EVENT = {
   PRESENCE_UPDATE: 'presence:update',
 } as const;
 
-/** `message:send` payload; `clientMsgId` makes retries idempotent (C6). */
+/**
+ * `message:send` payload; `clientMsgId` makes retries idempotent (C6). Everything past
+ * `conversationId` is optional so a client that only knows about text keeps working unchanged —
+ * omitting `type` means `TEXT`.
+ */
 export interface SendMessagePayload {
   conversationId: string;
-  clientMsgId: string;
-  body: string;
+  clientMsgId?: string;
+  type?: string;
+  body?: string;
+  mediaId?: string;
+  albumId?: string;
 }
 
 /** `{ conversationId, seq }` — used by both `message:read` and `message:delivered` from the client. */

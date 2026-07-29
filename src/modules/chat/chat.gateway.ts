@@ -24,6 +24,7 @@ import {
 } from './application/chat-events';
 import { ChatService } from './application/chat.service';
 import { Message } from './domain/entities/message.entity';
+import { MessageType } from './domain/enums/message-type.enum';
 import { VerifiedSocket, verifyStudentSocket } from './infrastructure/ws-jwt';
 import { MessageDto } from './presentation/dto/message.dto';
 
@@ -90,12 +91,14 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
     try {
       assertTokenFresh(client);
-      const message = await this.chat.sendMessage(
-        user,
-        payload.conversationId,
-        payload.body,
-        payload.clientMsgId ?? null,
-      );
+      const message = await this.chat.sendMessage(user, {
+        conversationId: payload.conversationId,
+        type: toMessageType(payload.type),
+        body: payload.body,
+        mediaId: payload.mediaId,
+        albumId: payload.albumId,
+        clientMsgId: payload.clientMsgId ?? null,
+      });
       await this.broadcastMessage(message);
       return {
         clientMsgId: payload.clientMsgId,
@@ -292,6 +295,17 @@ function toError(error: unknown): { code: string; message: string } {
     return { code: error.code, message: error.message };
   }
   return { code: ERROR_CODE.INTERNAL_ERROR, message: 'Xatolik yuz berdi' };
+}
+
+/** Wire value → enum, rejecting anything unknown so a typo does not silently become TEXT. */
+function toMessageType(value: string | undefined): MessageType | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!(Object.values(MessageType) as string[]).includes(value)) {
+    throw AppException.validation({ type: 'Noma‘lum xabar turi' });
+  }
+  return value as MessageType;
 }
 
 function unauthorized(): { code: string; message: string } {

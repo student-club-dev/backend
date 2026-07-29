@@ -1,3 +1,4 @@
+import { MediaAsset } from '../../../media/domain/entities/media-asset.entity';
 import { MessageType } from '../enums/message-type.enum';
 
 /** A chat message with a per-conversation monotonic `seq` (C4). */
@@ -15,5 +16,9 @@ export interface Message {
    * the message stops counting as unread. Clients render a "message deleted" tombstone.
    */
   deletedAt: Date | null;
+  /** Groups the messages of one multi-image send. Presentation only — each keeps its own `seq`. */
+  albumId: string | null;
+  /** The uploaded (or provider) attachment, when this message carries one. */
+  attachment: MediaAsset | null;
   createdAt: Date;
 }

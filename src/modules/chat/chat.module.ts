@@ -4,6 +4,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { StudentGuard } from '../../common/guards/student.guard';
 import { PrismaModule } from '../../infrastructure/database/prisma.module';
 import { PresenceModule } from '../../infrastructure/presence/presence.module';
+import { MediaModule } from '../media/media.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { ChatService } from './application/chat.service';
 import { ChatGateway } from './chat.gateway';
@@ -19,7 +20,7 @@ import { MessagesController } from './presentation/messages.controller';
  * Socket.IO gateway; presence in Redis (global). `RedisService` is provided globally by RedisModule.
  */
 @Module({
-  imports: [PrismaModule, PresenceModule, JwtModule.register({}), NotificationsModule],
+  imports: [PrismaModule, PresenceModule, JwtModule.register({}), NotificationsModule, MediaModule],
   controllers: [ConversationsController, MessagesController],
   providers: [
     ChatService,

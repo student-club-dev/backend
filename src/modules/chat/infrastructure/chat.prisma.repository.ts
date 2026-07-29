@@ -7,11 +7,19 @@ import {
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { LastSeenVisibility } from '../../profiles/domain/enums/last-seen-visibility.enum';
 import { LAST_SEEN_VISIBILITY_TO_DOMAIN } from '../../profiles/infrastructure/profile-enums.mapper';
-import { ChatRepository, ConversationPage, UnreadSummary } from '../domain/chat.repository';
+import {
+  AppendMessageInput,
+  ChatRepository,
+  ConversationPage,
+  UnreadSummary,
+} from '../domain/chat.repository';
 import { Conversation, ConversationMember } from '../domain/entities/conversation.entity';
 import { ConversationListItem } from '../domain/entities/conversation-view.entity';
 import { Message } from '../domain/entities/message.entity';
 import { ChatMapper, ChatSummaryRow } from './chat.mapper';
+
+/** A message is never useful without its attachment — load it everywhere, in one query. */
+const MESSAGE_INCLUDE = { attachment: true } as const;
 
 const SUMMARY_SELECT = {
   id: true,
@@ -94,15 +102,14 @@ export class ChatPrismaRepository implements ChatRepository {
    * Persists a message, assigning the next per-conversation `seq` atomically: post-incrementing
    * `nextSeq` (so the returned value is the new one) means this message takes `nextSeq - 1` (C4).
    */
-  async appendMessage(
-    conversationId: string,
-    senderId: string,
-    body: string,
-    clientMsgId: string | null,
-  ): Promise<Message> {
+  async appendMessage(input: AppendMessageInput): Promise<Message> {
+    const { conversationId, senderId, clientMsgId, mediaId } = input;
     // Idempotency (C6): a retry with the same clientMsgId returns the already-stored message.
     if (clientMsgId !== null) {
-      const prior = await this.prisma.message.findFirst({ where: { senderId, clientMsgId } });
+      const prior = await this.prisma.message.findFirst({
+        where: { senderId, clientMsgId },
+        include: MESSAGE_INCLUDE,
+      });
       if (prior !== null) {
         return ChatMapper.toMessage(prior);
       }
@@ -114,15 +121,25 @@ export class ChatPrismaRepository implements ChatRepository {
           data: { nextSeq: { increment: 1 }, lastMessageAt: new Date() },
           select: { nextSeq: true },
         });
-        return tx.message.create({
+        const message = await tx.message.create({
           data: {
             conversationId,
             senderId,
             seq: convo.nextSeq - 1,
-            body,
+            body: input.body,
             clientMsgId,
-            type: PrismaMessageType.TEXT,
+            type: PrismaMessageType[input.type],
+            albumId: input.albumId,
           },
+        });
+        if (mediaId !== null) {
+          // Claim the attachment inside the same transaction: two concurrent sends must not both
+          // walk away believing they own it, and the unique `message_id` is what enforces that.
+          await tx.mediaAsset.update({ where: { id: mediaId }, data: { messageId: message.id } });
+        }
+        return tx.message.findUniqueOrThrow({
+          where: { id: message.id },
+          include: MESSAGE_INCLUDE,
         });
       });
       return ChatMapper.toMessage(row);
@@ -133,13 +150,20 @@ export class ChatPrismaRepository implements ChatRepository {
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002'
       ) {
-        const prior = await this.prisma.message.findFirst({ where: { senderId, clientMsgId } });
+        const prior = await this.prisma.message.findFirst({
+          where: { senderId, clientMsgId },
+          include: MESSAGE_INCLUDE,
+        });
         if (prior !== null) {
           return ChatMapper.toMessage(prior);
         }
       }
       throw error;
     }
+  }
+
+  countInAlbum(conversationId: string, albumId: string): Promise<number> {
+    return this.prisma.message.count({ where: { conversationId, albumId } });
   }
 
   async listMessages(
@@ -151,6 +175,7 @@ export class ChatPrismaRepository implements ChatRepository {
       where: { conversationId, ...(beforeSeq === null ? {} : { seq: { lt: beforeSeq } }) },
       orderBy: { seq: 'desc' },
       take: size,
+      include: MESSAGE_INCLUDE,
     });
     return rows.map(ChatMapper.toMessage);
   }
@@ -160,6 +185,7 @@ export class ChatPrismaRepository implements ChatRepository {
       where: { conversationId, seq: { gt: afterSeq } },
       orderBy: { seq: 'asc' },
       take: size,
+      include: MESSAGE_INCLUDE,
     });
     return rows.map(ChatMapper.toMessage);
   }
@@ -272,7 +298,10 @@ export class ChatPrismaRepository implements ChatRepository {
   }
 
   async findMessage(messageId: string): Promise<Message | null> {
-    const row = await this.prisma.message.findUnique({ where: { id: messageId } });
+    const row = await this.prisma.message.findUnique({
+      where: { id: messageId },
+      include: MESSAGE_INCLUDE,
+    });
     return row === null ? null : ChatMapper.toMessage(row);
   }
 
@@ -282,6 +311,7 @@ export class ChatPrismaRepository implements ChatRepository {
       // The body really goes — a delete that only hid the text would be a lie to the sender.
       // Evidence for moderation is captured in `reports.content_snapshot` at report time.
       data: { deletedAt: new Date(), body: null },
+      include: MESSAGE_INCLUDE,
     });
     return ChatMapper.toMessage(row);
   }
@@ -297,6 +327,7 @@ export class ChatPrismaRepository implements ChatRepository {
       this.prisma.message.findFirst({
         where: { conversationId: conversation.id },
         orderBy: { seq: 'desc' },
+        include: MESSAGE_INCLUDE,
       }),
       this.prisma.message.count({
         where: {

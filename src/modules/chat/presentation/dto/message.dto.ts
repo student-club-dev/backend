@@ -1,4 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { AttachmentDto } from '../../../media/presentation/dto/attachment.dto';
 import { Message } from '../../domain/entities/message.entity';
 import { MessageType } from '../../domain/enums/message-type.enum';
 
@@ -48,11 +49,30 @@ export class MessageDto {
   })
   deletedAt!: string | null;
 
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description:
+      'Shared by every image of one multi-image send — draw consecutive messages with the same ' +
+      'value as a grid. Each is still its own message with its own `seq`.',
+  })
+  albumId!: string | null;
+
+  @ApiProperty({
+    type: () => AttachmentDto,
+    nullable: true,
+    description: 'Set for IMAGE, GIF, VIDEO, VOICE and FILE messages; null otherwise.',
+  })
+  attachment!: AttachmentDto | null;
+
   @ApiProperty({ type: String, format: 'date-time' })
   createdAt!: string;
 
-  /** `viewerId` is whoever will read this DTO — `clientMsgId` is private to the sender. */
-  static fromDomain(message: Message, viewerId: string | null): MessageDto {
+  /**
+   * `viewerId` is whoever will read this DTO — `clientMsgId` is private to the sender. `apiBase` is
+   * the `/v1` prefix the media proxy lives under.
+   */
+  static fromDomain(message: Message, viewerId: string | null, apiBase = '/v1'): MessageDto {
     const dto = new MessageDto();
     dto.id = message.id;
     dto.conversationId = message.conversationId;
@@ -62,6 +82,9 @@ export class MessageDto {
     dto.body = message.body;
     dto.clientMsgId = message.senderId === viewerId ? message.clientMsgId : null;
     dto.deletedAt = message.deletedAt === null ? null : message.deletedAt.toISOString();
+    dto.albumId = message.albumId;
+    dto.attachment =
+      message.attachment === null ? null : AttachmentDto.fromDomain(message.attachment, apiBase);
     dto.createdAt = message.createdAt.toISOString();
     return dto;
   }
@@ -81,10 +104,15 @@ export class MessageListDto {
   })
   hasMore!: boolean;
 
-  static from(messages: Message[], hasMore: boolean, viewerId: string): MessageListDto {
+  static from(
+    messages: Message[],
+    hasMore: boolean,
+    viewerId: string,
+    apiBase = '/v1',
+  ): MessageListDto {
     const dto = new MessageListDto();
     // Not `map(MessageDto.fromDomain)` — that would feed the array index into the second parameter.
-    dto.items = messages.map((message) => MessageDto.fromDomain(message, viewerId));
+    dto.items = messages.map((message) => MessageDto.fromDomain(message, viewerId, apiBase));
     dto.hasMore = hasMore;
     return dto;
   }

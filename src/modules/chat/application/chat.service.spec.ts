@@ -3,7 +3,10 @@ import { ERROR_CODE } from '../../../common/errors/error-code';
 import type { AuthenticatedUser } from '../../../common/types/authenticated-user';
 import { PresenceRepository } from '../../../infrastructure/presence/presence.repository';
 import { LastSeenVisibility } from '../../profiles/domain/enums/last-seen-visibility.enum';
-import { ChatRepository } from '../domain/chat.repository';
+import { MediaAsset } from '../../media/domain/entities/media-asset.entity';
+import { MediaAssetRepository } from '../../media/domain/media-asset.repository';
+import { MediaKind, MediaStatus } from '../../media/domain/enums/media-kind.enum';
+import { AppendMessageInput, ChatRepository } from '../domain/chat.repository';
 import { ConnectionCheckRepository } from '../domain/connection-check.repository';
 import { Conversation, ConversationMember } from '../domain/entities/conversation.entity';
 import { ConversationListItem } from '../domain/entities/conversation-view.entity';
@@ -34,6 +37,8 @@ function message(overrides: Partial<Message> = {}): Message {
     body: 'salom',
     clientMsgId: null,
     deletedAt: null,
+    albumId: null,
+    attachment: null,
     createdAt: new Date('2026-07-01T00:00:00Z'),
     ...overrides,
   };
@@ -90,9 +95,16 @@ function makeChat(overrides: Partial<ChatRepository> = {}): ChatRepository {
     findById: jest.fn().mockResolvedValue(null),
     findMembership: jest.fn().mockResolvedValue(member()),
     otherMemberId: jest.fn().mockResolvedValue('other'),
-    appendMessage: jest.fn(async (conversationId: string, senderId: string, body: string) =>
-      message({ conversationId, senderId, body }),
+    appendMessage: jest.fn(async (input: AppendMessageInput) =>
+      message({
+        conversationId: input.conversationId,
+        senderId: input.senderId,
+        body: input.body,
+        type: input.type,
+        albumId: input.albumId,
+      }),
     ),
+    countInAlbum: jest.fn().mockResolvedValue(0),
     listMessages: jest.fn().mockResolvedValue([]),
     listSince: jest.fn().mockResolvedValue([]),
     listConversations: jest.fn().mockResolvedValue({ items: [], total: 0 }),
@@ -129,12 +141,54 @@ function makePresence(overrides: Partial<PresenceRepository> = {}): PresenceRepo
   };
 }
 
+function makeMedia(asset: MediaAsset | null = null): MediaAssetRepository {
+  return {
+    create: jest.fn(),
+    findById: jest.fn().mockResolvedValue(asset),
+    bytesUploadedSince: jest.fn().mockResolvedValue(0),
+    markProcessed: jest.fn(),
+    attachToMessage: jest.fn(),
+    findOrphans: jest.fn().mockResolvedValue([]),
+    deleteMany: jest.fn(),
+  };
+}
+
+/** A READY image the caller owns, in this conversation, not yet attached to anything. */
+function readyImage(overrides: Partial<MediaAsset> = {}): MediaAsset {
+  return {
+    id: 'med_1',
+    ownerId: 'me',
+    conversationId: 'conv-1',
+    kind: MediaKind.IMAGE,
+    status: MediaStatus.READY,
+    isAnimated: false,
+    storageKey: 'k.webp',
+    thumbStorageKey: 't.webp',
+    externalUrl: null,
+    externalThumbUrl: null,
+    provider: null,
+    externalId: null,
+    mimeType: 'image/webp',
+    sizeBytes: 1000,
+    width: 100,
+    height: 100,
+    durationMs: null,
+    waveform: [],
+    fileName: null,
+    blurHash: 'L6P',
+    messageId: null,
+    createdAt: new Date('2026-07-29T00:00:00Z'),
+    ...overrides,
+  };
+}
+
 function makeService(
   chat: ChatRepository = makeChat(),
   connectionCheck: ConnectionCheckRepository = makeConnectionCheck(),
   presence: PresenceRepository = makePresence(),
+  media: MediaAssetRepository = makeMedia(),
 ): ChatService {
-  return new ChatService(chat, connectionCheck, presence);
+  return new ChatService(chat, connectionCheck, presence, media);
 }
 
 describe('ChatService', () => {
@@ -172,7 +226,9 @@ describe('ChatService', () => {
 
   describe('sendMessage', () => {
     it('throws 422 MESSAGE_EMPTY for a blank body', async () => {
-      await expect(makeService().sendMessage(me, 'conv-1', '   ')).rejects.toMatchObject({
+      await expect(
+        makeService().sendMessage(me, { conversationId: 'conv-1', body: '   ' }),
+      ).rejects.toMatchObject({
         code: ERROR_CODE.MESSAGE_EMPTY,
         status: 422,
       });
@@ -180,7 +236,9 @@ describe('ChatService', () => {
 
     it('throws 404 CONVERSATION_NOT_FOUND when the caller is not a member', async () => {
       const chat = makeChat({ findMembership: jest.fn().mockResolvedValue(null) });
-      await expect(makeService(chat).sendMessage(me, 'conv-1', 'hi')).rejects.toMatchObject({
+      await expect(
+        makeService(chat).sendMessage(me, { conversationId: 'conv-1', body: 'hi' }),
+      ).rejects.toMatchObject({
         code: ERROR_CODE.CONVERSATION_NOT_FOUND,
         status: 404,
       });
@@ -188,7 +246,9 @@ describe('ChatService', () => {
 
     it('throws 403 NOT_CONNECTED when the pair is no longer connected', async () => {
       const service = makeService(makeChat(), makeConnectionCheck(false));
-      await expect(service.sendMessage(me, 'conv-1', 'hi')).rejects.toMatchObject({
+      await expect(
+        service.sendMessage(me, { conversationId: 'conv-1', body: 'hi' }),
+      ).rejects.toMatchObject({
         code: ERROR_CODE.NOT_CONNECTED,
         status: 403,
       });
@@ -196,15 +256,119 @@ describe('ChatService', () => {
 
     it('appends the trimmed message for a connected member', async () => {
       const chat = makeChat();
-      const result = await makeService(chat).sendMessage(me, 'conv-1', '  salom  ');
-      expect(chat.appendMessage).toHaveBeenCalledWith('conv-1', 'me', 'salom', null);
+      const result = await makeService(chat).sendMessage(me, {
+        conversationId: 'conv-1',
+        body: '  salom  ',
+      });
+      expect(chat.appendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ conversationId: 'conv-1', senderId: 'me', body: 'salom' }),
+      );
       expect(result.body).toBe('salom');
     });
 
     it('passes the clientMsgId through for idempotency (C6)', async () => {
       const chat = makeChat();
-      await makeService(chat).sendMessage(me, 'conv-1', 'salom', 'client-42');
-      expect(chat.appendMessage).toHaveBeenCalledWith('conv-1', 'me', 'salom', 'client-42');
+      await makeService(chat).sendMessage(me, {
+        conversationId: 'conv-1',
+        body: 'salom',
+        clientMsgId: 'client-42',
+      });
+      expect(chat.appendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ body: 'salom', clientMsgId: 'client-42' }),
+      );
+    });
+  });
+
+  // §2.1 — every way an attachment can be wrong. Each clause is a separate way a send could
+  // otherwise smuggle in someone else's file, or one already spent.
+  describe('sendMessage with an attachment', () => {
+    const imageSend = { conversationId: 'conv-1', type: MessageType.IMAGE, mediaId: 'med_1' };
+
+    it('attaches a READY image the caller owns', async () => {
+      const chat = makeChat();
+      await makeService(
+        chat,
+        makeConnectionCheck(),
+        makePresence(),
+        makeMedia(readyImage()),
+      ).sendMessage(me, imageSend);
+      expect(chat.appendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ type: MessageType.IMAGE, mediaId: 'med_1' }),
+      );
+    });
+
+    it('requires a mediaId for a media type', async () => {
+      await expect(
+        makeService().sendMessage(me, { conversationId: 'conv-1', type: MessageType.IMAGE }),
+      ).rejects.toMatchObject({ code: ERROR_CODE.VALIDATION_ERROR });
+    });
+
+    it('refuses an attachment owned by someone else', async () => {
+      const media = makeMedia(readyImage({ ownerId: 'other' }));
+      await expect(
+        makeService(makeChat(), makeConnectionCheck(), makePresence(), media).sendMessage(
+          me,
+          imageSend,
+        ),
+      ).rejects.toMatchObject({ code: ERROR_CODE.MEDIA_NOT_FOUND, status: 422 });
+    });
+
+    it('refuses an attachment uploaded for a different conversation', async () => {
+      const media = makeMedia(readyImage({ conversationId: 'conv-other' }));
+      await expect(
+        makeService(makeChat(), makeConnectionCheck(), makePresence(), media).sendMessage(
+          me,
+          imageSend,
+        ),
+      ).rejects.toMatchObject({ code: ERROR_CODE.MEDIA_NOT_FOUND, status: 422 });
+    });
+
+    it('refuses an attachment already spent on another message', async () => {
+      const media = makeMedia(readyImage({ messageId: 'msg_old' }));
+      await expect(
+        makeService(makeChat(), makeConnectionCheck(), makePresence(), media).sendMessage(
+          me,
+          imageSend,
+        ),
+      ).rejects.toMatchObject({ code: ERROR_CODE.MEDIA_ALREADY_USED, status: 422 });
+    });
+
+    it('refuses a video that is still transcoding', async () => {
+      const media = makeMedia(readyImage({ status: MediaStatus.PROCESSING }));
+      await expect(
+        makeService(makeChat(), makeConnectionCheck(), makePresence(), media).sendMessage(
+          me,
+          imageSend,
+        ),
+      ).rejects.toMatchObject({ code: ERROR_CODE.MEDIA_NOT_READY, status: 422 });
+    });
+
+    it('refuses an attachment whose kind does not match the declared type', async () => {
+      const media = makeMedia(readyImage({ kind: MediaKind.VOICE }));
+      await expect(
+        makeService(makeChat(), makeConnectionCheck(), makePresence(), media).sendMessage(
+          me,
+          imageSend,
+        ),
+      ).rejects.toMatchObject({ code: ERROR_CODE.MEDIA_KIND_MISMATCH, status: 422 });
+    });
+
+    it('refuses an eleventh image in the same album', async () => {
+      const chat = makeChat({ countInAlbum: jest.fn().mockResolvedValue(10) });
+      await expect(
+        makeService(
+          chat,
+          makeConnectionCheck(),
+          makePresence(),
+          makeMedia(readyImage()),
+        ).sendMessage(me, { ...imageSend, albumId: 'alb_1' }),
+      ).rejects.toMatchObject({ code: ERROR_CODE.ALBUM_TOO_LARGE, status: 422 });
+    });
+
+    it('refuses a client-sent SYSTEM message', async () => {
+      await expect(
+        makeService().sendMessage(me, { conversationId: 'conv-1', type: MessageType.SYSTEM }),
+      ).rejects.toMatchObject({ code: ERROR_CODE.VALIDATION_ERROR });
     });
   });
 

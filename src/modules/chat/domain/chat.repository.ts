@@ -1,4 +1,5 @@
 import { LastSeenVisibility } from '../../profiles/domain/enums/last-seen-visibility.enum';
+import { MessageType } from './enums/message-type.enum';
 import { Conversation, ConversationMember } from './entities/conversation.entity';
 import { ConversationListItem } from './entities/conversation-view.entity';
 import { Message } from './entities/message.entity';
@@ -16,6 +17,17 @@ export interface ConversationPage {
 export interface UnreadSummary {
   total: number;
   conversations: number;
+}
+
+/** Everything a new message row needs. `mediaId` is linked to the message in the same transaction. */
+export interface AppendMessageInput {
+  conversationId: string;
+  senderId: string;
+  type: MessageType;
+  body: string | null;
+  clientMsgId: string | null;
+  mediaId: string | null;
+  albumId: string | null;
 }
 
 /**
@@ -42,12 +54,10 @@ export interface ChatRepository {
    * When `clientMsgId` is set, a retry with the same id returns the already-stored message instead
    * of creating a duplicate (C6 idempotency), enforced by a `(senderId, clientMsgId)` unique index.
    */
-  appendMessage(
-    conversationId: string,
-    senderId: string,
-    body: string,
-    clientMsgId: string | null,
-  ): Promise<Message>;
+  appendMessage(input: AppendMessageInput): Promise<Message>;
+
+  /** How many messages already share this album id — the 10-image ceiling (chat media spec §3). */
+  countInAlbum(conversationId: string, albumId: string): Promise<number>;
 
   /**
    * History strictly before `beforeSeq` (null = latest), newest-first, capped at `size`. Callers

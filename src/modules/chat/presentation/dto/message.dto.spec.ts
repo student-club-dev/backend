@@ -11,6 +11,8 @@ const message: Message = {
   body: 'salom',
   clientMsgId: 'cmid-1',
   deletedAt: null,
+  albumId: null,
+  attachment: null,
   createdAt: new Date('2026-07-28T09:14:22.531Z'),
 };
 

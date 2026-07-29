@@ -129,7 +129,14 @@ export class ConversationsController {
     @Param('id') id: string,
     @Body() dto: SendMessageDto,
   ): Promise<MessageDto> {
-    const message = await this.chat.sendMessage(user, id, dto.body, dto.clientMsgId ?? null);
+    const message = await this.chat.sendMessage(user, {
+      conversationId: id,
+      type: dto.type,
+      body: dto.body,
+      mediaId: dto.mediaId,
+      albumId: dto.albumId,
+      clientMsgId: dto.clientMsgId ?? null,
+    });
     await this.gateway.broadcastMessage(message);
     return MessageDto.fromDomain(message, user.id);
   }

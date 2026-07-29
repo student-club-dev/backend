@@ -16095,6 +16095,124 @@
           "SYSTEM"
         ]
       },
+      "MediaKindDto": {
+        "type": "string",
+        "enum": [
+          "IMAGE",
+          "GIF",
+          "VIDEO",
+          "VOICE",
+          "FILE"
+        ]
+      },
+      "MediaStatusDto": {
+        "type": "string",
+        "description": "`PROCESSING` only ever appears on video that is still transcoding. Show the `thumbUrl` and wait for the `media:ready` event, which carries the finished attachment.",
+        "enum": [
+          "PROCESSING",
+          "READY",
+          "FAILED"
+        ]
+      },
+      "MediaProviderDto": {
+        "type": "string",
+        "description": "Set when the GIF came from provider search rather than an upload.",
+        "enum": [
+          "TENOR",
+          "GIPHY"
+        ]
+      },
+      "AttachmentDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/MediaKindDto"
+          },
+          "status": {
+            "$ref": "#/components/schemas/MediaStatusDto"
+          },
+          "url": {
+            "type": "string",
+            "description": "Full-size media. Requires the same bearer token as any other call."
+          },
+          "thumbUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "mimeType": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "height": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "durationMs": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "waveform": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "description": "Voice notes only: 48 amplitude points in 0..100, computed server-side. Empty for every other kind — the client cannot derive it from an already-compressed file."
+          },
+          "fileName": {
+            "type": "string",
+            "nullable": true,
+            "description": "Original name, FILE only."
+          },
+          "blurHash": {
+            "type": "string",
+            "nullable": true,
+            "description": "BlurHash placeholder."
+          },
+          "isAnimated": {
+            "type": "boolean",
+            "description": "Play muted and looping when true (GIF and converted GIF-as-MP4)."
+          },
+          "provider": {
+            "nullable": true,
+            "$ref": "#/components/schemas/MediaProviderDto"
+          },
+          "externalId": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "status",
+          "url",
+          "thumbUrl",
+          "mimeType",
+          "sizeBytes",
+          "width",
+          "height",
+          "durationMs",
+          "waveform",
+          "fileName",
+          "blurHash",
+          "isAnimated",
+          "provider",
+          "externalId"
+        ]
+      },
       "MessageDto": {
         "type": "object",
         "properties": {
@@ -16130,6 +16248,20 @@
             "format": "date-time",
             "description": "When the sender deleted this message, `null` otherwise. The row keeps its `seq` and stays in the history — `body` is emptied and it no longer counts as unread. Render a \"message deleted\" placeholder (§18)."
           },
+          "albumId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Shared by every image of one multi-image send — draw consecutive messages with the same value as a grid. Each is still its own message with its own `seq`."
+          },
+          "attachment": {
+            "nullable": true,
+            "description": "Set for IMAGE, GIF, VIDEO, VOICE and FILE messages; null otherwise.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AttachmentDto"
+              }
+            ]
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -16144,6 +16276,8 @@
           "body",
           "clientMsgId",
           "deletedAt",
+          "albumId",
+          "attachment",
           "createdAt"
         ]
       },
@@ -16270,18 +16404,27 @@
       "SendMessageDto": {
         "type": "object",
         "properties": {
+          "type": {
+            "$ref": "#/components/schemas/MessageTypeDto"
+          },
           "body": {
             "type": "string",
-            "maxLength": 4000
+            "maxLength": 4000,
+            "description": "Required for `TEXT` (1–4000). An optional caption (≤1024) for `IMAGE`/`VIDEO`/`FILE`. Rejected for `GIF`/`VOICE`/`STICKER` — there is nowhere to render it."
+          },
+          "mediaId": {
+            "type": "string",
+            "description": "The id returned by `POST /v1/media/chat-upload`. Required for `IMAGE`, `VIDEO`, `VOICE`, `FILE` and an uploaded `GIF`. Single-use: an attachment belongs to one message."
+          },
+          "albumId": {
+            "type": "string",
+            "description": "Client-generated id shared by every image of one multi-image send (max 10). Each image is still its own message with its own `seq`; this only tells the client to draw them as a grid."
           },
           "clientMsgId": {
             "type": "string",
             "description": "Client-generated id — makes a retried send idempotent (C6)"
           }
-        },
-        "required": [
-          "body"
-        ]
+        }
       },
       "MarkReadDto": {
         "type": "object",
@@ -16356,124 +16499,6 @@
         },
         "required": [
           "url"
-        ]
-      },
-      "MediaKindDto": {
-        "type": "string",
-        "enum": [
-          "IMAGE",
-          "GIF",
-          "VIDEO",
-          "VOICE",
-          "FILE"
-        ]
-      },
-      "MediaStatusDto": {
-        "type": "string",
-        "description": "`PROCESSING` only ever appears on video that is still transcoding. Show the `thumbUrl` and wait for the `media:ready` event, which carries the finished attachment.",
-        "enum": [
-          "PROCESSING",
-          "READY",
-          "FAILED"
-        ]
-      },
-      "MediaProviderDto": {
-        "type": "string",
-        "description": "Set when the GIF came from provider search rather than an upload.",
-        "enum": [
-          "TENOR",
-          "GIPHY"
-        ]
-      },
-      "AttachmentDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "kind": {
-            "$ref": "#/components/schemas/MediaKindDto"
-          },
-          "status": {
-            "$ref": "#/components/schemas/MediaStatusDto"
-          },
-          "url": {
-            "type": "string",
-            "description": "Full-size media. Requires the same bearer token as any other call."
-          },
-          "thumbUrl": {
-            "type": "string",
-            "nullable": true
-          },
-          "mimeType": {
-            "type": "string"
-          },
-          "sizeBytes": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "width": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
-          },
-          "height": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
-          },
-          "durationMs": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
-          },
-          "waveform": {
-            "type": "array",
-            "items": {
-              "type": "integer"
-            },
-            "description": "Voice notes only: 48 amplitude points in 0..100, computed server-side. Empty for every other kind — the client cannot derive it from an already-compressed file."
-          },
-          "fileName": {
-            "type": "string",
-            "nullable": true,
-            "description": "Original name, FILE only."
-          },
-          "blurHash": {
-            "type": "string",
-            "nullable": true,
-            "description": "BlurHash placeholder."
-          },
-          "isAnimated": {
-            "type": "boolean",
-            "description": "Play muted and looping when true (GIF and converted GIF-as-MP4)."
-          },
-          "provider": {
-            "nullable": true,
-            "$ref": "#/components/schemas/MediaProviderDto"
-          },
-          "externalId": {
-            "type": "string",
-            "nullable": true
-          }
-        },
-        "required": [
-          "id",
-          "kind",
-          "status",
-          "url",
-          "thumbUrl",
-          "mimeType",
-          "sizeBytes",
-          "width",
-          "height",
-          "durationMs",
-          "waveform",
-          "fileName",
-          "blurHash",
-          "isAnimated",
-          "provider",
-          "externalId"
         ]
       }
     }

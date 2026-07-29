@@ -1,9 +1,12 @@
 import {
   Conversation as PrismaConversation,
   ConversationMember as PrismaMember,
+  MediaAsset as PrismaMediaAsset,
   Message as PrismaMessage,
   Student,
 } from '@prisma/client';
+import { MediaAsset } from '../../media/domain/entities/media-asset.entity';
+import { MediaKind, MediaProvider, MediaStatus } from '../../media/domain/enums/media-kind.enum';
 import { StudentSummary } from '../../connections/domain/entities/student-summary.entity';
 import {
   COURSE_YEAR_TO_DOMAIN,
@@ -41,7 +44,7 @@ export class ChatMapper {
     };
   }
 
-  static toMessage(row: PrismaMessage): Message {
+  static toMessage(row: PrismaMessage & { attachment?: PrismaMediaAsset | null }): Message {
     return {
       id: row.id,
       conversationId: row.conversationId,
@@ -51,6 +54,39 @@ export class ChatMapper {
       body: row.body,
       clientMsgId: row.clientMsgId,
       deletedAt: row.deletedAt,
+      albumId: row.albumId,
+      attachment:
+        row.attachment === undefined || row.attachment === null
+          ? null
+          : ChatMapper.toAttachment(row.attachment),
+      createdAt: row.createdAt,
+    };
+  }
+
+  /** Prisma media row → the media module's domain shape, so `MessageDto` can render it. */
+  static toAttachment(row: PrismaMediaAsset): MediaAsset {
+    return {
+      id: row.id,
+      ownerId: row.ownerId,
+      conversationId: row.conversationId,
+      kind: MediaKind[row.kind],
+      status: MediaStatus[row.status],
+      isAnimated: row.isAnimated,
+      storageKey: row.storageKey,
+      thumbStorageKey: row.thumbStorageKey,
+      externalUrl: row.externalUrl,
+      externalThumbUrl: row.externalThumbUrl,
+      provider: row.provider === null ? null : MediaProvider[row.provider],
+      externalId: row.externalId,
+      mimeType: row.mimeType,
+      sizeBytes: row.sizeBytes,
+      width: row.width,
+      height: row.height,
+      durationMs: row.durationMs,
+      waveform: row.waveform,
+      fileName: row.fileName,
+      blurHash: row.blurHash,
+      messageId: row.messageId,
       createdAt: row.createdAt,
     };
   }

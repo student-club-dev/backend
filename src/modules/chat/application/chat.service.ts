@@ -8,12 +8,19 @@ import {
 } from '../../../infrastructure/presence/presence.repository';
 import { applyPresenceVisibility } from '../../connections/domain/presence-visibility';
 import { LastSeenVisibility } from '../../profiles/domain/enums/last-seen-visibility.enum';
+import {
+  MEDIA_ASSET_REPOSITORY,
+  MediaAssetRepository,
+} from '../../media/domain/media-asset.repository';
+import { MediaStatus } from '../../media/domain/enums/media-kind.enum';
 import { CHAT_REPOSITORY, ChatRepository, UnreadSummary } from '../domain/chat.repository';
+import { MessageType } from '../domain/enums/message-type.enum';
+import { MAX_ALBUM_SIZE, normalizeBody, requiredKindFor } from '../domain/message-composition';
 import { CONNECTION_CHECK, ConnectionCheckRepository } from '../domain/connection-check.repository';
 import { Conversation } from '../domain/entities/conversation.entity';
 import { ConversationListItem } from '../domain/entities/conversation-view.entity';
 import { Message } from '../domain/entities/message.entity';
-import { directKeyOf, MessagePage, Page } from './chat.io';
+import { directKeyOf, MessagePage, Page, SendMessageInput } from './chat.io';
 
 /**
  * Chat use-cases (docs/architecture/chat.md). 1:1 DIRECT conversations gated by an accepted
@@ -26,6 +33,7 @@ export class ChatService {
     @Inject(CHAT_REPOSITORY) private readonly chat: ChatRepository,
     @Inject(CONNECTION_CHECK) private readonly connectionCheck: ConnectionCheckRepository,
     @Inject(PRESENCE_REPOSITORY) private readonly presence: PresenceRepository,
+    @Inject(MEDIA_ASSET_REPOSITORY) private readonly media: MediaAssetRepository,
   ) {}
 
   /** Opens (or returns) the DIRECT conversation with a connected student. */
@@ -43,23 +51,95 @@ export class ChatService {
     );
   }
 
-  /** Sends a text message into a conversation the caller belongs to (connection re-checked). */
-  async sendMessage(
-    user: AuthenticatedUser,
-    conversationId: string,
-    body: string,
-    clientMsgId: string | null = null,
-  ): Promise<Message> {
-    const text = body.trim();
-    if (text.length === 0) {
-      throw new AppException(ERROR_CODE.MESSAGE_EMPTY, 422, "Xabar bo'sh bo'lishi mumkin emas");
+  /**
+   * Sends a message into a conversation the caller belongs to (connection re-checked).
+   *
+   * `type` defaults to `TEXT`, which is what makes an older client — one that only ever sends
+   * `{ body, clientMsgId }` — keep working unchanged.
+   */
+  async sendMessage(user: AuthenticatedUser, input: SendMessageInput): Promise<Message> {
+    const type = input.type ?? MessageType.TEXT;
+    if (type === MessageType.SYSTEM) {
+      throw AppException.validation({ type: 'SYSTEM xabarni yuborib bo‘lmaydi' });
     }
-    await this.assertMember(conversationId, user.id);
-    const otherId = await this.chat.otherMemberId(conversationId, user.id);
+
+    const body = normalizeBody(type, input.body);
+
+    await this.assertMember(input.conversationId, user.id);
+    const otherId = await this.chat.otherMemberId(input.conversationId, user.id);
     if (otherId !== null && !(await this.connectionCheck.areConnected(user.id, otherId))) {
       throw new AppException(ERROR_CODE.NOT_CONNECTED, 403, "Avval bog'lanish kerak");
     }
-    return this.chat.appendMessage(conversationId, user.id, text, clientMsgId);
+
+    const mediaId = await this.resolveAttachment(user, type, input);
+    await this.assertAlbumHasRoom(input.conversationId, input.albumId ?? null);
+
+    return this.chat.appendMessage({
+      conversationId: input.conversationId,
+      senderId: user.id,
+      type,
+      body,
+      clientMsgId: input.clientMsgId ?? null,
+      mediaId,
+      albumId: input.albumId ?? null,
+    });
+  }
+
+  /**
+   * Checks that the `mediaId` may be attached to this message, and returns it (or null when the
+   * type carries no attachment).
+   *
+   * Every clause here is a separate way the send could otherwise go wrong: someone else's upload,
+   * an upload for a different conversation, one already spent on an earlier message, a video that
+   * has not finished transcoding, or a kind that does not match the declared type.
+   */
+  private async resolveAttachment(
+    user: AuthenticatedUser,
+    type: MessageType,
+    input: SendMessageInput,
+  ): Promise<string | null> {
+    const requiredKind = requiredKindFor(type);
+    if (requiredKind === null) {
+      return null;
+    }
+    if (input.mediaId === undefined || input.mediaId === null) {
+      throw AppException.validation({ mediaId: 'Avval faylni yuklang' });
+    }
+
+    const asset = await this.media.findById(input.mediaId);
+    if (asset === null || asset.ownerId !== user.id) {
+      throw new AppException(ERROR_CODE.MEDIA_NOT_FOUND, 422, 'Fayl topilmadi');
+    }
+    if (asset.conversationId !== input.conversationId) {
+      throw new AppException(ERROR_CODE.MEDIA_NOT_FOUND, 422, 'Fayl topilmadi');
+    }
+    if (asset.messageId !== null) {
+      throw new AppException(ERROR_CODE.MEDIA_ALREADY_USED, 422, 'Bu fayl allaqachon yuborilgan');
+    }
+    if (asset.status !== MediaStatus.READY) {
+      throw new AppException(ERROR_CODE.MEDIA_NOT_READY, 422, 'Fayl hali tayyor emas');
+    }
+    if (asset.kind !== requiredKind) {
+      throw new AppException(
+        ERROR_CODE.MEDIA_KIND_MISMATCH,
+        422,
+        'Fayl turi xabar turiga mos emas',
+      );
+    }
+    return asset.id;
+  }
+
+  private async assertAlbumHasRoom(conversationId: string, albumId: string | null): Promise<void> {
+    if (albumId === null) {
+      return;
+    }
+    if ((await this.chat.countInAlbum(conversationId, albumId)) >= MAX_ALBUM_SIZE) {
+      throw new AppException(
+        ERROR_CODE.ALBUM_TOO_LARGE,
+        422,
+        `Bitta albomda ${MAX_ALBUM_SIZE} tadan ko'p rasm bo'lmaydi`,
+      );
+    }
   }
 
   /**
