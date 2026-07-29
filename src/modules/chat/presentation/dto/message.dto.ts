@@ -2,6 +2,39 @@ import { ApiProperty } from '@nestjs/swagger';
 import { AttachmentDto } from '../../../media/presentation/dto/attachment.dto';
 import { Message } from '../../domain/entities/message.entity';
 import { MessageType } from '../../domain/enums/message-type.enum';
+import { MessageSticker } from '../../domain/sticker-directory.repository';
+
+/** The sticker carried by a `STICKER` message. */
+export class MessageStickerDto {
+  @ApiProperty()
+  id!: string;
+
+  @ApiProperty()
+  packId!: string;
+
+  @ApiProperty({ example: '😄' })
+  emoji!: string;
+
+  @ApiProperty()
+  url!: string;
+
+  @ApiProperty({ type: 'integer', format: 'int32' })
+  width!: number;
+
+  @ApiProperty({ type: 'integer', format: 'int32' })
+  height!: number;
+
+  static fromDomain(sticker: MessageSticker): MessageStickerDto {
+    const dto = new MessageStickerDto();
+    dto.id = sticker.id;
+    dto.packId = sticker.packId;
+    dto.emoji = sticker.emoji;
+    dto.url = sticker.url;
+    dto.width = sticker.width;
+    dto.height = sticker.height;
+    return dto;
+  }
+}
 
 /** A chat message on the wire. */
 export class MessageDto {
@@ -65,6 +98,13 @@ export class MessageDto {
   })
   attachment!: AttachmentDto | null;
 
+  @ApiProperty({
+    type: () => MessageStickerDto,
+    nullable: true,
+    description: 'Set for `STICKER` messages; null otherwise.',
+  })
+  sticker!: MessageStickerDto | null;
+
   @ApiProperty({ type: String, format: 'date-time' })
   createdAt!: string;
 
@@ -85,6 +125,7 @@ export class MessageDto {
     dto.albumId = message.albumId;
     dto.attachment =
       message.attachment === null ? null : AttachmentDto.fromDomain(message.attachment, apiBase);
+    dto.sticker = message.sticker === null ? null : MessageStickerDto.fromDomain(message.sticker);
     dto.createdAt = message.createdAt.toISOString();
     return dto;
   }

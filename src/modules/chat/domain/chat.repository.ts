@@ -27,6 +27,7 @@ export interface AppendMessageInput {
   body: string | null;
   clientMsgId: string | null;
   mediaId: string | null;
+  stickerId: string | null;
   albumId: string | null;
 }
 

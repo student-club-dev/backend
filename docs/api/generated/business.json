@@ -16116,7 +16116,7 @@
       },
       "MediaProviderDto": {
         "type": "string",
-        "description": "Set when the GIF came from provider search rather than an upload.",
+        "description": "Whose catalogue answered — show the matching attribution.",
         "enum": [
           "TENOR",
           "GIPHY"
@@ -16213,6 +16213,40 @@
           "externalId"
         ]
       },
+      "MessageStickerDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "packId": {
+            "type": "string"
+          },
+          "emoji": {
+            "type": "string",
+            "example": "😄"
+          },
+          "url": {
+            "type": "string"
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "height": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "required": [
+          "id",
+          "packId",
+          "emoji",
+          "url",
+          "width",
+          "height"
+        ]
+      },
       "MessageDto": {
         "type": "object",
         "properties": {
@@ -16262,6 +16296,15 @@
               }
             ]
           },
+          "sticker": {
+            "nullable": true,
+            "description": "Set for `STICKER` messages; null otherwise.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MessageStickerDto"
+              }
+            ]
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -16278,6 +16321,7 @@
           "deletedAt",
           "albumId",
           "attachment",
+          "sticker",
           "createdAt"
         ]
       },
@@ -16401,6 +16445,46 @@
           "hasMore"
         ]
       },
+      "GifRefDto": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "$ref": "#/components/schemas/MediaProviderDto"
+          },
+          "externalId": {
+            "type": "string",
+            "description": "The search result `id`."
+          },
+          "url": {
+            "type": "string",
+            "description": "Provider CDN url. Checked against a host allowlist."
+          },
+          "thumbUrl": {
+            "type": "string"
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "height": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "durationMs": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          }
+        },
+        "required": [
+          "provider",
+          "externalId",
+          "url",
+          "thumbUrl",
+          "width",
+          "height"
+        ]
+      },
       "SendMessageDto": {
         "type": "object",
         "properties": {
@@ -16415,6 +16499,18 @@
           "mediaId": {
             "type": "string",
             "description": "The id returned by `POST /v1/media/chat-upload`. Required for `IMAGE`, `VIDEO`, `VOICE`, `FILE` and an uploaded `GIF`. Single-use: an attachment belongs to one message."
+          },
+          "gif": {
+            "description": "For a `GIF` taken from search. Use this **or** `mediaId` (an uploaded GIF), not both.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GifRefDto"
+              }
+            ]
+          },
+          "stickerId": {
+            "type": "string",
+            "description": "Required for `STICKER`. An id from `GET /v1/stickers/packs`."
           },
           "albumId": {
             "type": "string",
@@ -16500,6 +16596,171 @@
         "required": [
           "url"
         ]
+      },
+      "StickerDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "packId": {
+            "type": "string"
+          },
+          "emoji": {
+            "type": "string",
+            "example": "😄",
+            "description": "The emoji this sticker stands in for."
+          },
+          "url": {
+            "type": "string",
+            "description": "Static WebP, transparent background."
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32",
+            "example": 512
+          },
+          "height": {
+            "type": "integer",
+            "format": "int32",
+            "example": 512
+          }
+        },
+        "required": [
+          "id",
+          "packId",
+          "emoji",
+          "url",
+          "width",
+          "height"
+        ]
+      },
+      "StickerPackDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string",
+            "example": "student_life",
+            "description": "Stable key; survives reseeding."
+          },
+          "name": {
+            "type": "string"
+          },
+          "coverUrl": {
+            "type": "string"
+          },
+          "isDefault": {
+            "type": "boolean"
+          },
+          "stickers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StickerDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "key",
+          "name",
+          "coverUrl",
+          "isDefault",
+          "stickers"
+        ]
+      },
+      "StickerPacksDto": {
+        "type": "object",
+        "properties": {
+          "packs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StickerPackDto"
+            }
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Bumped whenever any pack changes. Also sent as the `ETag`, so a conditional request gets 304 and no body at all."
+          }
+        },
+        "required": [
+          "packs",
+          "version"
+        ]
+      },
+      "GifDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Provider id — pass to `POST /v1/gifs/{id}/share`."
+          },
+          "url": {
+            "type": "string",
+            "description": "Silent looping MP4. Play it muted and on repeat."
+          },
+          "thumbUrl": {
+            "type": "string"
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "height": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "durationMs": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "url",
+          "thumbUrl",
+          "width",
+          "height",
+          "durationMs"
+        ]
+      },
+      "GifSearchResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GifDto"
+            }
+          },
+          "next": {
+            "type": "string",
+            "nullable": true,
+            "description": "Cursor for the next page; pass it back as `pos`. Null at the end."
+          },
+          "provider": {
+            "$ref": "#/components/schemas/MediaProviderDto"
+          }
+        },
+        "required": [
+          "items",
+          "next",
+          "provider"
+        ]
+      },
+      "GifShareDto": {
+        "type": "object",
+        "properties": {
+          "q": {
+            "type": "string",
+            "maxLength": 100,
+            "description": "The search term the result was chosen from, when there was one."
+          }
+        }
       }
     }
   }

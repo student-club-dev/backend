@@ -9439,6 +9439,583 @@
           }
         ]
       }
+    },
+    "/v1/stickers/packs": {
+      "get": {
+        "operationId": "StickersController_packs",
+        "summary": "Every sticker pack, with its stickers",
+        "description": "The whole catalogue in one response (~200 KB) — cache it. Send the previous `ETag` back as `If-None-Match` and an unchanged catalogue answers `304` with no body.",
+        "parameters": [
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "description": "A previously received `ETag`.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "$ref": "#/components/schemas/StickerPacksDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "304": {
+            "description": "Catalogue unchanged; no body."
+          },
+          "401": {
+            "description": "Missing or invalid access token (`UNAUTHORIZED`), or expired (`TOKEN_EXPIRED`) — refresh and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 401
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Avtorizatsiyadan o‘tilmagan"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UNAUTHORIZED",
+                            "message": "Avtorizatsiyadan o‘tilmagan",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not a STUDENT account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 403
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Ruxsat yo‘q"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "FORBIDDEN",
+                            "message": "Ruxsat yo‘q",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Chat"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/gifs/search": {
+      "get": {
+        "operationId": "GifsController_search",
+        "summary": "Search GIFs (or the featured list when `q` is empty)",
+        "description": "Results carry the **MP4** rendition, not the `.gif` — the same animation is roughly 20× the bytes as a GIF. Play them muted and looping. Show the \"Powered by Tenor\" attribution: it is required by their terms.",
+        "parameters": [
+          {
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "Search term. Omit or leave empty for the featured list.",
+            "schema": {
+              "maxLength": 100,
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50,
+              "format": "int32",
+              "default": 30,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "pos",
+            "required": false,
+            "in": "query",
+            "description": "The `next` cursor from a previous page.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "locale",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "default": "uz_UZ",
+              "enum": [
+                "uz_UZ",
+                "ru_RU",
+                "en_US"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "$ref": "#/components/schemas/GifSearchResponseDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (`UNAUTHORIZED`), or expired (`TOKEN_EXPIRED`) — refresh and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 401
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Avtorizatsiyadan o‘tilmagan"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UNAUTHORIZED",
+                            "message": "Avtorizatsiyadan o‘tilmagan",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not a STUDENT account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 403
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Ruxsat yo‘q"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "FORBIDDEN",
+                            "message": "Ruxsat yo‘q",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The provider did not answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 502
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Xatolik yuz berdi"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "GIF_PROVIDER_ERROR",
+                            "message": "Xatolik yuz berdi",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "No provider API key is configured on this deployment.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 503
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Xatolik yuz berdi"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "GIF_PROVIDER_ERROR",
+                            "message": "Xatolik yuz berdi",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Chat"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/gifs/{id}/share": {
+      "post": {
+        "operationId": "GifsController_share",
+        "summary": "Tell the provider a result was shared",
+        "description": "Required by the provider terms and what makes their ranking improve. Best-effort — this never fails your send.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "The `id` of the chosen search result",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GifShareDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Recorded; `result` is null.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "nullable": true,
+                          "example": null,
+                          "description": "No payload for this endpoint."
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (`UNAUTHORIZED`), or expired (`TOKEN_EXPIRED`) — refresh and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 401
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Avtorizatsiyadan o‘tilmagan"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UNAUTHORIZED",
+                            "message": "Avtorizatsiyadan o‘tilmagan",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not a STUDENT account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 403
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Ruxsat yo‘q"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "FORBIDDEN",
+                            "message": "Ruxsat yo‘q",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Chat"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
     }
   },
   "info": {
@@ -16975,7 +17552,7 @@
       },
       "MediaProviderDto": {
         "type": "string",
-        "description": "Set when the GIF came from provider search rather than an upload.",
+        "description": "Whose catalogue answered — show the matching attribution.",
         "enum": [
           "TENOR",
           "GIPHY"
@@ -17072,6 +17649,40 @@
           "externalId"
         ]
       },
+      "MessageStickerDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "packId": {
+            "type": "string"
+          },
+          "emoji": {
+            "type": "string",
+            "example": "😄"
+          },
+          "url": {
+            "type": "string"
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "height": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "required": [
+          "id",
+          "packId",
+          "emoji",
+          "url",
+          "width",
+          "height"
+        ]
+      },
       "MessageDto": {
         "type": "object",
         "properties": {
@@ -17121,6 +17732,15 @@
               }
             ]
           },
+          "sticker": {
+            "nullable": true,
+            "description": "Set for `STICKER` messages; null otherwise.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MessageStickerDto"
+              }
+            ]
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -17137,6 +17757,7 @@
           "deletedAt",
           "albumId",
           "attachment",
+          "sticker",
           "createdAt"
         ]
       },
@@ -17260,6 +17881,46 @@
           "hasMore"
         ]
       },
+      "GifRefDto": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "$ref": "#/components/schemas/MediaProviderDto"
+          },
+          "externalId": {
+            "type": "string",
+            "description": "The search result `id`."
+          },
+          "url": {
+            "type": "string",
+            "description": "Provider CDN url. Checked against a host allowlist."
+          },
+          "thumbUrl": {
+            "type": "string"
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "height": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "durationMs": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          }
+        },
+        "required": [
+          "provider",
+          "externalId",
+          "url",
+          "thumbUrl",
+          "width",
+          "height"
+        ]
+      },
       "SendMessageDto": {
         "type": "object",
         "properties": {
@@ -17274,6 +17935,18 @@
           "mediaId": {
             "type": "string",
             "description": "The id returned by `POST /v1/media/chat-upload`. Required for `IMAGE`, `VIDEO`, `VOICE`, `FILE` and an uploaded `GIF`. Single-use: an attachment belongs to one message."
+          },
+          "gif": {
+            "description": "For a `GIF` taken from search. Use this **or** `mediaId` (an uploaded GIF), not both.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GifRefDto"
+              }
+            ]
+          },
+          "stickerId": {
+            "type": "string",
+            "description": "Required for `STICKER`. An id from `GET /v1/stickers/packs`."
           },
           "albumId": {
             "type": "string",
@@ -17359,6 +18032,171 @@
         "required": [
           "url"
         ]
+      },
+      "StickerDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "packId": {
+            "type": "string"
+          },
+          "emoji": {
+            "type": "string",
+            "example": "😄",
+            "description": "The emoji this sticker stands in for."
+          },
+          "url": {
+            "type": "string",
+            "description": "Static WebP, transparent background."
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32",
+            "example": 512
+          },
+          "height": {
+            "type": "integer",
+            "format": "int32",
+            "example": 512
+          }
+        },
+        "required": [
+          "id",
+          "packId",
+          "emoji",
+          "url",
+          "width",
+          "height"
+        ]
+      },
+      "StickerPackDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string",
+            "example": "student_life",
+            "description": "Stable key; survives reseeding."
+          },
+          "name": {
+            "type": "string"
+          },
+          "coverUrl": {
+            "type": "string"
+          },
+          "isDefault": {
+            "type": "boolean"
+          },
+          "stickers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StickerDto"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "key",
+          "name",
+          "coverUrl",
+          "isDefault",
+          "stickers"
+        ]
+      },
+      "StickerPacksDto": {
+        "type": "object",
+        "properties": {
+          "packs": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StickerPackDto"
+            }
+          },
+          "version": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Bumped whenever any pack changes. Also sent as the `ETag`, so a conditional request gets 304 and no body at all."
+          }
+        },
+        "required": [
+          "packs",
+          "version"
+        ]
+      },
+      "GifDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Provider id — pass to `POST /v1/gifs/{id}/share`."
+          },
+          "url": {
+            "type": "string",
+            "description": "Silent looping MP4. Play it muted and on repeat."
+          },
+          "thumbUrl": {
+            "type": "string"
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "height": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "durationMs": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "url",
+          "thumbUrl",
+          "width",
+          "height",
+          "durationMs"
+        ]
+      },
+      "GifSearchResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GifDto"
+            }
+          },
+          "next": {
+            "type": "string",
+            "nullable": true,
+            "description": "Cursor for the next page; pass it back as `pos`. Null at the end."
+          },
+          "provider": {
+            "$ref": "#/components/schemas/MediaProviderDto"
+          }
+        },
+        "required": [
+          "items",
+          "next",
+          "provider"
+        ]
+      },
+      "GifShareDto": {
+        "type": "object",
+        "properties": {
+          "q": {
+            "type": "string",
+            "maxLength": 100,
+            "description": "The search term the result was chosen from, when there was one."
+          }
+        }
       }
     }
   }

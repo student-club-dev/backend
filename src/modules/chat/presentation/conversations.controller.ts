@@ -134,6 +134,8 @@ export class ConversationsController {
       type: dto.type,
       body: dto.body,
       mediaId: dto.mediaId,
+      gif: dto.gif,
+      stickerId: dto.stickerId,
       albumId: dto.albumId,
       clientMsgId: dto.clientMsgId ?? null,
     });

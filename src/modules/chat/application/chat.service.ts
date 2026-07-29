@@ -12,15 +12,20 @@ import {
   MEDIA_ASSET_REPOSITORY,
   MediaAssetRepository,
 } from '../../media/domain/media-asset.repository';
-import { MediaStatus } from '../../media/domain/enums/media-kind.enum';
+import { MediaKind, MediaStatus } from '../../media/domain/enums/media-kind.enum';
+import { isAllowedGifUrl } from '../../gifs/domain/gif-source';
 import { CHAT_REPOSITORY, ChatRepository, UnreadSummary } from '../domain/chat.repository';
 import { MessageType } from '../domain/enums/message-type.enum';
+import {
+  STICKER_DIRECTORY,
+  StickerDirectoryRepository,
+} from '../domain/sticker-directory.repository';
 import { MAX_ALBUM_SIZE, normalizeBody, requiredKindFor } from '../domain/message-composition';
 import { CONNECTION_CHECK, ConnectionCheckRepository } from '../domain/connection-check.repository';
 import { Conversation } from '../domain/entities/conversation.entity';
 import { ConversationListItem } from '../domain/entities/conversation-view.entity';
 import { Message } from '../domain/entities/message.entity';
-import { directKeyOf, MessagePage, Page, SendMessageInput } from './chat.io';
+import { directKeyOf, ExternalGifRef, MessagePage, Page, SendMessageInput } from './chat.io';
 
 /**
  * Chat use-cases (docs/architecture/chat.md). 1:1 DIRECT conversations gated by an accepted
@@ -34,6 +39,7 @@ export class ChatService {
     @Inject(CONNECTION_CHECK) private readonly connectionCheck: ConnectionCheckRepository,
     @Inject(PRESENCE_REPOSITORY) private readonly presence: PresenceRepository,
     @Inject(MEDIA_ASSET_REPOSITORY) private readonly media: MediaAssetRepository,
+    @Inject(STICKER_DIRECTORY) private readonly stickers: StickerDirectoryRepository,
   ) {}
 
   /** Opens (or returns) the DIRECT conversation with a connected student. */
@@ -72,6 +78,7 @@ export class ChatService {
     }
 
     const mediaId = await this.resolveAttachment(user, type, input);
+    const stickerId = await this.resolveSticker(type, input.stickerId ?? null);
     await this.assertAlbumHasRoom(input.conversationId, input.albumId ?? null);
 
     return this.chat.appendMessage({
@@ -81,8 +88,26 @@ export class ChatService {
       body,
       clientMsgId: input.clientMsgId ?? null,
       mediaId,
+      stickerId,
       albumId: input.albumId ?? null,
     });
+  }
+
+  /** A `STICKER` message must name a sticker that exists; every other type must not name one. */
+  private async resolveSticker(
+    type: MessageType,
+    stickerId: string | null,
+  ): Promise<string | null> {
+    if (type !== MessageType.STICKER) {
+      return null;
+    }
+    if (stickerId === null) {
+      throw AppException.validation({ stickerId: 'Stiker tanlang' });
+    }
+    if ((await this.stickers.findById(stickerId)) === null) {
+      throw new AppException(ERROR_CODE.STICKER_NOT_FOUND, 422, 'Stiker topilmadi');
+    }
+    return stickerId;
   }
 
   /**
@@ -102,6 +127,17 @@ export class ChatService {
     if (requiredKind === null) {
       return null;
     }
+
+    // A GIF has two sources that must look identical to the client: an upload, or a pick from
+    // provider search. The second one is referenced rather than copied — re-hosting is against
+    // their terms — so it gets a MediaAsset row with no bytes behind it.
+    if (type === MessageType.GIF && input.gif !== undefined && input.gif !== null) {
+      if (input.mediaId !== undefined && input.mediaId !== null) {
+        throw AppException.validation({ gif: 'mediaId yoki gif — ikkalasi emas' });
+      }
+      return this.createExternalGif(user, input.conversationId, input.gif);
+    }
+
     if (input.mediaId === undefined || input.mediaId === null) {
       throw AppException.validation({ mediaId: 'Avval faylni yuklang' });
     }
@@ -126,6 +162,49 @@ export class ChatService {
         'Fayl turi xabar turiga mos emas',
       );
     }
+    return asset.id;
+  }
+
+  /**
+   * Stores a provider GIF as an attachment without downloading it. Both URLs are re-checked against
+   * the host allowlist here, not just in search: the client sends this object back to us, so
+   * trusting it would turn the field into an open redirect to any host an attacker chooses.
+   */
+  private async createExternalGif(
+    user: AuthenticatedUser,
+    conversationId: string,
+    gif: ExternalGifRef,
+  ): Promise<string> {
+    if (!isAllowedGifUrl(gif.url) || !isAllowedGifUrl(gif.thumbUrl)) {
+      throw new AppException(
+        ERROR_CODE.GIF_URL_NOT_ALLOWED,
+        422,
+        'Bu havoladan GIF yuborib bo‘lmaydi',
+      );
+    }
+    const asset = await this.media.create({
+      ownerId: user.id,
+      conversationId,
+      kind: MediaKind.GIF,
+      status: MediaStatus.READY,
+      isAnimated: true,
+      storageKey: null,
+      thumbStorageKey: null,
+      externalUrl: gif.url,
+      externalThumbUrl: gif.thumbUrl,
+      provider: gif.provider,
+      externalId: gif.externalId,
+      mimeType: 'video/mp4',
+      // Not ours to measure — the bytes live on their CDN. Zero keeps it out of the daily quota,
+      // which is about our disk, not theirs.
+      sizeBytes: 0,
+      width: gif.width,
+      height: gif.height,
+      durationMs: gif.durationMs ?? null,
+      waveform: [],
+      fileName: null,
+      blurHash: null,
+    });
     return asset.id;
   }
 

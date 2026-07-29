@@ -10,8 +10,10 @@ import { ChatService } from './application/chat.service';
 import { ChatGateway } from './chat.gateway';
 import { CHAT_REPOSITORY } from './domain/chat.repository';
 import { CONNECTION_CHECK } from './domain/connection-check.repository';
+import { STICKER_DIRECTORY } from './domain/sticker-directory.repository';
 import { ChatPrismaRepository } from './infrastructure/chat.prisma.repository';
 import { ConnectionCheckPrismaRepository } from './infrastructure/connection-check.prisma.repository';
+import { StickerDirectoryPrismaRepository } from './infrastructure/sticker-directory.prisma.repository';
 import { ConversationsController } from './presentation/conversations.controller';
 import { MessagesController } from './presentation/messages.controller';
 
@@ -29,6 +31,7 @@ import { MessagesController } from './presentation/messages.controller';
     StudentGuard,
     { provide: CHAT_REPOSITORY, useClass: ChatPrismaRepository },
     { provide: CONNECTION_CHECK, useClass: ConnectionCheckPrismaRepository },
+    { provide: STICKER_DIRECTORY, useClass: StickerDirectoryPrismaRepository },
   ],
 })
 export class ChatModule {}

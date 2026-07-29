@@ -21,7 +21,9 @@ import { DiscountsModule } from './modules/discounts/discounts.module';
 import { GeoModule } from './modules/geo/geo.module';
 import { HealthModule } from './modules/health/health.module';
 import { ListingsModule } from './modules/listings/listings.module';
+import { GifsModule } from './modules/gifs/gifs.module';
 import { MediaModule } from './modules/media/media.module';
+import { StickersModule } from './modules/stickers/stickers.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { ProfileModule } from './modules/profiles/profile.module';
 import { RedemptionsModule } from './modules/redemptions/redemptions.module';
@@ -73,6 +75,8 @@ import { TradeCentersModule } from './modules/trade-centers/trade-centers.module
     ChatModule,
     NotificationsModule,
     MediaModule,
+    StickersModule,
+    GifsModule,
     CronModule,
   ],
 })

@@ -26,6 +26,7 @@ export interface SendMessagePayload {
   type?: string;
   body?: string;
   mediaId?: string;
+  stickerId?: string;
   albumId?: string;
 }
 

@@ -96,6 +96,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect {
         type: toMessageType(payload.type),
         body: payload.body,
         mediaId: payload.mediaId,
+        stickerId: payload.stickerId,
         albumId: payload.albumId,
         clientMsgId: payload.clientMsgId ?? null,
       });

@@ -1,4 +1,5 @@
 import { Message } from '../domain/entities/message.entity';
+import { MediaProvider } from '../../media/domain/enums/media-kind.enum';
 import { MessageType } from '../domain/enums/message-type.enum';
 
 /** A page of application results plus the unpaginated total (the controller derives `hasNext`). */
@@ -30,6 +31,20 @@ export interface SendMessageInput {
   type?: MessageType;
   body?: string | null;
   mediaId?: string | null;
+  /** A GIF chosen from provider search — referenced, never re-hosted. */
+  gif?: ExternalGifRef | null;
+  stickerId?: string | null;
   albumId?: string | null;
   clientMsgId?: string | null;
+}
+
+/** A provider GIF the client picked from search. */
+export interface ExternalGifRef {
+  provider: MediaProvider;
+  externalId: string;
+  url: string;
+  thumbUrl: string;
+  width: number;
+  height: number;
+  durationMs?: number | null;
 }

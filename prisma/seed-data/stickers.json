@@ -1,0 +1,30 @@
+[
+  {
+    "key": "student_life",
+    "name": "Talaba hayoti",
+    "coverUrl": "https://cdn.studentclub.uz/stickers/student_life/cover.webp",
+    "isDefault": true,
+    "sortOrder": 0,
+    "stickers": [
+      { "emoji": "😄", "url": "https://cdn.studentclub.uz/stickers/student_life/01.webp" },
+      { "emoji": "😴", "url": "https://cdn.studentclub.uz/stickers/student_life/02.webp" },
+      { "emoji": "📚", "url": "https://cdn.studentclub.uz/stickers/student_life/03.webp" },
+      { "emoji": "☕", "url": "https://cdn.studentclub.uz/stickers/student_life/04.webp" },
+      { "emoji": "🎓", "url": "https://cdn.studentclub.uz/stickers/student_life/05.webp" },
+      { "emoji": "😭", "url": "https://cdn.studentclub.uz/stickers/student_life/06.webp" }
+    ]
+  },
+  {
+    "key": "reactions",
+    "name": "Reaksiyalar",
+    "coverUrl": "https://cdn.studentclub.uz/stickers/reactions/cover.webp",
+    "isDefault": false,
+    "sortOrder": 1,
+    "stickers": [
+      { "emoji": "👍", "url": "https://cdn.studentclub.uz/stickers/reactions/01.webp" },
+      { "emoji": "🔥", "url": "https://cdn.studentclub.uz/stickers/reactions/02.webp" },
+      { "emoji": "❤️", "url": "https://cdn.studentclub.uz/stickers/reactions/03.webp" },
+      { "emoji": "🤔", "url": "https://cdn.studentclub.uz/stickers/reactions/04.webp" }
+    ]
+  }
+]

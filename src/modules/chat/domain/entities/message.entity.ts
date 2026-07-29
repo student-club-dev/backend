@@ -1,5 +1,6 @@
 import { MediaAsset } from '../../../media/domain/entities/media-asset.entity';
 import { MessageType } from '../enums/message-type.enum';
+import { MessageSticker } from '../sticker-directory.repository';
 
 /** A chat message with a per-conversation monotonic `seq` (C4). */
 export interface Message {
@@ -20,5 +21,7 @@ export interface Message {
   albumId: string | null;
   /** The uploaded (or provider) attachment, when this message carries one. */
   attachment: MediaAsset | null;
+  /** The sticker, for `STICKER` messages. Catalogue content, not an upload. */
+  sticker: MessageSticker | null;
   createdAt: Date;
 }

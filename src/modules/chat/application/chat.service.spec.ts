@@ -7,6 +7,7 @@ import { MediaAsset } from '../../media/domain/entities/media-asset.entity';
 import { MediaAssetRepository } from '../../media/domain/media-asset.repository';
 import { MediaKind, MediaStatus } from '../../media/domain/enums/media-kind.enum';
 import { AppendMessageInput, ChatRepository } from '../domain/chat.repository';
+import { MessageSticker, StickerDirectoryRepository } from '../domain/sticker-directory.repository';
 import { ConnectionCheckRepository } from '../domain/connection-check.repository';
 import { Conversation, ConversationMember } from '../domain/entities/conversation.entity';
 import { ConversationListItem } from '../domain/entities/conversation-view.entity';
@@ -39,6 +40,7 @@ function message(overrides: Partial<Message> = {}): Message {
     deletedAt: null,
     albumId: null,
     attachment: null,
+    sticker: null,
     createdAt: new Date('2026-07-01T00:00:00Z'),
     ...overrides,
   };
@@ -182,13 +184,27 @@ function readyImage(overrides: Partial<MediaAsset> = {}): MediaAsset {
   };
 }
 
+function makeStickers(found: MessageSticker | null = null): StickerDirectoryRepository {
+  return { findById: jest.fn().mockResolvedValue(found) };
+}
+
+const STICKER: MessageSticker = {
+  id: 'st_1',
+  packId: 'pk_1',
+  emoji: '😄',
+  url: 'https://cdn/st_1.webp',
+  width: 512,
+  height: 512,
+};
+
 function makeService(
   chat: ChatRepository = makeChat(),
   connectionCheck: ConnectionCheckRepository = makeConnectionCheck(),
   presence: PresenceRepository = makePresence(),
   media: MediaAssetRepository = makeMedia(),
+  stickers: StickerDirectoryRepository = makeStickers(STICKER),
 ): ChatService {
-  return new ChatService(chat, connectionCheck, presence, media);
+  return new ChatService(chat, connectionCheck, presence, media, stickers);
 }
 
 describe('ChatService', () => {
@@ -363,6 +379,53 @@ describe('ChatService', () => {
           makeMedia(readyImage()),
         ).sendMessage(me, { ...imageSend, albumId: 'alb_1' }),
       ).rejects.toMatchObject({ code: ERROR_CODE.ALBUM_TOO_LARGE, status: 422 });
+    });
+
+    it('sends a sticker that exists in the catalogue', async () => {
+      const chat = makeChat();
+      await makeService(chat).sendMessage(me, {
+        conversationId: 'conv-1',
+        type: MessageType.STICKER,
+        stickerId: 'st_1',
+      });
+      expect(chat.appendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ type: MessageType.STICKER, stickerId: 'st_1', mediaId: null }),
+      );
+    });
+
+    it('refuses an unknown stickerId', async () => {
+      const service = makeService(
+        makeChat(),
+        makeConnectionCheck(),
+        makePresence(),
+        makeMedia(),
+        makeStickers(null),
+      );
+      await expect(
+        service.sendMessage(me, {
+          conversationId: 'conv-1',
+          type: MessageType.STICKER,
+          stickerId: 'nope',
+        }),
+      ).rejects.toMatchObject({ code: ERROR_CODE.STICKER_NOT_FOUND, status: 422 });
+    });
+
+    it('requires a stickerId on a STICKER message', async () => {
+      await expect(
+        makeService().sendMessage(me, { conversationId: 'conv-1', type: MessageType.STICKER }),
+      ).rejects.toMatchObject({ code: ERROR_CODE.VALIDATION_ERROR });
+    });
+
+    it('does not look up a sticker for a non-sticker message', async () => {
+      const stickers = makeStickers(STICKER);
+      await makeService(
+        makeChat(),
+        makeConnectionCheck(),
+        makePresence(),
+        makeMedia(),
+        stickers,
+      ).sendMessage(me, { conversationId: 'conv-1', body: 'salom' });
+      expect(stickers.findById).not.toHaveBeenCalled();
     });
 
     it('refuses a client-sent SYSTEM message', async () => {

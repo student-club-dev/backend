@@ -19,7 +19,7 @@ import { Message } from '../domain/entities/message.entity';
 import { ChatMapper, ChatSummaryRow } from './chat.mapper';
 
 /** A message is never useful without its attachment — load it everywhere, in one query. */
-const MESSAGE_INCLUDE = { attachment: true } as const;
+const MESSAGE_INCLUDE = { attachment: true, sticker: true } as const;
 
 const SUMMARY_SELECT = {
   id: true,
@@ -129,6 +129,7 @@ export class ChatPrismaRepository implements ChatRepository {
             body: input.body,
             clientMsgId,
             type: PrismaMessageType[input.type],
+            stickerId: input.stickerId,
             albumId: input.albumId,
           },
         });

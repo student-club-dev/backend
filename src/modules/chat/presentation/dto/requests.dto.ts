@@ -1,5 +1,16 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, MaxLength, Min } from 'class-validator';
+import { Type } from 'class-transformer';
+import {
+  IsEnum,
+  IsInt,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MaxLength,
+  Min,
+  ValidateNested,
+} from 'class-validator';
+import { MediaProvider } from '../../../media/domain/enums/media-kind.enum';
 import { MessageType } from '../../domain/enums/message-type.enum';
 
 /** Body of `POST /v1/conversations` — open (or fetch) a direct conversation with a connection. */
@@ -8,6 +19,49 @@ export class OpenDirectDto {
   @IsString()
   @IsNotEmpty()
   studentId!: string;
+}
+
+/**
+ * A GIF picked from `GET /v1/gifs/search`. Sent instead of `mediaId`: provider terms forbid
+ * re-hosting, so we reference their CDN rather than copying the file.
+ */
+export class GifRefDto {
+  @ApiProperty({ enum: MediaProvider, enumName: 'MediaProviderDto' })
+  @IsEnum(MediaProvider)
+  provider!: MediaProvider;
+
+  @ApiProperty({ description: 'The search result `id`.' })
+  @IsString()
+  @IsNotEmpty()
+  externalId!: string;
+
+  @ApiProperty({ description: 'Provider CDN url. Checked against a host allowlist.' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(2048)
+  url!: string;
+
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(2048)
+  thumbUrl!: string;
+
+  @ApiProperty({ type: 'integer', format: 'int32' })
+  @IsInt()
+  @Min(1)
+  width!: number;
+
+  @ApiProperty({ type: 'integer', format: 'int32' })
+  @IsInt()
+  @Min(1)
+  height!: number;
+
+  @ApiPropertyOptional({ type: 'integer', format: 'int32', nullable: true })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  durationMs?: number;
 }
 
 /** Body of `POST /v1/conversations/:id/messages`. */
@@ -44,6 +98,24 @@ export class SendMessageDto {
   @IsOptional()
   @IsString()
   mediaId?: string;
+
+  @ApiPropertyOptional({
+    type: () => GifRefDto,
+    description:
+      'For a `GIF` taken from search. Use this **or** `mediaId` (an uploaded GIF), not both.',
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => GifRefDto)
+  gif?: GifRefDto;
+
+  @ApiPropertyOptional({
+    type: String,
+    description: 'Required for `STICKER`. An id from `GET /v1/stickers/packs`.',
+  })
+  @IsOptional()
+  @IsString()
+  stickerId?: string;
 
   @ApiPropertyOptional({
     type: String,

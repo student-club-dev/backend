@@ -3,6 +3,7 @@ import {
   ConversationMember as PrismaMember,
   MediaAsset as PrismaMediaAsset,
   Message as PrismaMessage,
+  Sticker as PrismaSticker,
   Student,
 } from '@prisma/client';
 import { MediaAsset } from '../../media/domain/entities/media-asset.entity';
@@ -44,7 +45,12 @@ export class ChatMapper {
     };
   }
 
-  static toMessage(row: PrismaMessage & { attachment?: PrismaMediaAsset | null }): Message {
+  static toMessage(
+    row: PrismaMessage & {
+      attachment?: PrismaMediaAsset | null;
+      sticker?: PrismaSticker | null;
+    },
+  ): Message {
     return {
       id: row.id,
       conversationId: row.conversationId,
@@ -59,6 +65,17 @@ export class ChatMapper {
         row.attachment === undefined || row.attachment === null
           ? null
           : ChatMapper.toAttachment(row.attachment),
+      sticker:
+        row.sticker === undefined || row.sticker === null
+          ? null
+          : {
+              id: row.sticker.id,
+              packId: row.sticker.packId,
+              emoji: row.sticker.emoji,
+              url: row.sticker.url,
+              width: row.sticker.width,
+              height: row.sticker.height,
+            },
       createdAt: row.createdAt,
     };
   }
