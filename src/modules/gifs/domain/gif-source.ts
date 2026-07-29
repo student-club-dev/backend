@@ -26,11 +26,15 @@ export interface GifPage {
  * that logs every recipient's IP.
  */
 const ALLOWED_HOSTS: readonly RegExp[] = [
-  /^media\d*\.tenor\.com$/,
-  /^media\.tenor\.com$/,
-  /^c\.tenor\.com$/,
+  // KLIPY — the provider in use.
+  /^static\.klipy\.com$/,
+  /^[a-z0-9-]+\.klipy\.com$/,
+  // Giphy and Tenor: no longer served, but historical messages still carry their URLs and must
+  // keep rendering. Tenor's API shut down on 30 June 2026; the CDN links in old rows outlive it.
   /^media\d*\.giphy\.com$/,
   /^i\.giphy\.com$/,
+  /^media\d*\.tenor\.com$/,
+  /^c\.tenor\.com$/,
 ];
 
 /** Whether a provider URL may be stored on a message and rendered by the client. */

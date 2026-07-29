@@ -80,9 +80,15 @@ services:
       DATABASE_URL: postgresql://elonuz:elonuz@db:5432/elonuz?schema=public
       REDIS_URL: redis://redis:6379
 
+    # Uploaded media lives on disk, so without this every container restart deletes it: listing
+    # images AND chat attachments (CHAT_MEDIA_DIR sits under the same tree). One volume covers both.
+    volumes:
+      - elonuz-uploads:/app/uploads
+
     ports:
       - '3000:3000'
 
 volumes:
   elonuz-db-data:
   elonuz-redis-data:
+  elonuz-uploads:

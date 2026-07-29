@@ -39,7 +39,7 @@ npx prisma migrate deploy
 npm run test:e2e
 ```
 
-Bu **birinchi navbatdagi ish** — unit testlar (738 ta) yashil, lekin ular haqiqiy so'rov-javob
+Bu **birinchi navbatdagi ish** — unit testlar (779 ta) yashil, lekin ular haqiqiy so'rov-javob
 yo'lini, marshrut tartibini va Prisma so'rovlarini tekshirmaydi.
 
 ## 3. 🟠 Nginx — WebSocket upgrade
@@ -77,10 +77,10 @@ docker compose exec app ffmpeg -version   # tekshirish
 Shuningdek `CHAT_MEDIA_DIR` (`./uploads/chat`) uchun **doimiy volume** kerak — konteyner qayta
 ishga tushganda chat fayllari yo'qolmasin. `docker-compose.yml` da volume borligini tekshiring.
 
-## 5. 🟡 Tenor API kaliti — GIF qidiruvi uchun
+## 5. 🟡 GIF qidiruvi — KLIPY ulandi, production access qoldi
 
-Batafsil qadamlar §7 da. Kalitsiz `GET /v1/gifs/search` **503** qaytaradi (kod yoziladi, faqat
-ishlamaydi) — qolgan hamma narsa normal ishlayveradi.
+Integratsiya tayyor va haqiqiy kalit bilan tekshirilgan. Qolgani — **test kalitidan production
+kalitiga o'tish** (test = soatiga 100 ta, prod uchun yetarli emas). Batafsil quyida.
 
 ## 6. 🟡 Stiker kontenti — 2 paket × 24 ta WebP
 
@@ -114,75 +114,89 @@ Hali kerak emas. Kerak bo'lganda mobil hujjatning §11.1 dagi konfiguratsiyasi a
 
 ---
 
-## Tenor API kaliti — qadamma-qadam
+## GIF qidiruvi — KLIPY ulandi ✅
 
-Tenor Google'niki, shuning uchun kalit **Google Cloud Console** orqali olinadi. Bepul va
-cheklovi katta (kuniga o'n minglab so'rov).
+Provayder tanlandi va integratsiya **haqiqiy kalit bilan tekshirildi**: `mapped 8 of 8 results`.
 
-### 1-qadam — Google Cloud loyihasi
+### Nega KLIPY
 
-<https://console.cloud.google.com/projectcreate>
+| Provayder | Holat |
+|---|---|
+| Tenor | ⛔ API **2026-yil 30-iyunda o'chirilgan**. Mavjud kalitlar ham ishlamaydi |
+| Giphy | ⚠️ Bepul kalit — soatiga **100 ta** so'rov. Cheksiz uchun **pullik** shartnoma |
+| **KLIPY** | ✅ **Bepul, cheksiz production tarifi.** Tenor jamoasi qurgan; WhatsApp o'tgan, Discord ko'chmoqda |
 
-Loyiha nomi: masalan `studentclub-tenor`. Mavjud loyihangiz bo'lsa, o'shani ishlatsangiz ham bo'ladi.
-
-### 2-qadam — Tenor API ni yoqish
-
-<https://console.cloud.google.com/apis/library/tenor.googleapis.com>
-
-Yuqorida to'g'ri loyiha tanlanganiga ishonch hosil qiling → **Enable** tugmasi.
-
-> Agar sahifa topilmasa, API kutubxonasida <https://console.cloud.google.com/apis/library> qidiruvga
-> `Tenor` yozing.
-
-### 3-qadam — Kalit yaratish
-
-<https://console.cloud.google.com/apis/credentials>
-
-**+ CREATE CREDENTIALS** → **API key**. Kalit darhol ko'rsatiladi — nusxa oling.
-
-### 4-qadam — Kalitni cheklash (bu qadamni tashlab ketmang)
-
-Yaratilgan kalit yonidagi **Edit** (qalam) belgisi:
-
-- **API restrictions** → `Restrict key` → ro'yxatdan **Tenor API** ni tanlang.
-  Shu bilan kalit sizib chiqsa ham, faqat GIF qidiruvi uchun ishlaydi, boshqa Google xizmatlari
-  uchun emas.
-- **Application restrictions** → **`None` qoldiring**.
-  ⚠️ «HTTP referrers» ni tanlamang — bu brauzer uchun. Bizda so'rovni **server** yuboradi.
-  Serveringizning IP si o'zgarmas bo'lsa, `IP addresses` ni tanlab, o'sha IP ni qo'shsangiz —
-  yanada yaxshi.
-
-### 5-qadam — Serverga qo'yish
-
-`.env` fayliga (repoga **hech qachon** commit qilinmaydi):
+### Konfiguratsiya
 
 ```dotenv
-TENOR_API_KEY=AIzaSy...
+KLIPY_API_KEY=<kalit>
+KLIPY_BASE_URL=https://api.klipy.com/api/v1   # default, o'zgartirish shart emas
 ```
 
-Konfiguratsiya sxemasida u allaqachon bor (`src/config/env.ts`), ixtiyoriy maydon sifatida.
+⚠️ Kalit so'rov **yo'lida** ketadi (`/api/v1/<KEY>/gifs/search`) — parol darajasidagi sir.
+Adapter URL'ni **hech qachon log qilmaydi**, faqat xato sababini yozadi.
 
-### 6-qadam — Tekshirish
+Kalit sozlanmagan bo'lsa `GET /v1/gifs/search` **503** qaytaradi va boshqa hech narsa buzilmaydi.
+
+### Qolgan ish: production access — **uch tomonlama**
+
+Hozirgi **test kaliti — soatiga 100 ta so'rov**, prod uchun yetarli emas. Production kaliti bepul va
+cheksiz, lekin so'rov formasi **ilova ichida ishlab turgan GIF panelining video yozuvini** talab
+qiladi (Partner Panel → API Keys → Upgrade to Production Key).
+
+Ya'ni buni **backend yolg'iz topshira olmaydi** — mobil panel qurilmaguncha ko'rsatadigan narsa yo'q.
+
+| # | Kim | Ish |
+|---|---|---|
+| 1 | Backend | ✅ `GET /v1/gifs/search` tayyor, haqiqiy kalit bilan tekshirilgan (`mapped 8 of 8`) |
+| 2 | Siz | Partner Panel'dagi «Download them here» dan **atribut assetlarini** yuklab olib, mobil jamoaga bering |
+| 3 | Mobil jamoa | GIF panelini quradi, **«Powered by KLIPY» belgisini** qo'yadi |
+| 4 | Mobil jamoa | 30–60 soniyalik ekran yozuvi: chat → GIF paneli (**atribut kadrda**) → qidiruv → yuborish → suhbatda o'ynashi |
+| 5 | Siz | Formani topshirasiz. Javob bir necha ish kunida keladi |
+
+**Formani to'ldirish:**
+
+- **App Category** → `Messaging` (GIF paneli chatda yashaydi; `Social Media` ham noto'g'ri emas)
+- **Monthly Active Users** → rostini: `0 (pre-launch)` yoki aniq belgi bilan kutilayotgan son.
+  Bo'rttirmang — integratsiya videodan baribir tekshiriladi
+- **URL** → `studentclub.uz`
+
+⚠️ Production access **`.env` dagi kalit uchun** so'ralsin. Panelda uchta ilova ro'yxatdan o'tgan
+(`studentclub-android/-ios/-web`), lekin backend bittasini ishlatadi — boshqasiga so'ralsa, prod'da
+baribir 100/soat chegarasiga urilib, sababi topilmay qoladi.
+
+**Nega video kerak.** Production kaliti bepul va cheksiz, ya'ni Klipy o'z CDN trafigini beradi.
+Kalit butunlay serverda bo'lgani uchun ular faqat so'rovlar sonini ko'radi — natijalar bilan nima
+qilinayotganini emas. Video ularga uchta savolga javob beradi: kontent qayerda ishlatilyapti,
+atribut haqiqatan ko'rsatilyaptimi, va katalog ko'chirib olinmayaptimi.
+
+**Ads API'ni yoqmang** — panel taklif qiladi, lekin talabalar ilovasida GIF panelida reklama
+o'rinsiz va u klient tomonda qo'shimcha integratsiya talab qiladi.
+
+### Bu v1 rejasiga qanday ta'sir qiladi
+
+GIF **qidiruvi** endi ikkita tashqi bog'liqlikka bog'liq: mobil panel va Klipy tasdig'i. v1 ga
+ulgurmasligi mumkin.
+
+GIF **yuborish** esa hech kimga bog'liq emas va **allaqachon ishlaydi** — foydalanuvchi o'z GIF'ini
+yuklaydi, server uni ovozsiz MP4 ga o'giradi. Panel keyinga qolsa ham bu yo'qolmaydi.
+
+### Klient tomonda
+
+**Atribut majburiy** — «Powered by KLIPY» brendi qidiruv panelida ko'rsatilishi shart (Tenor va
+Giphy'da ham shunday edi). Javobdagi `provider` maydoni qaysi belgini ko'rsatishni aytadi.
+
+Ads API **ixtiyoriy** va biz uni **yoqmadik** — talabalar ilovasida reklama o'rinsiz.
+
+### Tekshirish
 
 ```bash
-curl -s "https://tenor.googleapis.com/v2/search?q=cat&key=$TENOR_API_KEY&limit=1" | head -c 300
+npm run gifs:probe          # .env dan kalitni o'qiydi
 ```
 
-JSON kelsa — kalit ishlayapti. `403` kelsa — API yoqilmagan yoki cheklov noto'g'ri.
-
-### Muhim: Tenor shartlaridan kelib chiqadigan majburiyatlar
-
-Bular **mobil jamoa** bilan birga bajariladi:
-
-1. **Fayllarni o'z serverimizga ko'chirmaymiz.** Tenor CDN havolasi to'g'ridan-to'g'ri ishlatiladi —
-   re-hosting shartlarga zid. Shuning uchun Tenor GIF'ida `mediaId` yo'q, faqat tashqi havola.
-   (Backend shunga moslab yozilgan: `MediaAsset.externalUrl`, `storageKey: null`.)
-2. **«Powered by Tenor» atributi** — qidiruv panelida logotip bilan ko'rsatilishi shart (klient ishi).
-3. **`registershare`** — foydalanuvchi GIF tanlaganda Tenor'ga xabar berilishi kerak.
-   Backend buni `POST /v1/gifs/{id}/share` orqali qiladi.
-
-> Giphy ham xuddi shunday ishlaydi va kontrakt bir xil (`provider: "GIPHY"`). Tenor tavsiya
-> etiladi: Google'niki, ishonchliroq va O'zbekistondan tez ochiladi.
+Javob shaklini va adapter nechta natijani o'giraganini ko'rsatadi. Provayder javobini o'zgartirsa
+(bu bir oyda ikki marta bo'ldi), bu skript buni **darhol** aniqlaydi — aks holda endpoint xato
+bermay, jimgina bo'sh ro'yxat qaytaraverardi.
 
 ---
 
@@ -194,7 +208,7 @@ Bular **mobil jamoa** bilan birga bajariladi:
 | 2 | E2E testlarni ishga tushirish | backend | ishonch |
 | 3 | Docker image + ffmpeg + volume | devops | rasmdan boshqa hamma media |
 | 4 | Nginx WS upgrade | devops | chat sifati, keyin qo'ng'iroq |
-| 5 | Tenor kaliti | siz | faqat GIF qidiruvi |
+| 5 | KLIPY **production access** (test kaliti 100/soat) | siz | GIF qidiruvi prod'da |
 | 6 | Stiker tasvirlari | dizayn/kontent | faqat stikerlar |
 | 7 | FCM/APNs | backend + Apple/Google hisoblari | push va qo'ng'iroq |
 | 8 | coturn | devops | qo'ng'iroq (keyinroq) |

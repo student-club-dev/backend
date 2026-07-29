@@ -1,4 +1,14 @@
-import { Body, Controller, Get, HttpCode, Param, Post, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Inject,
+  Param,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { ERROR_CODE } from '../../../common/errors/error-code';
@@ -10,7 +20,7 @@ import {
   ApiOkEnvelope,
   ApiUnauthorizedEnvelope,
 } from '../../../common/swagger/api-envelope.decorator';
-import { GifSearchService } from '../application/gif-search.service';
+import { GIF_PROVIDER, GifProviderAdapter } from '../domain/gif-provider.port';
 import { GifSearchQueryDto, GifShareDto } from './dto/gif-query.dto';
 import { GifSearchResponseDto } from './dto/gif.dto';
 
@@ -25,7 +35,7 @@ import { GifSearchResponseDto } from './dto/gif.dto';
 @UseGuards(JwtAuthGuard, StudentGuard)
 @Controller('gifs')
 export class GifsController {
-  constructor(private readonly gifs: GifSearchService) {}
+  constructor(@Inject(GIF_PROVIDER) private readonly gifs: GifProviderAdapter) {}
 
   @Get('search')
   @UseGuards(ThrottlerGuard)
@@ -34,15 +44,20 @@ export class GifsController {
     summary: 'Search GIFs (or the featured list when `q` is empty)',
     description:
       'Results carry the **MP4** rendition, not the `.gif` — the same animation is roughly 20× the ' +
-      'bytes as a GIF. Play them muted and looping. Show the "Powered by Tenor" attribution: it is ' +
-      'required by their terms.',
+      'bytes as a GIF. Play them muted and looping. Show the attribution badge the `provider` field ' +
+      'names — "Powered by KLIPY" today — their terms require it.',
   })
   @ApiOkEnvelope(GifSearchResponseDto)
+  @ApiErrorEnvelope(
+    429,
+    ERROR_CODE.GIF_PROVIDER_RATE_LIMITED,
+    'The provider’s quota is spent — retry shortly. Distinct from our own 60/min per-user limit.',
+  )
   @ApiErrorEnvelope(502, ERROR_CODE.GIF_PROVIDER_ERROR, 'The provider did not answer.')
   @ApiErrorEnvelope(
     503,
     ERROR_CODE.GIF_PROVIDER_ERROR,
-    'No provider API key is configured on this deployment.',
+    'No provider API key is configured on this deployment (`GIF_PROVIDER`).',
   )
   async search(@Query() query: GifSearchQueryDto): Promise<GifSearchResponseDto> {
     const page = await this.gifs.search(
@@ -59,8 +74,8 @@ export class GifsController {
   @ApiOperation({
     summary: 'Tell the provider a result was shared',
     description:
-      'Required by the provider terms and what makes their ranking improve. Best-effort — this ' +
-      'never fails your send.',
+      'Required by some providers terms and what makes their ranking improve. A no-op for providers ' +
+      'without such an endpoint. Best-effort — this never fails your send.',
   })
   @ApiParam({ name: 'id', description: 'The `id` of the chosen search result' })
   @ApiOkEnvelope(undefined, 'Recorded; `result` is null.')

@@ -1019,8 +1019,11 @@ enum MediaStatus {
 
 /// Where an attachment came from. Null ⇒ the student uploaded it to us.
 enum MediaProvider {
-  TENOR
+  KLIPY
   GIPHY
+  /// Retained for rows written before the switch. Tenor's API shut down on 30 June 2026, so nothing
+  /// new is ever created with it.
+  TENOR
 }
 
 /// Hook for NSFW/abuse screening. Nothing enforces it yet — the interface exists so turning

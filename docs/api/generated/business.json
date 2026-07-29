@@ -16118,8 +16118,9 @@
         "type": "string",
         "description": "Whose catalogue answered — show the matching attribution.",
         "enum": [
-          "TENOR",
-          "GIPHY"
+          "KLIPY",
+          "GIPHY",
+          "TENOR"
         ]
       },
       "AttachmentDto": {

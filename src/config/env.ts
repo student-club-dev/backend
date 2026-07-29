@@ -70,9 +70,15 @@ export const envSchema = z
     FFPROBE_PATH: z.string().min(1).default('ffprobe'),
 
     // GIF search proxy. The key never leaves the server — that is the entire point of proxying
-    // instead of shipping it in the app. Absent ⇒ the GIF endpoints answer 503.
-    TENOR_API_KEY: z.string().optional(),
-    TENOR_BASE_URL: z.string().url().default('https://tenor.googleapis.com/v2'),
+    // instead of shipping it in the app. No key ⇒ the GIF endpoints answer 503 and nothing else
+    // breaks.
+    //
+    // KLIPY is the catalogue behind `GET /v1/gifs/search`. Tenor's API shut down on 30 June 2026
+    // and Giphy caps a free key at 100 calls/hour, so KLIPY's free unlimited tier is the only one
+    // that can actually serve production.
+    // ⚠️ The key travels in the request *path*, so it must never reach a log line or an error.
+    KLIPY_API_KEY: z.string().optional(),
+    KLIPY_BASE_URL: z.string().url().default('https://api.klipy.com/api/v1'),
 
     ADMIN_EMAIL: z.string().optional(),
     ADMIN_PASSWORD_HASH: z.string().optional(),

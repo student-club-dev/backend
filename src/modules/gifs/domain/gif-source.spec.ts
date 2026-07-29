@@ -2,6 +2,8 @@ import { isAllowedGifUrl } from './gif-source';
 
 describe('isAllowedGifUrl', () => {
   it.each([
+    'https://static.klipy.com/ii/abc/md.mp4',
+    'https://cdn.klipy.com/abc/sm.gif',
     'https://media.tenor.com/abc/animation.mp4',
     'https://media1.tenor.com/abc/animation.mp4',
     'https://c.tenor.com/abc/tiny.gif',
@@ -12,6 +14,9 @@ describe('isAllowedGifUrl', () => {
   });
 
   it.each([
+    'https://static.klipy.com.evil.example/x.mp4',
+    'https://evil.example/static.klipy.com/x.mp4',
+    'https://klipy.com.attacker.io/x.mp4',
     'https://evil.example.com/animation.mp4',
     'https://tenor.com.evil.example/animation.mp4',
     'https://evil.example/media.tenor.com/animation.mp4',
