@@ -55,6 +55,25 @@ export const envSchema = z
     UPLOADS_DIR: z.string().min(1).default('./uploads'),
     PUBLIC_MEDIA_BASE_URL: z.string().url().default('http://localhost:3000/uploads'),
 
+    // Chat media. Unlike listing images these are private: they are served through
+    // `GET /v1/media/{id}/raw`, which checks conversation membership, never over the static path.
+    CHAT_MEDIA_DIR: z.string().min(1).default('./uploads/chat'),
+    // Per-student upload quota (abuse limits, chat spec §9).
+    CHAT_UPLOADS_PER_MINUTE: z.coerce.number().int().positive().default(20),
+    CHAT_UPLOAD_BYTES_PER_DAY: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(500 * 1024 * 1024),
+    // Transcoding binaries. Present in the Docker image; override for a non-standard local install.
+    FFMPEG_PATH: z.string().min(1).default('ffmpeg'),
+    FFPROBE_PATH: z.string().min(1).default('ffprobe'),
+
+    // GIF search proxy. The key never leaves the server — that is the entire point of proxying
+    // instead of shipping it in the app. Absent ⇒ the GIF endpoints answer 503.
+    TENOR_API_KEY: z.string().optional(),
+    TENOR_BASE_URL: z.string().url().default('https://tenor.googleapis.com/v2'),
+
     ADMIN_EMAIL: z.string().optional(),
     ADMIN_PASSWORD_HASH: z.string().optional(),
     MODERATOR_EMAIL: z.string().optional(),

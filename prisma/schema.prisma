@@ -220,6 +220,7 @@ model Student {
   // Chat
   conversationMemberships ConversationMember[]
   messagesSent            Message[]
+  mediaAssets             MediaAsset[]
   deviceTokens            DeviceToken[]
 
   // Discovery filters on GET /v1/students — one index per column so Postgres can bitmap-AND any
@@ -921,8 +922,11 @@ enum ConversationType {
 enum MessageType {
   TEXT
   IMAGE
+  GIF
+  VIDEO
   FILE
   VOICE
+  STICKER
   SYSTEM
 }
 
@@ -937,6 +941,7 @@ model Conversation {
 
   members  ConversationMember[]
   messages Message[]
+  media    MediaAsset[]
 
   @@index([lastMessageAt])
   @@map("conversations")
@@ -976,14 +981,143 @@ model Message {
   deletedAt      DateTime?   @map("deleted_at")
   createdAt      DateTime    @default(now()) @map("created_at")
 
+  // Sticker messages carry no MediaAsset — the sticker is shared catalogue content, not an upload.
+  stickerId String? @map("sticker_id")
+  // Groups the messages of one multi-image send. Purely presentational: each image stays its own
+  // message with its own `seq`, or unread counts and `?after=` paging would break (chat spec §3).
+  albumId   String? @map("album_id")
+
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   sender       Student      @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  sticker      Sticker?     @relation(fields: [stickerId], references: [id], onDelete: SetNull)
+  attachment   MediaAsset?
   reports      Report[]     @relation("ReportMessage")
 
   @@unique([conversationId, seq])
   @@unique([senderId, clientMsgId])
   @@index([conversationId, seq])
+  @@index([albumId])
+  @@index([stickerId])
   @@map("messages")
+}
+
+// ---- Chat media (uploads + sticker catalogue — chat media spec parts A/§1–§5) ----
+
+enum MediaKind {
+  IMAGE
+  GIF
+  VIDEO
+  VOICE
+  FILE
+}
+
+enum MediaStatus {
+  PROCESSING
+  READY
+  FAILED
+}
+
+/// Where an attachment came from. Null ⇒ the student uploaded it to us.
+enum MediaProvider {
+  TENOR
+  GIPHY
+}
+
+/// Hook for NSFW/abuse screening. Nothing enforces it yet — the interface exists so turning
+/// screening on later does not require a migration (chat media spec §9).
+enum ModerationStatus {
+  PENDING
+  OK
+  BLOCKED
+}
+
+/// One chat attachment. Covers both uploads (`storageKey` set) and provider GIFs (`externalUrl`
+/// set): Tenor's terms forbid re-hosting, so those are referenced, never copied. Keeping both in one
+/// table is what lets `MessageDto.attachment` have a single shape for the client.
+model MediaAsset {
+  id             String           @id @default(cuid())
+  ownerId        String           @map("owner_id")
+  // Uploads are scoped to a conversation up front: it is the permission check (only a member may
+  // upload) and it is what `GET /v1/media/{id}/raw` re-checks on every read.
+  conversationId String           @map("conversation_id")
+  kind           MediaKind
+  status         MediaStatus      @default(READY)
+  moderation     ModerationStatus @default(PENDING)
+  /// GIFs and the MP4s converted from them — the client autoplays these muted and looping.
+  isAnimated     Boolean          @default(false) @map("is_animated")
+
+  /// Object key in our storage. Null for a provider GIF.
+  storageKey       String?        @map("storage_key")
+  thumbStorageKey  String?        @map("thumb_storage_key")
+  /// Provider CDN url. Null for our own uploads — those are served through the authorised proxy.
+  externalUrl      String?        @map("external_url")
+  externalThumbUrl String?        @map("external_thumb_url")
+  provider         MediaProvider?
+  externalId       String?        @map("external_id")
+
+  mimeType   String  @map("mime_type")
+  sizeBytes  Int     @map("size_bytes")
+  width      Int?
+  height     Int?
+  durationMs Int?    @map("duration_ms")
+  /// 48 normalised RMS points, voice notes only. Computed server-side — the client cannot derive it
+  /// from an already-compressed file. Empty for every other kind.
+  waveform   Int[]   @default([])
+  /// Original upload name for FILE, sanitised. Null for the other kinds.
+  fileName   String? @map("file_name")
+  blurHash   String? @map("blur_hash")
+
+  /// Set when the asset is attached to a message. Still null after 24h ⇒ the user abandoned the
+  /// send, and the cleanup job deletes the row and its bytes (chat media spec §1.4).
+  messageId String?  @unique @map("message_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  owner        Student      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  message      Message?     @relation(fields: [messageId], references: [id], onDelete: SetNull)
+
+  // Serves the per-student daily byte quota (SUM(size_bytes) WHERE owner AND created_at > now()-24h).
+  @@index([ownerId, createdAt])
+  @@index([conversationId])
+  // Orphan sweep: unattached rows older than a day.
+  @@index([createdAt])
+  @@map("media_assets")
+}
+
+/// A sticker pack. `version` lets the client cache the whole catalogue and refetch only on a bump.
+model StickerPack {
+  id        String   @id @default(cuid())
+  /// Stable human key (`student_life`) — survives reseeding, unlike the cuid.
+  key       String   @unique
+  name      String
+  coverUrl  String   @map("cover_url")
+  sortOrder Int      @default(0) @map("sort_order")
+  isDefault Boolean  @default(false) @map("is_default")
+  version   Int      @default(1)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  stickers Sticker[]
+
+  @@map("sticker_packs")
+}
+
+/// One sticker: a static 512×512 WebP with a transparent background.
+model Sticker {
+  id        String   @id @default(cuid())
+  packId    String   @map("pack_id")
+  emoji     String
+  url       String
+  width     Int      @default(512)
+  height    Int      @default(512)
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  pack     StickerPack @relation(fields: [packId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@index([packId])
+  @@map("stickers")
 }
 
 // ---- Push notifications (device tokens for offline delivery — chat.md C8) ----

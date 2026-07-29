@@ -16087,8 +16087,11 @@
         "enum": [
           "TEXT",
           "IMAGE",
+          "GIF",
+          "VIDEO",
           "FILE",
           "VOICE",
+          "STICKER",
           "SYSTEM"
         ]
       },

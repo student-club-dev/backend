@@ -15,8 +15,13 @@ RUN npx prisma generate && npm run build
 FROM node:20-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
-# Same reason as the build stage: the query engine @prisma/client loads at runtime needs libssl.
-RUN apk add --no-cache openssl
+# openssl: same reason as the build stage — the query engine @prisma/client loads needs libssl.
+# ffmpeg: chat media. GIFs are re-encoded to silent looping MP4 (a GIF is ~20x the size of the
+# equivalent H.264), video is probed and transcoded, and voice notes are decoded to compute their
+# waveform. Without it every non-image upload fails at runtime, not at boot.
+# sharp ships prebuilt musl binaries as optional deps, so `npm ci` below resolves them on Alpine —
+# no vips-dev build toolchain required.
+RUN apk add --no-cache openssl ffmpeg
 COPY package*.json ./
 RUN npm ci --omit=dev
 COPY --from=build /app/dist ./dist
