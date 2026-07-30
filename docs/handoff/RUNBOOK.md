@@ -152,6 +152,93 @@ Prod'da majburiy:
 
 ---
 
+# B5. Serverga deploy — qadamma-qadam
+
+## ⚠️ AVVAL: yuklangan fayllarni zaxiralang
+
+Bu **eng oson unutiladigan va eng qimmat** xato.
+
+Ilgari `docker-compose.yml` da `uploads` uchun **volume yo'q edi** — ya'ni yuklangan hamma fayl
+konteynerning o'z ichida yashagan. Yangi image bilan konteyner qayta yaratilganda **o'sha fayllar
+butunlay yo'qoladi**: e'lon rasmlari, biznes logolari — hammasi.
+
+Yangi `docker-compose.yml` da volume qo'shildi, lekin u **faqat bundan keyingi** fayllarni saqlaydi.
+Mavjudlarini qo'lda ko'chirish kerak:
+
+```bash
+cd /opt/studentclub
+
+# 1. Eski konteynerdan fayllarni chiqarib oling (u hali ishlab turgan paytda!)
+docker compose cp backend:/app/uploads ./uploads-backup
+ls -la uploads-backup            # nima borligini ko'ring
+du -sh uploads-backup            # hajmi
+```
+
+Agar bu buyruq bo'sh papka qaytarsa — yaxshi, yo'qotadigan narsa yo'q.
+
+## Deploy
+
+```bash
+cd /opt/studentclub
+
+# 2. Yangi kodni oling
+git pull origin main
+
+# 3. Image'ni qayta quring — ffmpeg SHU YERDA qo'shiladi
+docker compose build backend
+
+# 4. Migratsiyalar (alohida xizmat, bir marta ishlaydi va to'xtaydi)
+docker compose run --rm migrate
+
+# 5. Ko'taring
+docker compose up -d
+
+# 6. Zaxiradagi fayllarni yangi volume'ga qaytaring
+docker compose cp ./uploads-backup/. backend:/app/uploads
+```
+
+## Tekshirish
+
+```bash
+docker compose ps                              # backend `running` bo'lsinmi
+docker compose logs --tail=50 backend          # boot xatolari
+docker compose exec backend ffmpeg -version    # ffmpeg bormi
+docker compose exec backend ls -la /app/uploads
+curl -s https://api.studentclub.uz/v1/health   # tirikmi
+```
+
+## Boot'dan keyin loglarni tekshiring
+
+`PUSH_PROVIDER` qo'yilmagan bo'lsa, ilova **ko'tariladi**, lekin har boot'da shu qatorni yozadi:
+
+```
+ERROR [PushProvider] PUSH_PROVIDER=dev in production — NO push notification will reach any device.
+```
+
+Bu kutilgan holat: hozircha push o'chiq. `FCM_*` kredensiallari tayyor bo'lgach §C1 ni bajaring va
+bu qator yo'qoladi. **Qator turgan ekan — offline talabalar yangi xabar haqida bilmaydi.**
+
+Loglarni har doim avval o'qing:
+
+```bash
+docker compose logs --tail=100 backend | grep -i "error\|Invalid environment"
+```
+
+Konfiguratsiya xatosi bo'lsa, ilova qaysi o'zgaruvchi noto'g'ri ekanini **aniq nomi bilan** yozadi.
+
+## Orqaga qaytarish
+
+```bash
+git log --oneline -5             # oldingi commit'ni toping
+git checkout <oldingi-commit>
+docker compose build backend && docker compose up -d
+```
+
+⚠️ **Migratsiyalar orqaga qaytmaydi.** Lekin bu safar hammasi qo'shuvchi (yangi ustun/jadval),
+ya'ni eski kod ularni shunchaki e'tiborsiz qoldiradi — orqaga qaytish xavfsiz.
+
+---
+
 # C. Kredensiallar — parallel, shoshilinch emas
 
 Bularsiz ham ilova ishlaydi, faqat tegishli imkoniyatlar o'chiq turadi.

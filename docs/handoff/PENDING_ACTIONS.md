@@ -91,8 +91,16 @@ huquqi buzilishi va ilovaning App Store / Google Play dan olib tashlanishi xavfi
 `FcmPushProvider` yozildi va testlangan. **Hali `dev` rejimida ishlayapti** — ya'ni push haqiqiy
 qurilmaga bormaydi, faqat log yoziladi.
 
-`PUSH_PROVIDER=dev` **production'da boot'ni to'xtatadi** (SMS provayderi kabi) — jimgina tashlab
-yuborilgan bildirishnoma foydalanuvchilar shikoyat qilmaguncha ko'rinmaydi.
+`PUSH_PROVIDER=dev` production'da ilovani **to'xtatmaydi**, lekin har boot'da `ERROR` darajasida
+ogohlantirish yozadi:
+
+```
+PUSH_PROVIDER=dev in production — NO push notification will reach any device.
+```
+
+Bu ataylab yumshatilgan: push xizmat ishga tushgandan keyin qo'shilyapti, shuning uchun hali tayyor
+bo'lmagan kredensiallar deploy'ni bloklamasligi kerak edi. **Bu qator loglarda turgan ekan — offline
+talabalar yangi xabar haqida bilmaydi.** Kredensiallar qo'yilgach yo'qoladi.
 
 ### Yoqish
 
@@ -118,6 +126,12 @@ o'zi APNs ga uzatadi. Ya'ni ikkita emas, bitta integratsiya.
 Yopiq ilovada jiringlash uchun **VoIP push (PushKit)** kerak, uni FCM yubora olmaydi — u APNs ga
 to'g'ridan-to'g'ri, `apns-push-type: voip` bilan ketishi shart. Bu alohida adapter va qo'ng'iroq
 bosqichida yoziladi. Unda **VoIP Services sertifikati** kerak bo'ladi.
+
+### Qachon qattiqroq qilish kerak
+
+`PUSH_PROVIDER=fcm` hamma muhitda qo'yilgach, ogohlantirishni yana boot'ni to'xtatuvchi xatoga
+aylantirish mumkin — `push-provider.factory.ts` da ikki qatorlik o'zgarish (SMS provayderi shunday
+ishlaydi).
 
 ### O'lik tokenlar
 
