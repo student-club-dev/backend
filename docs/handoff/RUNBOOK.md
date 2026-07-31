@@ -113,21 +113,22 @@ docker compose exec backend ls -la /app/uploads
 `docker-compose.yml` ga `elonuz-uploads` volume qo'shildi. Busiz **har bir qayta ishga tushirishda
 yuklangan hamma fayl o'chib ketardi** — e'lon rasmlari ham, chat fayllari ham.
 
-## B3. Nginx — WebSocket
+## B3. Nginx — WebSocket ✅ (qo'llandi 2026-07-31)
 
-Hozir chat **long-polling** ustida ishlayapti (batareya sarfi, kechikish). Konfiguratsiya tayyor:
+`/etc/nginx/sites-available/api.studentclub.uz` ichiga `location /socket.io/` bloki qo'shildi
+(namuna: `deploy/nginx/socket-io.conf`), so'ng:
 
 ```bash
-sudo cp deploy/nginx/socket-io.conf /etc/nginx/snippets/socket-io.conf
-# server { } bloki ichiga qo'shing:
-#   include /etc/nginx/snippets/socket-io.conf;
 sudo nginx -t && sudo systemctl reload nginx
 ```
+
+`nginx -t` avval — test yiqilsa hech narsa qayta yuklanmaydi va sayt eskisicha ishlayveradi.
+`reload`, `restart` emas: mavjud ulanishlar uzilmaydi.
 
 Tekshirish:
 
 ```bash
-curl -i -o /dev/null -w '%{http_code}\n' \
+curl -s -o /dev/null -m 5 -w '%{http_code}\n' \
   -H 'Connection: Upgrade' -H 'Upgrade: websocket' \
   -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' \
   'https://<sizning-domeningiz>/socket.io/?EIO=4&transport=websocket'
@@ -135,8 +136,29 @@ curl -i -o /dev/null -w '%{http_code}\n' \
 
 **`101`** — tuzatildi. **`400`** — hali qo'llanmagan.
 
-Bu keyinchalik qo'ng'iroq uchun **majburiy** bo'ladi — polling ustida WebRTC signalizatsiya
-ishlamaydi.
+> `-m 5` ni olib tashlamang: muvaffaqiyatda ulanish tunnelga aylanadi va `curl` (u WebSocket
+> protokolini bilmaydi) osilib qoladi. **Osilib qolishi — muvaffaqiyat belgisi, nosozlik emas.**
+
+Polling zaxira yo'li ham buzilmaganini tasdiqlang — WebSocket bloklangan tarmoqlardagi klientlar
+unga tayanadi:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' 'https://<domen>/socket.io/?EIO=4&transport=polling'
+```
+
+### Shu bilan birga: `client_max_body_size`
+
+Bu alohida, mustaqil nuqson edi — WebSocket bilan bog'liq emas, lekin bir vaqtda topildi.
+
+nginx'dagi qiymat `10m` edi, eng katta yuklama esa **64 MB video**. Ya'ni nginx 10 MB dan
+kattasini **413** bilan rad etardi, so'rov Node'ga umuman yetib bormasdi va ilovaning o'z
+tekshiruvi (uzbekcha xato xabari bilan) hech qachon ishlamasdi.
+
+```nginx
+client_max_body_size 70m;    # server { } darajasida
+```
+
+`src/modules/media/domain/media-limits.ts` dagi `maxBytes` oshsa, buni ham oshiring.
 
 ## B4. Server `.env` ini to'ldiring
 
@@ -184,8 +206,8 @@ cd /opt/studentclub
 # 2. Yangi kodni oling
 git pull origin main
 
-# 3. Image'ni qayta quring — ffmpeg SHU YERDA qo'shiladi
-docker compose build backend
+# 3. IKKALA image'ni ham qayta quring — `migrate` ni unutmang
+docker compose build backend migrate
 
 # 4. Migratsiyalar (alohida xizmat, bir marta ishlaydi va to'xtaydi)
 docker compose run --rm migrate
@@ -197,6 +219,17 @@ docker compose up -d
 docker compose cp ./uploads-backup/. backend:/app/uploads
 ```
 
+> ⚠️ **3-qadamdagi `migrate` — haqiqiy tuzoq, bir marta yeb qo'ydik (2026-07-31).**
+> `migrate` xizmati o'z image'idan ishlaydi (`target: build`). Uni qayta qurmasangiz **eski kod**
+> bilan ishga tushadi va `No pending migrations to apply` deb **yolg'on** xabar beradi — hech qanday
+> xato ko'rinmaydi. Backend esa yangi kod bilan ko'tariladi va bazada yo'q ustunlarni so'raydi.
+>
+> Nazorat: `migrate` chiqishidagi `N migrations found` soni `ls prisma/migrations` dagi papkalar
+> soniga teng bo'lishi kerak (`migration_lock.toml` fayl — papka emas, sanoqqa kirmaydi).
+>
+> `.env` o'zgargan bo'lsa 5-qadam `docker compose up -d --force-recreate backend` bo'lsin —
+> oddiy `up -d` (va ayniqsa `restart`) muhit o'zgaruvchilarini qayta o'qimasligi mumkin.
+
 ## Tekshirish
 
 ```bash
@@ -204,7 +237,17 @@ docker compose ps                              # backend `running` bo'lsinmi
 docker compose logs --tail=50 backend          # boot xatolari
 docker compose exec backend ffmpeg -version    # ffmpeg bormi
 docker compose exec backend ls -la /app/uploads
-curl -s https://api.studentclub.uz/v1/health   # tirikmi
+curl -i https://api.studentclub.uz/v1/health   # tirikmi
+```
+
+> `curl -s` emas, **`curl -i`**. `-s` curl'ning o'z xato xabarlarini ham yashiradi, shuning uchun
+> bo'sh chiqish «ishladi» degani emas — u ulanish umuman bo'lmaganini ham anglatishi mumkin.
+
+Migratsiyalar haqiqatan bazaga tushganini alohida tasdiqlang — bu yagona ishonchli dalil:
+
+```bash
+docker compose exec -T db sh -c \
+ 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -c "select migration_name, finished_at from _prisma_migrations order by finished_at desc limit 5;"'
 ```
 
 ## Boot'dan keyin loglarni tekshiring
@@ -243,30 +286,78 @@ ya'ni eski kod ularni shunchaki e'tiborsiz qoldiradi — orqaga qaytish xavfsiz.
 
 Bularsiz ham ilova ishlaydi, faqat tegishli imkoniyatlar o'chiq turadi.
 
-## C1. Firebase — push bildirishnomalari
+## C1. Firebase — push bildirishnomalari ✅ (backend yoqildi 2026-07-31)
 
-Hozir push **hech qanday qurilmaga bormaydi** (`PUSH_PROVIDER=dev` faqat log yozadi).
+Loyiha: **`studentclub-191b0`**. Tasdiq: `FCM auth: OK — project studentclub-191b0`.
 
-1. <https://console.firebase.google.com> → loyiha yarating (yoki mavjudini oling)
-2. **Project settings → Service accounts → Generate new private key** → JSON yuklab olinadi
-3. JSON dan uchta qiymatni `.env` ga ko'chiring:
+Qayta sozlash kerak bo'lsa (kalit almashtirildi, yangi server):
 
-```dotenv
-PUSH_PROVIDER=fcm
-FCM_PROJECT_ID=<json.project_id>
-FCM_CLIENT_EMAIL=<json.client_email>
-FCM_PRIVATE_KEY=<json.private_key>
+1. <https://console.firebase.google.com> → **Project settings → Service accounts →
+   Generate new private key** → JSON yuklab olinadi
+2. Faylni serverga yuboring (o'z kompyuteringizda bajaring):
+   ```bash
+   scp ~/Downloads/<fayl>.json deploy@api.studentclub.uz:/opt/studentclub/service-account.json
+   ```
+3. Uchta qatorni **qo'lda ko'chirmasdan** yasang — PEM kalitini qo'lda yopishtirish deyarli har
+   doim buziladi:
+   ```bash
+   cd /opt/studentclub
+   python3 - <<'EOF' > /tmp/fcm.env
+   import json
+   d = json.load(open('service-account.json'))
+   print('FCM_PROJECT_ID=' + d['project_id'])
+   print('FCM_CLIENT_EMAIL=' + d['client_email'])
+   print('FCM_PRIVATE_KEY=' + d['private_key'].replace('\n', '\\n'))
+   EOF
+   ```
+4. `.env` dagi eski `FCM_*` qatorlarini o'chirib, `/tmp/fcm.env` dagilarini qo'ying
+   (`grep -c "^FCM_" .env` → **3**), so'ng izlarni yo'q qiling:
+   ```bash
+   shred -u /tmp/fcm.env service-account.json
+   docker compose up -d --force-recreate backend
+   ```
+
+`PUSH_PROVIDER=fcm` bo'lishi ham shart.
+
+### Tekshirish — sirni chiqarmaydi
+
+```bash
+docker compose exec -T backend node -e '
+const {JWT} = require("google-auth-library");
+new JWT({ email: process.env.FCM_CLIENT_EMAIL,
+          key: (process.env.FCM_PRIVATE_KEY || "").replace(/\\n/g, "\n"),
+          scopes: ["https://www.googleapis.com/auth/firebase.messaging"] }).authorize()
+ .then(() => console.log("FCM auth: OK — project " + process.env.FCM_PROJECT_ID))
+ .catch(e => console.log("FCM auth: XATO — " + e.message));'
 ```
 
-⚠️ `private_key` ichidagi `\n` belgilarini **o'zgartirmang** — ilova ularni o'zi haqiqiy qatorga
-aylantiradi.
+`DECODER routines::unsupported` → kalit `.env` ga noto'g'ri **yozilgan**, kalitning o'zi buzuq
+emas. Nima yetib borganini ko'rish (bu ham sirni chiqarmaydi):
+
+```bash
+docker compose exec -T backend node -e '
+const k = process.env.FCM_PRIVATE_KEY || "";
+console.log("uzunlik:", k.length, "| matnli bekslesh-n:", (k.match(/\\n/g)||[]).length);'
+```
+
+Sog'lom: uzunlik ~1700, matnli `\n` ~28 ta. Uzunlik 1 bo'lsa — `.env` da haqiqiy kalit emas,
+`…` kabi to'ldirgich turibdi. Uzunlik ~27 — qiymat birinchi qator uzilishida qirqilgan.
+
+> ⚠️ **`docker compose restart` `.env` ni qayta o'qimaydi.** `.env` o'zgargach har doim
+> **`up -d --force-recreate backend`**.
 
 **iOS uchun:** Apple Developer → Keys → APNs kaliti (`.p8`). U bizning `.env` ga **emas**,
 **Firebase konsoliga** yuklanadi: Project settings → Cloud Messaging → APNs Authentication Key.
 Shundan keyin FCM iOS ga ham yetkazadi — alohida integratsiya kerak emas.
 
-> ⚠️ `PUSH_PROVIDER=dev` bilan `NODE_ENV=production` qilsangiz **ilova boot bo'lmaydi**. Bu ataylab:
-> jimgina tashlab yuborilgan bildirishnoma foydalanuvchilar shikoyat qilmaguncha ko'rinmaydi.
+> `PUSH_PROVIDER=dev` bilan `NODE_ENV=production` qilsangiz ilova **baribir ko'tariladi**, lekin
+> har boot'da `ERROR` darajasida ogohlantirish yozadi. Ataylab yumshatilgan: push xizmat ishga
+> tushgandan keyin qo'shildi, shuning uchun tayyor bo'lmagan kredensiallar deploy'ni bloklamasligi
+> kerak edi. Qattiqroq qilish — `push-provider.factory.ts` da ikki qatorlik o'zgarish.
+
+> ⛔ **Mobil tomon hali qilinmagan.** Firebase loyihasida bitta ham ilova ro'yxatdan o'tmagan, ya'ni
+> ilova FCM token ololmaydi va backend kimga yuborishni bilmaydi. Mobil jamoa uchun qadamlar:
+> `docs/handoff/mobile/05-PUSH-SETUP.md`.
 
 ## C2. KLIPY — GIF qidiruvi production kaliti
 

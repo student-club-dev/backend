@@ -23,14 +23,16 @@ bosqichlar rejangizni o'zgartiradi:
 | Hujjat nima deydi | Aslida |
 |---|---|
 | §15.4 — «API bir nechta nusxada ishlasa **Socket.IO Redis adapteri majburiy**» | ✅ **Allaqachon ulangan.** `src/main.ts` da `RedisIoAdapter` (`@socket.io/redis-adapter`). Sticky sessiya ham, `ip_hash` ham kerak emas. |
-| §17.2 — «nginx WS upgrade buzilgan» | ⚠️ **To'g'ri, lekin bu repoda tuzatib bo'lmaydi** — nginx server tomonida boshqariladi. Tayyor konfiguratsiya berildi: `deploy/nginx/socket-io.conf` + tekshirish usuli bilan `README.md`. Qo'llash — DevOps ishi. |
-| §13 — VoIP push (PushKit / FCM) | ⛔ Push provayderi hozir **faqat log yozadigan stub** (`DevPushProvider`). Real FCM/APNs **umuman yozilmagan** — hozir hech qanday push, hatto oddiy xabar push'i ham, haqiqiy qurilmaga bormaydi. |
+| §17.2 — «nginx WS upgrade buzilgan» | ✅ **Tuzatildi va qo'llandi** (2026-07-31). `ws: 101` tasdiqlangan, polling zaxira yo'li ham ishlayapti. Chat endi haqiqiy WebSocket ustida. |
+| §13 — VoIP push (PushKit / FCM) | 🟡 **Oddiy xabar push'i endi ishlaydi** — real FCM provayderi yozildi va prod'ga chiqarildi (`05-PUSH-SETUP.md`). Qolgani sizda: Firebase'ga ilovalarni qo'shish. **VoIP push (qo'ng'iroq) esa hali yo'q** — uni FCM yubora olmaydi, alohida APNs adapteri kerak. |
 | §11 — coturn | ⛔ Alohida server infratuzilmasi. Kodda emas, hali ko'tarilmagan. |
-| A qism kutubxonalari | ⛔ `sharp`, `ffmpeg`, `bullmq`, `file-type` — **hech biri o'rnatilmagan**. Docker image ham o'zgarishi kerak. |
+| A qism kutubxonalari | ✅ **O'rnatildi va deploy qilindi** — `sharp`, `bullmq`, `file-type`; Docker image `ffmpeg` bilan qayta qurildi (`ffmpeg version 8.0.1` serverda tasdiqlangan). |
 | §18 — `GET /v1/conversations/{id}` «yo'q» | ✅ To'g'ri. Qo'shimcha: `docs/architecture/chat.md` da u v1 ro'yxatida turgan edi — hujjat haqiqatga moslandi. |
 
-Eng muhim xulosa: **§13 (qo'ng'iroq push'i) o'ylaganingizdan uzoqroq.** U `tokenType` maydonini
-qo'shish emas — avval butun FCM/APNs integratsiyasi yozilishi kerak.
+Eng muhim xulosa: **§13 ikkiga bo'linadi.** Oddiy xabar push'i tayyor va ishlaydi — sizda faqat
+Firebase konfiguratsiyasi qoldi (`05-PUSH-SETUP.md`). Qo'ng'iroq push'i esa `tokenType` maydonini
+qo'shish emas: u PushKit orqali ketadi, FCM buni qila olmaydi, shuning uchun alohida APNs adapteri
+B qismi bilan birga yoziladi.
 
 ---
 
@@ -39,7 +41,7 @@ qo'shish emas — avval butun FCM/APNs integratsiyasi yozilishi kerak.
 | Band | Holat | Qayerda |
 |---|---|---|
 | §17.1 `message:new` da `clientMsgId` | ✅ Bajarildi | §3.1 |
-| §17.2 nginx WS upgrade | ⚠️ Konfiguratsiya berildi, qo'llash sizda | `deploy/nginx/` |
+| §17.2 nginx WS upgrade | ✅ Qo'llandi (2026-07-31) — `ws: 101` | `deploy/nginx/` |
 | §17.3 WS xato konverti + `TOKEN_EXPIRED` | ✅ Bajarildi (konvert emas, kodlar birxilligi — §3.5) | §3.5 |
 | §17.4 `reports` `messageId` tekshiruvi | ✅ Bajarildi | §3.6 |
 | §17.5 `hasMore` aniq hisoblansin | ✅ Bajarildi | §3.2 |
@@ -510,15 +512,19 @@ generatsiya qilingan klientni buzadi, shuning uchun alohida kelishuv kerak — o
 
 ### B qism — qo'ng'iroq: bloklovchilar
 
-Bu qismni hozir boshlash mumkin emas. Tartib bo'yicha:
+Ikkitasi yopildi, ikkitasi qoldi:
 
-1. **nginx WS upgrade** (§17.2) — `deploy/nginx/` da tayyor, **siz/DevOps qo'llashi kerak**.
-   Busiz signalizatsiya polling ustida ishlaydi va qo'ng'iroq umuman ulanmaydi.
-2. **Real FCM/APNs provayderi** — hozir yo'q (stub). Bu §13 dan **oldin** keladi va o'zi jiddiy ish:
-   Firebase loyihasi, APNs sertifikatlari, provayder implementatsiyasi.
-3. **coturn serveri** — 443/TLS bilan. Server infratuzilmasi, kod emas.
-4. Shundan keyingina `/calls` namespace, `Call` jadvali va `GET /v1/calls/ice-servers` mantiqiy
-   bo'ladi.
+1. ✅ **nginx WS upgrade** (§17.2) — qo'llandi 2026-07-31, `ws: 101`. Signalizatsiya endi haqiqiy
+   WebSocket ustida ishlay oladi.
+2. ✅ **Push provayderi** — real FCM yozildi va prod'da ishlayapti. Oddiy xabar push'i uchun
+   yetarli. Sizdagi qadamlar: `05-PUSH-SETUP.md`.
+3. ⛔ **VoIP push (PushKit)** — yopiq iPhone'ni jiringlatish uchun. FCM buni **yubora olmaydi**;
+   `apns-push-type: voip` bilan to'g'ridan-to'g'ri APNs'ga ketadigan alohida adapter kerak.
+   **VoIP Services sertifikati** ham kerak — hozirgi APNs `.p8` kaliti bunga yaramaydi.
+4. ⛔ **coturn serveri** — 443/TLS bilan. Server infratuzilmasi, kod emas.
+
+Shundan keyingina `/calls` namespace, `Call` jadvali va `GET /v1/calls/ice-servers` mantiqiy
+bo'ladi.
 
 §11.1 dagi coturn konfiguratsiyasi va §12 dagi hodisalar jadvali juda foydali — coturn ko'tarilganda
 o'shani asos qilib olamiz. `denied-peer-ip` bloklari va 443/TLS talabi ayniqsa to'g'ri.
@@ -534,6 +540,7 @@ Bu papka ichida:
 | **OpenAPI (codegen manbasi)** | `student-api.json` |
 | WebSocket protokoli | `03-WEBSOCKET.md` |
 | GIF paneli talablari | `04-GIF-INTEGRATION.md` |
+| **Push sozlamasi (Firebase, APNs, `/v1/devices`)** | `05-PUSH-SETUP.md` |
 | Boshlash nuqtasi | `01-README.md` |
 
 Backend repo ichidagi hujjatlar (bu papkaga kiritilmagan, kerak bo'lsa so'rang):

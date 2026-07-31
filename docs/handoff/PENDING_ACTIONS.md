@@ -3,20 +3,24 @@
 Chat Bosqich 0 / 2 / 3 ishlari davomida to'plangan, **odam qo'li bilan** bajarilishi kerak bo'lgan
 ishlar. Har biri kimga tegishli va nima bloklanayotgani bilan.
 
-Holat: 2026-07-29.
+Holat: **2026-07-31 — production'ga deploy qilindi.**
 
 ---
 
-## 1. ✅ Migratsiyalar — qo'llandi (lokal)
+## 1. ✅ Migratsiyalar — qo'llandi (lokal **va** production)
 
-To'rtta migratsiya lokal bazaga muvaffaqiyatli qo'llandi, jumladan qo'lda yozilgan uchtasi:
+To'rtta migratsiya bazaga muvaffaqiyatli qo'llandi, jumladan qo'lda yozilgan uchtasi:
 `message_soft_delete`, `chat_media_and_stickers`, `media_provider_klipy`.
 
 Hammasi qo'shuvchi (additive) — hech narsa o'chirilmaydi, jadval qayta yozilmaydi, uzoq qulf yo'q.
 Eski kod yangi ustunlarni e'tiborsiz qoldiradi, ya'ni rolling deploy xavfsiz.
 
-**Serverda hali qo'llanmagan** — deploy paytida `npx prisma migrate deploy` (prod'da **hech qachon**
-`migrate dev` emas).
+Production'da `docker compose run --rm migrate` bilan qo'llandi (2026-07-31): `17 migrations found`,
+uchtasi yangi. Prod'da **hech qachon** `migrate dev` emas.
+
+> ⚠️ **Tuzoq:** `migrate` xizmati o'z image'idan ishlaydi (`target: build`). `git pull` dan keyin uni
+> **qayta qurmasangiz** eski kod bilan ishga tushadi va `No pending migrations to apply` deb yolg'on
+> xabar beradi. Har deploy'da avval `docker compose build migrate`.
 
 ## 2. ✅ E2E testlar — o'tdi
 
@@ -33,40 +37,25 @@ npm run test:e2e
 ishlamaydi. `localhost` ga o'zgartiring; containerlar buzilmaydi, chunki `docker-compose.yml`
 ular uchun `db:5432` ni qayta belgilaydi. Batafsil: `RUNBOOK.md` A2.
 
-## 3. 🟠 Nginx — WebSocket upgrade
+## 3. ✅ Nginx — WebSocket upgrade (qo'llandi 2026-07-31)
 
-Konfiguratsiya tayyor: `deploy/nginx/socket-io.conf` + `deploy/nginx/README.md`.
+`api.studentclub.uz` konfiguratsiyasiga `location /socket.io/` bloki qo'shildi (`Upgrade` +
+`Connection` sarlavhalari, 3600s timeout, `proxy_buffering off`). Tasdiqlandi: **`ws: 101`**,
+polling zaxira yo'li ham ishlayapti. Chat endi haqiqiy WebSocket ustida.
 
-```bash
-sudo cp deploy/nginx/socket-io.conf /etc/nginx/snippets/socket-io.conf
-# server { } bloki ichiga: include /etc/nginx/snippets/socket-io.conf;
-sudo nginx -t && sudo systemctl reload nginx
-```
+Bir vaqtning o'zida **`client_max_body_size` `10m` → `70m`** ga ko'tarildi. Bu alohida nuqson edi:
+eng katta yuklama 64 MB video, ya'ni nginx 10 MB dan kattasini **413** bilan rad etardi va so'rov
+Node'ga umuman yetib bormasdi. `media-limits.ts` dagi `maxBytes` oshsa, buni ham oshiring.
 
-Tekshirish (`101` kutiladi, `400` — qo'llanmagan):
+Namuna va tekshirish buyruqlari: `deploy/nginx/socket-io.conf` + `deploy/nginx/README.md`.
 
-```bash
-curl -i -o /dev/null -w '%{http_code}\n' \
-  -H 'Connection: Upgrade' -H 'Upgrade: websocket' \
-  -H 'Sec-WebSocket-Version: 13' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' \
-  'https://<host>/socket.io/?EIO=4&transport=websocket'
-```
+## 4. ✅ Docker image + volume (qo'llandi 2026-07-31)
 
-**Bloklaydi:** hozir chat long-polling ustida ishlayapti (batareya, kechikish); keyinchalik
-qo'ng'iroq **umuman** ishlamaydi.
+`Dockerfile` ga **`ffmpeg`** qo'shildi (GIF→MP4, video probe/transkod, ovoz dekodi). Serverda
+tasdiqlandi: `ffmpeg version 8.0.1`.
 
-## 4. 🟠 Docker image'ni qayta qurish
-
-`Dockerfile` ga **`ffmpeg`** qo'shildi (GIF→MP4, video probe/transkod, ovoz dekodi). Eski image
-bilan rasm ishlaydi, qolgan hamma media ish vaqtida yiqiladi.
-
-```bash
-docker compose build app && docker compose up -d app
-docker compose exec app ffmpeg -version   # tekshirish
-```
-
-Shuningdek `CHAT_MEDIA_DIR` (`./uploads/chat`) uchun **doimiy volume** kerak — konteyner qayta
-ishga tushganda chat fayllari yo'qolmasin. `docker-compose.yml` da volume borligini tekshiring.
+`docker-compose.yml` ga **`elonuz-uploads:/app/uploads`** volume'i qo'shildi. Ilgari volume
+**umuman yo'q edi** — har `docker compose up` yuklangan fayllarni yo'q qilardi.
 
 ## 5. 🟡 GIF qidiruvi — KLIPY ulandi, production access qoldi
 
@@ -86,32 +75,65 @@ ishi. Mobil jamoaning tavsiyasi (va u to'g'ri): **Microsoft Fluent Emoji, MIT li
 ⛔ **Telegram stikerlarini olib ishlatmang.** Mobil jamoa buni to'g'ri ogohlantirgan: mualliflik
 huquqi buzilishi va ilovaning App Store / Google Play dan olib tashlanishi xavfi.
 
-## 7. 🟠 FCM push — kod tayyor, kredensiallar kerak
+## 7. 🟡 FCM push — backend ✅, mobil tomon qoldi
 
-`FcmPushProvider` yozildi va testlangan. **Hali `dev` rejimida ishlayapti** — ya'ni push haqiqiy
-qurilmaga bormaydi, faqat log yoziladi.
-
-`PUSH_PROVIDER=dev` production'da ilovani **to'xtatmaydi**, lekin har boot'da `ERROR` darajasida
-ogohlantirish yozadi:
+`FcmPushProvider` yozildi, testlandi va **production'da yoqildi** (2026-07-31). Firebase loyihasi:
+**`studentclub-191b0`** (Spark tarifi — FCM uchun yetarli). Tasdiqlandi:
 
 ```
-PUSH_PROVIDER=dev in production — NO push notification will reach any device.
+FCM auth: OK — project studentclub-191b0
 ```
 
-Bu ataylab yumshatilgan: push xizmat ishga tushgandan keyin qo'shilyapti, shuning uchun hali tayyor
-bo'lmagan kredensiallar deploy'ni bloklamasligi kerak edi. **Bu qator loglarda turgan ekan — offline
-talabalar yangi xabar haqida bilmaydi.** Kredensiallar qo'yilgach yo'qoladi.
+### Qolgan ish — mobil jamoada
 
-### Yoqish
+Firebase loyihasida hali **bitta ham ilova ro'yxatdan o'tmagan**. Mobil ilova FCM token'ini faqat
+o'z Firebase konfiguratsiyasi bo'lsa oladi; token bo'lmasa `POST /v1/devices` ga yuboradigan narsa
+yo'q va backend kimga push yuborishni bilmaydi.
 
-Firebase Console → Project settings → **Service accounts** → *Generate new private key* → JSON:
+| Kim | Ish |
+|---|---|
+| ✅ Backend | Service account kaliti `.env` da, autentifikatsiya tekshirilgan |
+| ⏳ Mobil (Android) | Firebase'ga Android ilovasini qo'shish → `google-services.json` |
+| ⏳ Mobil (iOS) | iOS ilovasini qo'shish → `GoogleService-Info.plist` **va** APNs `.p8` kalitini Firebase'ga yuklash |
 
-```dotenv
-PUSH_PROVIDER=fcm
-FCM_PROJECT_ID=<json.project_id>
-FCM_CLIENT_EMAIL=<json.client_email>
-FCM_PRIVATE_KEY=<json.private_key>     # \n belgilarini o'zgartirmang
+⚠️ `google-services.json` ichidagi `project_id` **`studentclub-191b0`** bo'lishi shart. Boshqa
+loyiha bo'lsa tokenlar mos kelmaydi va push jimgina yo'qoladi.
+
+### Kalitni `.env` ga qo'yish (takrorlash kerak bo'lsa)
+
+Firebase Console → Project settings → **Service accounts** → *Generate new private key* → JSON.
+Faylni serverga `scp` bilan yuboring, so'ng uchta qatorni **qo'lda ko'chirmasdan** yasang — PEM
+kalitini qo'lda yopishtirish deyarli har doim buziladi:
+
+```bash
+python3 - <<'EOF' > /tmp/fcm.env
+import json
+d = json.load(open('service-account.json'))
+print('FCM_PROJECT_ID=' + d['project_id'])
+print('FCM_CLIENT_EMAIL=' + d['client_email'])
+print('FCM_PRIVATE_KEY=' + d['private_key'].replace('\n', '\\n'))
+EOF
 ```
+
+Eski `FCM_*` qatorlarini o'chirib, bularni `.env` ga qo'shing (qo'shtirnoqsiz, har biri bitta
+qatorda), so'ng `shred -u /tmp/fcm.env service-account.json`.
+
+Keyin **`docker compose up -d --force-recreate backend`** — `restart` `.env` ni qayta o'qimaydi.
+
+Tekshirish (sirni chiqarmaydi):
+
+```bash
+docker compose exec -T backend node -e '
+const {JWT} = require("google-auth-library");
+new JWT({ email: process.env.FCM_CLIENT_EMAIL,
+          key: (process.env.FCM_PRIVATE_KEY || "").replace(/\\n/g, "\n"),
+          scopes: ["https://www.googleapis.com/auth/firebase.messaging"] }).authorize()
+ .then(() => console.log("FCM auth: OK — project " + process.env.FCM_PROJECT_ID))
+ .catch(e => console.log("FCM auth: XATO — " + e.message));'
+```
+
+`DECODER routines::unsupported` → kalit `.env` ga noto'g'ri yozilgan (qisqargan, qo'shtirnoq ichida,
+yoki `\n` belgilari yo'q), kalitning o'zi emas.
 
 ### iOS uchun alohida integratsiya kerak emas
 
@@ -232,15 +254,52 @@ bermay, jimgina bo'sh ro'yxat qaytaraverardi.
 
 ---
 
+## 9. 🔴 `.env` sirlarini almashtirish
+
+Ishlab chiqish jarayonida production `.env` ning to'liq mazmuni suhbat oynasiga joylashtirildi.
+Quyidagilar **oshkor bo'lgan deb hisoblanadi** va almashtirilishi shart:
+
+`JWT_ACCESS_SECRET` · `JWT_REFRESH_SECRET` · `ESKIZ_PASSWORD` · `TELEGRAM_GATEWAY_TOKEN` ·
+`KLIPY_API_KEY` · `SWAGGER_PASSWORD` · `ADMIN_PASSWORD_HASH`
+
+⚠️ JWT sirlarini almashtirsangiz **hamma sessiya bekor bo'ladi** — foydalanuvchilar qaytadan
+kirishga majbur. Kam faollik vaqtida qiling.
+
+Yangi tasodifiy sir yasash: `openssl rand -base64 48`
+
+**Qoida:** sir **qiymatini** hech qachon chatga, issue'ga yoki commit'ga yozmang — faqat
+o'zgaruvchi **nomini**.
+
+## 10. 🟠 `APPLE_ALLOWED_CLIENT_IDS` — nomi noto'g'ri
+
+Serverdagi `.env` da `APPLE_OAUTH_CLIENT_ID` deb yozilgan, `config/env.ts` esa
+**`APPLE_ALLOWED_CLIENT_IDS`** kutadi. Ya'ni Apple orqali kirish hozir ishlamaydi — o'zgaruvchi
+o'qilmaydi. Nomni to'g'rilab `docker compose up -d --force-recreate backend`.
+
+Yana bir keraksiz qator bor: `ADMIN_API_KEY` — admin autentifikatsiyasi JWT/RBAC ga o'tgandan
+keyin ishlatilmaydi, o'chirish mumkin.
+
+---
+
 ## Qisqacha ustuvorlik
+
+**Bajarildi (2026-07-31 deploy):**
+
+| # | Ish | Tasdiq |
+|---|---|---|
+| 1 | Migratsiyalar (lokal + prod) | 3 ta yangi migratsiya qo'llandi |
+| 2 | E2E testlar | 114/114 · unit 808/808 |
+| 3 | Docker image + ffmpeg + uploads volume | `ffmpeg version 8.0.1` |
+| 4 | Nginx WS upgrade + `client_max_body_size` | `ws: 101` |
+| 5 | FCM backend kredensiallari | `FCM auth: OK` |
+
+**Qoldi:**
 
 | # | Ish | Kim | Nimani bloklaydi |
 |---|---|---|---|
-| 1 | Migratsiyalarni qo'llash | backend/devops | hamma narsa |
-| 2 | E2E testlarni ishga tushirish | backend | ishonch |
-| 3 | Docker image + ffmpeg + volume | devops | rasmdan boshqa hamma media |
-| 4 | Nginx WS upgrade | devops | chat sifati, keyin qo'ng'iroq |
-| 5 | KLIPY **production access** (test kaliti 100/soat) | siz | GIF qidiruvi prod'da |
-| 6 | Stiker tasvirlari | dizayn/kontent | faqat stikerlar |
-| 7 | FCM kredensiallari (kod ✅) | siz: Firebase + Apple APNs kaliti | push; qo'ng'iroq uchun keyin VoIP |
-| 8 | coturn | devops | qo'ng'iroq (keyinroq) |
+| 6 | **`.env` sirlarini almashtirish** | siz | xavfsizlik — eng ustuvor |
+| 7 | `APPLE_ALLOWED_CLIENT_IDS` nomini to'g'rilash | siz | Apple orqali kirish |
+| 8 | Firebase'ga Android/iOS ilovalarini qo'shish + APNs `.p8` | mobil jamoa | push haqiqiy qurilmaga |
+| 9 | KLIPY **production access** (test kaliti 100/soat) | siz + mobil jamoa | GIF **qidiruvi** prod'da |
+| 10 | Stiker tasvirlari (512×512 WebP) | dizayn/kontent | faqat stikerlar |
+| 11 | coturn | devops | qo'ng'iroq (keyinroq) |
