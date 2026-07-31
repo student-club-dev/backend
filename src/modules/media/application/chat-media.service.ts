@@ -9,7 +9,7 @@ import type { AuthenticatedUser } from '../../../common/types/authenticated-user
 import type { Env } from '../../../config/env';
 import { CHAT_ACCESS, ChatAccessRepository } from '../domain/chat-access.repository';
 import { MediaAsset, NewMediaAsset } from '../domain/entities/media-asset.entity';
-import { MediaKind, MediaStatus } from '../domain/enums/media-kind.enum';
+import { isChatKind, isStoryKind, MediaKind, MediaStatus } from '../domain/enums/media-kind.enum';
 import { MEDIA_LIMITS, hasBlockedExtension, sanitizeFileName } from '../domain/media-limits';
 import { MEDIA_ASSET_REPOSITORY, MediaAssetRepository } from '../domain/media-asset.repository';
 import { computeWaveform } from '../domain/waveform';
@@ -52,10 +52,17 @@ export class ChatMediaService {
   async upload(user: AuthenticatedUser, input: ChatUploadInput): Promise<MediaAsset> {
     const file = requireFile(input.file);
 
-    // 1. Permission. Scoping an upload to a conversation is what stops the endpoint being used as
-    //    anonymous file hosting by someone with nobody to send to.
-    if (!(await this.access.canSend(input.conversationId, user.id))) {
-      throw new AppException(ERROR_CODE.NOT_CONNECTED, 403, "Bu suhbatga fayl yuklab bo'lmaydi");
+    // 1. Permission. For a chat attachment, scoping the upload to a conversation is what stops the
+    //    endpoint being used as anonymous file hosting by someone with nobody to send to. A profile
+    //    photo or a story has no conversation to scope to; the daily byte quota below is what bounds
+    //    those, together with the per-set caps their own endpoints enforce.
+    if (isChatKind(input.kind)) {
+      if (input.conversationId === null) {
+        throw AppException.validation({ conversationId: 'Suhbat id sini yuboring' });
+      }
+      if (!(await this.access.canSend(input.conversationId, user.id))) {
+        throw new AppException(ERROR_CODE.NOT_CONNECTED, 403, "Bu suhbatga fayl yuklab bo'lmaydi");
+      }
     }
 
     // 2. Daily byte quota.
@@ -100,7 +107,9 @@ export class ChatMediaService {
     // kind cannot forget to clear a field that belonged to another one.
     const base: NewMediaAsset = {
       ownerId: user.id,
-      conversationId: input.conversationId,
+      // Already forced to null for the non-chat kinds by the controller; a stray value here would
+      // otherwise make a story readable to a conversation's members.
+      conversationId: isChatKind(input.kind) ? input.conversationId : null,
       kind: input.kind,
       status: MediaStatus.READY,
       isAnimated: false,
@@ -121,15 +130,24 @@ export class ChatMediaService {
     };
 
     switch (input.kind) {
+      // A profile photo and a story image go through exactly the same pipeline as a chat image —
+      // EXIF (including GPS) stripped, downscaled, thumbnail and BlurHash generated. Story framing
+      // is the client's business: a 9:16 crop is what it sends, but a different ratio is accepted
+      // and simply rendered to fit.
       case MediaKind.IMAGE:
+      case MediaKind.PROFILE_PHOTO:
+      case MediaKind.STORY_IMAGE:
         return this.assets.create(await this.buildImage(base, file));
       case MediaKind.GIF:
         return this.assets.create(await this.buildGif(base, file, detected.extension));
       case MediaKind.VOICE:
         return this.assets.create(await this.buildVoice(base, file, detected.extension));
       case MediaKind.VIDEO:
+      case MediaKind.STORY_VIDEO:
         return this.enqueueIfNeeded(
-          await this.assets.create(await this.buildVideo(base, file, detected.extension)),
+          await this.assets.create(
+            await this.buildVideo(base, file, detected.extension, input.kind),
+          ),
         );
       case MediaKind.FILE:
         return this.assets.create({
@@ -140,17 +158,47 @@ export class ChatMediaService {
     }
   }
 
-  /** The asset behind a `mediaId`, for the message-send validation and the raw proxy. */
+  /**
+   * The asset behind a `mediaId`, checked against whoever is asking for it.
+   *
+   * Three rules, one per family of kinds, because they are genuinely different questions:
+   *
+   * - chat attachments — **membership**, not ownership: the recipient has to be able to open what
+   *   was sent to them;
+   * - profile photos — any signed-in student, since they already appear in search results and
+   *   conversation lists to people who are not connected;
+   * - story media — the owner, or someone still connected to them: the same gate the story feed
+   *   applies, re-checked here so a story URL forwarded to an outsider is not a way around it.
+   *
+   * Every failure is the same 404. Distinguishing "does not exist" from "not yours" would confirm
+   * that a given id exists to anyone who guesses one.
+   */
   async findForMember(id: string, studentId: string): Promise<MediaAsset> {
     const asset = await this.assets.findById(id);
     if (asset === null) {
       throw AppException.notFound(ERROR_CODE.MEDIA_NOT_FOUND, 'Fayl topilmadi');
     }
-    // Membership, not ownership: the recipient has to be able to open what was sent to them.
-    if (!(await this.access.isMember(asset.conversationId, studentId))) {
+    if (!(await this.mayRead(asset, studentId))) {
       throw AppException.notFound(ERROR_CODE.MEDIA_NOT_FOUND, 'Fayl topilmadi');
     }
     return asset;
+  }
+
+  private async mayRead(asset: MediaAsset, studentId: string): Promise<boolean> {
+    if (asset.ownerId === studentId) {
+      return true;
+    }
+    if (isStoryKind(asset.kind)) {
+      return this.access.areConnected(asset.ownerId, studentId);
+    }
+    if (asset.kind === MediaKind.PROFILE_PHOTO) {
+      return true;
+    }
+    // A chat attachment always has a conversation; a null one would mean a corrupt row, and failing
+    // closed is the only safe reading of it.
+    return asset.conversationId !== null
+      ? this.access.isMember(asset.conversationId, studentId)
+      : false;
   }
 
   /**
@@ -174,6 +222,28 @@ export class ChatMediaService {
     }
     await this.assets.deleteMany(orphans.map((asset) => asset.id));
     return orphans.length;
+  }
+
+  /**
+   * Deletes specific assets, bytes first, whatever their kind.
+   *
+   * The story cleanup drives this: a `Story` row cascades from its `MediaAsset`, so removing the
+   * asset removes the story and its views in one step, in the right order — bytes gone before the
+   * row that names them, since bytes without a row are a leak nothing will ever find again.
+   */
+  async deleteAssets(ids: string[]): Promise<number> {
+    if (ids.length === 0) {
+      return 0;
+    }
+    for (const asset of await this.assets.findByIds(ids)) {
+      for (const key of [asset.storageKey, asset.thumbStorageKey]) {
+        if (key !== null) {
+          await this.storage.delete(key).catch(() => undefined);
+        }
+      }
+    }
+    await this.assets.deleteMany(ids);
+    return ids.length;
   }
 
   // ---- per-kind processing ----
@@ -271,6 +341,7 @@ export class ChatMediaService {
     base: NewMediaAsset,
     file: UploadedChatFile,
     extension: string,
+    kind: MediaKind,
   ): Promise<NewMediaAsset> {
     return this.inTempDir(async (dir) => {
       const source = join(dir, `in.${extension}`);
@@ -278,7 +349,9 @@ export class ChatMediaService {
       await writeFile(source, file.buffer);
 
       const probe = await this.probeOrReject(source);
-      this.assertDuration(probe.durationMs, MediaKind.VIDEO);
+      // `kind`, not a hardcoded VIDEO: a story is capped at 30 seconds where a chat video gets three
+      // minutes, and passing the wrong one here would let a 3-minute story through.
+      this.assertDuration(probe.durationMs, kind);
 
       await this.ffmpeg.extractFrame(
         source,

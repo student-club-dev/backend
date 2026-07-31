@@ -3832,6 +3832,1460 @@
         ]
       }
     },
+    "/v1/profile/photos": {
+      "get": {
+        "operationId": "ProfilePhotosController_list",
+        "summary": "Your profile photos, in display order",
+        "description": "The first element is the current avatar and always equals `avatarUrl`.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "$ref": "#/components/schemas/ProfilePhotoListDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (`UNAUTHORIZED`), or expired (`TOKEN_EXPIRED`) — refresh and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 401
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Avtorizatsiyadan o‘tilmagan"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UNAUTHORIZED",
+                            "message": "Avtorizatsiyadan o‘tilmagan",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not a STUDENT account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 403
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Ruxsat yo‘q"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "FORBIDDEN",
+                            "message": "Ruxsat yo‘q",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Profiles"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "ProfilePhotosController_add",
+        "summary": "Add a photo — it becomes the new avatar",
+        "description": "Upload the file first with `POST /v1/media/chat-upload` and `kind=PROFILE_PHOTO` (no `conversationId`), then post the `id` it returns. The new photo goes to the **front** of the set and `avatarUrl` moves with it, so changing your picture is this one call. Up to 6 photos.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddProfilePhotoDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "$ref": "#/components/schemas/ProfilePhotoDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (`UNAUTHORIZED`), or expired (`TOKEN_EXPIRED`) — refresh and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 401
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Avtorizatsiyadan o‘tilmagan"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UNAUTHORIZED",
+                            "message": "Avtorizatsiyadan o‘tilmagan",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not a STUDENT account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 403
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Ruxsat yo‘q"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "FORBIDDEN",
+                            "message": "Ruxsat yo‘q",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Already at 6 photos — delete one first.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 422
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Xatolik yuz berdi"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "PHOTO_LIMIT_REACHED",
+                            "message": "Xatolik yuz berdi",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Profiles"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/profile/photos/{id}/main": {
+      "put": {
+        "operationId": "ProfilePhotosController_makeMain",
+        "summary": "Promote an existing photo to avatar",
+        "description": "Moves it to the front of the set; `avatarUrl` follows.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Profile photo id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "$ref": "#/components/schemas/ProfilePhotoDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (`UNAUTHORIZED`), or expired (`TOKEN_EXPIRED`) — refresh and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 401
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Avtorizatsiyadan o‘tilmagan"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UNAUTHORIZED",
+                            "message": "Avtorizatsiyadan o‘tilmagan",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not a STUDENT account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 403
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Ruxsat yo‘q"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "FORBIDDEN",
+                            "message": "Ruxsat yo‘q",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not one of your photos.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 404
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Rasm topilmadi"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "PHOTO_NOT_FOUND",
+                            "message": "Rasm topilmadi",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Profiles"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/profile/photos/{id}": {
+      "delete": {
+        "operationId": "ProfilePhotosController_remove",
+        "summary": "Delete a photo",
+        "description": "Deleting the current avatar promotes the next photo in the set; deleting the last one clears `avatarUrl` and the client falls back to initials.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Profile photo id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted; `result` is null.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "nullable": true,
+                          "example": null,
+                          "description": "No payload for this endpoint."
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (`UNAUTHORIZED`), or expired (`TOKEN_EXPIRED`) — refresh and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 401
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Avtorizatsiyadan o‘tilmagan"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UNAUTHORIZED",
+                            "message": "Avtorizatsiyadan o‘tilmagan",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not a STUDENT account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 403
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Ruxsat yo‘q"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "FORBIDDEN",
+                            "message": "Ruxsat yo‘q",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not one of your photos.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 404
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Rasm topilmadi"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "PHOTO_NOT_FOUND",
+                            "message": "Rasm topilmadi",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Profiles"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/media/upload": {
+      "post": {
+        "operationId": "MediaController_upload",
+        "summary": "Upload an image (logo, cover, listing photo)",
+        "description": "multipart/form-data. JPEG/PNG/WebP, max 5 MB. Returns the public URL.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file",
+                  "purpose"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "Image file (JPEG/PNG/WebP, max 5 MB)"
+                  },
+                  "purpose": {
+                    "type": "string",
+                    "description": "Image purpose: LOGO | COVER | LISTING",
+                    "example": "LISTING"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "$ref": "#/components/schemas/MediaUploadResponseDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (`UNAUTHORIZED`), or expired (`TOKEN_EXPIRED`) — refresh and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 401
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Avtorizatsiyadan o‘tilmagan"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UNAUTHORIZED",
+                            "message": "Avtorizatsiyadan o‘tilmagan",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "File exceeds the 5 MB size limit.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 413
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Xatolik yuz berdi"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "FILE_TOO_LARGE",
+                            "message": "Xatolik yuz berdi",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unknown `purpose`, missing file, or the file is not a valid JPEG/PNG/WebP image.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 422
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Ma’lumotlar noto‘g‘ri"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "VALIDATION_ERROR",
+                            "message": "Ma’lumotlar noto‘g‘ri",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded — 100 uploads per hour.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 429
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Xatolik yuz berdi"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "RATE_LIMITED",
+                            "message": "Xatolik yuz berdi",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Media"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/media/chat-upload": {
+      "post": {
+        "operationId": "ChatMediaController_chatUpload",
+        "summary": "Upload an attachment, profile photo or story",
+        "description": "multipart/form-data. One pipeline for everything a student uploads: the type is decided by the file's magic bytes, never by `Content-Type` or the filename; images are stripped of EXIF (including GPS); GIFs become silent looping MP4; video is transcoded to H.264/AAC and gets a poster frame; voice notes get a 48-point waveform.\n\n`conversationId` is **required for the chat kinds** (`IMAGE`, `GIF`, `VIDEO`, `VOICE`, `FILE`) and is their permission check — you must be a member, still connected and not blocked. It is **ignored for `PROFILE_PHOTO`, `STORY_IMAGE` and `STORY_VIDEO`**, which have no conversation; those are authorised on read by their own rule instead.\n\nThe returned `id` is the `mediaId` you then pass to `POST /v1/profile/photos` or `POST /v1/stories`. Story framing is yours: send a 9:16 crop if you want one — the server accepts any ratio.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "file",
+                  "kind"
+                ],
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  },
+                  "kind": {
+                    "type": "string",
+                    "enum": [
+                      "IMAGE",
+                      "GIF",
+                      "VIDEO",
+                      "VOICE",
+                      "FILE",
+                      "PROFILE_PHOTO",
+                      "STORY_IMAGE",
+                      "STORY_VIDEO"
+                    ],
+                    "description": "IMAGE 12 MB · GIF 20 MB · VIDEO 64 MB · VOICE 16 MB · FILE 48 MB · PROFILE_PHOTO 12 MB · STORY_IMAGE 12 MB · STORY_VIDEO 48 MB (≤ 30 s)"
+                  },
+                  "conversationId": {
+                    "type": "string",
+                    "description": "Required for the chat kinds; omit for PROFILE_PHOTO and STORY_*."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "$ref": "#/components/schemas/AttachmentDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (`UNAUTHORIZED`), or expired (`TOKEN_EXPIRED`) — refresh and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 401
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Avtorizatsiyadan o‘tilmagan"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UNAUTHORIZED",
+                            "message": "Avtorizatsiyadan o‘tilmagan",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not a member, not connected any more, or blocked (`NOT_CONNECTED`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 403
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Ruxsat yo‘q"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "FORBIDDEN",
+                            "message": "Ruxsat yo‘q",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Larger than the limit for this `kind`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 413
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Xatolik yuz berdi"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "FILE_TOO_LARGE",
+                            "message": "Xatolik yuz berdi",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unknown `kind`, missing file, a type outside the allowlist (`FILE_TYPE_NOT_ALLOWED`), too long (`MEDIA_TOO_LONG`) or too many pixels (`MEDIA_TOO_LARGE_DIMENSIONS`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 422
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Ma’lumotlar noto‘g‘ri"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "VALIDATION_ERROR",
+                            "message": "Ma’lumotlar noto‘g‘ri",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "20 uploads a minute, or 500 MB a day.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 429
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Xatolik yuz berdi"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UPLOAD_RATE_LIMIT",
+                            "message": "Xatolik yuz berdi",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Chat"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/media/{id}/raw": {
+      "get": {
+        "operationId": "ChatMediaController_raw",
+        "summary": "Download a chat attachment",
+        "description": "Streams the bytes after checking that you are a member of the conversation it belongs to. Chat media is never on a public path — a leaked link is useless without a token.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "variant",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "full",
+                "thumb"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Missing or invalid access token (`UNAUTHORIZED`), or expired (`TOKEN_EXPIRED`) — refresh and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 401
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Avtorizatsiyadan o‘tilmagan"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UNAUTHORIZED",
+                            "message": "Avtorizatsiyadan o‘tilmagan",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not a STUDENT account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 403
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Ruxsat yo‘q"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "FORBIDDEN",
+                            "message": "Ruxsat yo‘q",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such attachment, or not in a conversation you belong to.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 404
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Fayl topilmadi"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "MEDIA_NOT_FOUND",
+                            "message": "Fayl topilmadi",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Chat"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/v1/listings/{listingId}/redeem/start": {
       "post": {
         "operationId": "RedeemStartController_start",
@@ -4552,6 +6006,197 @@
                           "example": {
                             "code": "VALIDATION_ERROR",
                             "message": "Ma’lumotlar noto‘g‘ri",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Connections"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/students/{id}": {
+      "get": {
+        "operationId": "StudentSearchController_getOne",
+        "summary": "One student’s profile",
+        "description": "The same row `GET /v1/students` returns, for a single student — so a profile can be opened from anywhere, not only from a list or an existing conversation. `bio`, `photos` and `phoneNumber` are included, each subject to that student’s own privacy settings. Passing your own id works and returns your own row.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Student id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "$ref": "#/components/schemas/SearchResultDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (`UNAUTHORIZED`), or expired (`TOKEN_EXPIRED`) — refresh and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 401
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Avtorizatsiyadan o‘tilmagan"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UNAUTHORIZED",
+                            "message": "Avtorizatsiyadan o‘tilmagan",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "One of you has blocked the other. A 403 rather than a 404 — you can already tell this account exists, so hiding it would only look broken.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 403
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Xatolik yuz berdi"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "USER_BLOCKED",
+                            "message": "Xatolik yuz berdi",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such student.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 404
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Foydalanuvchi topilmadi"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "STUDENT_NOT_FOUND",
+                            "message": "Foydalanuvchi topilmadi",
                             "fields": {}
                           }
                         }
@@ -8696,301 +10341,22 @@
         ]
       }
     },
-    "/v1/media/upload": {
-      "post": {
-        "operationId": "MediaController_upload",
-        "summary": "Upload an image (logo, cover, listing photo)",
-        "description": "multipart/form-data. JPEG/PNG/WebP, max 5 MB. Returns the public URL.",
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "file",
-                  "purpose"
-                ],
-                "properties": {
-                  "file": {
-                    "type": "string",
-                    "format": "binary",
-                    "description": "Image file (JPEG/PNG/WebP, max 5 MB)"
-                  },
-                  "purpose": {
-                    "type": "string",
-                    "description": "Image purpose: LOGO | COVER | LISTING",
-                    "example": "LISTING"
-                  }
-                }
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/BaseResponseDto"
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "result": {
-                          "$ref": "#/components/schemas/MediaUploadResponseDto"
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Missing or invalid access token (`UNAUTHORIZED`), or expired (`TOKEN_EXPIRED`) — refresh and retry.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/BaseResponseDto"
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "success": {
-                          "type": "boolean",
-                          "example": false
-                        },
-                        "status": {
-                          "type": "integer",
-                          "example": 401
-                        },
-                        "message": {
-                          "type": "string",
-                          "example": "Avtorizatsiyadan o‘tilmagan"
-                        },
-                        "result": {
-                          "nullable": true,
-                          "example": null
-                        },
-                        "error": {
-                          "allOf": [
-                            {
-                              "$ref": "#/components/schemas/ApiErrorDto"
-                            }
-                          ],
-                          "example": {
-                            "code": "UNAUTHORIZED",
-                            "message": "Avtorizatsiyadan o‘tilmagan",
-                            "fields": {}
-                          }
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "413": {
-            "description": "File exceeds the 5 MB size limit.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/BaseResponseDto"
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "success": {
-                          "type": "boolean",
-                          "example": false
-                        },
-                        "status": {
-                          "type": "integer",
-                          "example": 413
-                        },
-                        "message": {
-                          "type": "string",
-                          "example": "Xatolik yuz berdi"
-                        },
-                        "result": {
-                          "nullable": true,
-                          "example": null
-                        },
-                        "error": {
-                          "allOf": [
-                            {
-                              "$ref": "#/components/schemas/ApiErrorDto"
-                            }
-                          ],
-                          "example": {
-                            "code": "FILE_TOO_LARGE",
-                            "message": "Xatolik yuz berdi",
-                            "fields": {}
-                          }
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Unknown `purpose`, missing file, or the file is not a valid JPEG/PNG/WebP image.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/BaseResponseDto"
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "success": {
-                          "type": "boolean",
-                          "example": false
-                        },
-                        "status": {
-                          "type": "integer",
-                          "example": 422
-                        },
-                        "message": {
-                          "type": "string",
-                          "example": "Ma’lumotlar noto‘g‘ri"
-                        },
-                        "result": {
-                          "nullable": true,
-                          "example": null
-                        },
-                        "error": {
-                          "allOf": [
-                            {
-                              "$ref": "#/components/schemas/ApiErrorDto"
-                            }
-                          ],
-                          "example": {
-                            "code": "VALIDATION_ERROR",
-                            "message": "Ma’lumotlar noto‘g‘ri",
-                            "fields": {}
-                          }
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Rate limit exceeded — 100 uploads per hour.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/BaseResponseDto"
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "success": {
-                          "type": "boolean",
-                          "example": false
-                        },
-                        "status": {
-                          "type": "integer",
-                          "example": 429
-                        },
-                        "message": {
-                          "type": "string",
-                          "example": "Xatolik yuz berdi"
-                        },
-                        "result": {
-                          "nullable": true,
-                          "example": null
-                        },
-                        "error": {
-                          "allOf": [
-                            {
-                              "$ref": "#/components/schemas/ApiErrorDto"
-                            }
-                          ],
-                          "example": {
-                            "code": "RATE_LIMITED",
-                            "message": "Xatolik yuz berdi",
-                            "fields": {}
-                          }
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          }
-        },
-        "tags": [
-          "Media"
-        ],
-        "security": [
+    "/v1/stickers/packs": {
+      "get": {
+        "operationId": "StickersController_packs",
+        "summary": "Every sticker pack, with its stickers",
+        "description": "The whole catalogue in one response (~200 KB) — cache it. Send the previous `ETag` back as `If-None-Match` and an unchanged catalogue answers `304` with no body.",
+        "parameters": [
           {
-            "bearer": []
-          }
-        ]
-      }
-    },
-    "/v1/media/chat-upload": {
-      "post": {
-        "operationId": "ChatMediaController_chatUpload",
-        "summary": "Upload a chat attachment",
-        "description": "multipart/form-data. `conversationId` is required and is the permission check — you must be a member, still connected and not blocked. The type is decided by the file's magic bytes, never by `Content-Type` or the filename. Images are stripped of EXIF (including GPS), GIFs are converted to silent looping MP4, voice notes get a 48-point waveform.",
-        "parameters": [],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "multipart/form-data": {
-              "schema": {
-                "type": "object",
-                "required": [
-                  "file",
-                  "kind",
-                  "conversationId"
-                ],
-                "properties": {
-                  "file": {
-                    "type": "string",
-                    "format": "binary"
-                  },
-                  "kind": {
-                    "type": "string",
-                    "enum": [
-                      "IMAGE",
-                      "GIF",
-                      "VIDEO",
-                      "VOICE",
-                      "FILE"
-                    ],
-                    "description": "IMAGE 12 MB · GIF 20 MB · VIDEO 64 MB · VOICE 16 MB · FILE 48 MB"
-                  },
-                  "conversationId": {
-                    "type": "string"
-                  }
-                }
-              }
+            "name": "If-None-Match",
+            "in": "header",
+            "description": "A previously received `ETag`.",
+            "required": false,
+            "schema": {
+              "type": "string"
             }
           }
-        },
+        ],
         "responses": {
           "200": {
             "description": "OK",
@@ -9005,7 +10371,7 @@
                       "type": "object",
                       "properties": {
                         "result": {
-                          "$ref": "#/components/schemas/AttachmentDto"
+                          "$ref": "#/components/schemas/StickerPacksDto"
                         }
                       }
                     }
@@ -9013,6 +10379,9 @@
                 }
               }
             }
+          },
+          "304": {
+            "description": "Catalogue unchanged; no body."
           },
           "401": {
             "description": "Missing or invalid access token (`UNAUTHORIZED`), or expired (`TOKEN_EXPIRED`) — refresh and retry.",
@@ -9062,7 +10431,7 @@
             }
           },
           "403": {
-            "description": "Not a member, not connected any more, or blocked (`NOT_CONNECTED`).",
+            "description": "The caller is not a STUDENT account.",
             "content": {
               "application/json": {
                 "schema": {
@@ -9107,147 +10476,6 @@
                 }
               }
             }
-          },
-          "413": {
-            "description": "Larger than the limit for this `kind`.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/BaseResponseDto"
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "success": {
-                          "type": "boolean",
-                          "example": false
-                        },
-                        "status": {
-                          "type": "integer",
-                          "example": 413
-                        },
-                        "message": {
-                          "type": "string",
-                          "example": "Xatolik yuz berdi"
-                        },
-                        "result": {
-                          "nullable": true,
-                          "example": null
-                        },
-                        "error": {
-                          "allOf": [
-                            {
-                              "$ref": "#/components/schemas/ApiErrorDto"
-                            }
-                          ],
-                          "example": {
-                            "code": "FILE_TOO_LARGE",
-                            "message": "Xatolik yuz berdi",
-                            "fields": {}
-                          }
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Unknown `kind`, missing file, a type outside the allowlist (`FILE_TYPE_NOT_ALLOWED`), too long (`MEDIA_TOO_LONG`) or too many pixels (`MEDIA_TOO_LARGE_DIMENSIONS`).",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/BaseResponseDto"
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "success": {
-                          "type": "boolean",
-                          "example": false
-                        },
-                        "status": {
-                          "type": "integer",
-                          "example": 422
-                        },
-                        "message": {
-                          "type": "string",
-                          "example": "Ma’lumotlar noto‘g‘ri"
-                        },
-                        "result": {
-                          "nullable": true,
-                          "example": null
-                        },
-                        "error": {
-                          "allOf": [
-                            {
-                              "$ref": "#/components/schemas/ApiErrorDto"
-                            }
-                          ],
-                          "example": {
-                            "code": "VALIDATION_ERROR",
-                            "message": "Ma’lumotlar noto‘g‘ri",
-                            "fields": {}
-                          }
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "20 uploads a minute, or 500 MB a day.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/BaseResponseDto"
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "success": {
-                          "type": "boolean",
-                          "example": false
-                        },
-                        "status": {
-                          "type": "integer",
-                          "example": 429
-                        },
-                        "message": {
-                          "type": "string",
-                          "example": "Xatolik yuz berdi"
-                        },
-                        "result": {
-                          "nullable": true,
-                          "example": null
-                        },
-                        "error": {
-                          "allOf": [
-                            {
-                              "$ref": "#/components/schemas/ApiErrorDto"
-                            }
-                          ],
-                          "example": {
-                            "code": "UPLOAD_RATE_LIMIT",
-                            "message": "Xatolik yuz berdi",
-                            "fields": {}
-                          }
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
           }
         },
         "tags": [
@@ -9260,34 +10488,81 @@
         ]
       }
     },
-    "/v1/media/{id}/raw": {
+    "/v1/stickers/search": {
       "get": {
-        "operationId": "ChatMediaController_raw",
-        "summary": "Download a chat attachment",
-        "description": "Streams the bytes after checking that you are a member of the conversation it belongs to. Chat media is never on a public path — a leaked link is useless without a token.",
+        "operationId": "StickersController_search",
+        "summary": "Search provider stickers (or the trending list when `q` is empty)",
+        "description": "Millions of transparent, animated stickers from the provider catalogue — the character stickers `GET /v1/stickers/packs` does not carry. Results are **WebP**, not MP4: MP4 has no alpha channel and would render the sticker as a white square. Post one by sending the whole item back as `SendMessageDto.sticker`; it has no `mediaId`, because provider terms forbid re-hosting their files. Show the attribution badge the `provider` field names.",
         "parameters": [
           {
-            "name": "id",
-            "required": true,
-            "in": "path",
+            "name": "q",
+            "required": false,
+            "in": "query",
+            "description": "Search term. Omit or leave empty for the trending list.",
+            "schema": {
+              "maxLength": 100,
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 50,
+              "format": "int32",
+              "default": 30,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "pos",
+            "required": false,
+            "in": "query",
+            "description": "The `next` cursor from a previous page.",
             "schema": {
               "type": "string"
             }
           },
           {
-            "name": "variant",
+            "name": "locale",
             "required": false,
             "in": "query",
             "schema": {
+              "default": "uz_UZ",
               "enum": [
-                "full",
-                "thumb"
+                "uz_UZ",
+                "ru_RU",
+                "en_US"
               ],
               "type": "string"
             }
           }
         ],
         "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "$ref": "#/components/schemas/StickerSearchResponseDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
           "401": {
             "description": "Missing or invalid access token (`UNAUTHORIZED`), or expired (`TOKEN_EXPIRED`) — refresh and retry.",
             "content": {
@@ -9382,8 +10657,8 @@
               }
             }
           },
-          "404": {
-            "description": "No such attachment, or not in a conversation you belong to.",
+          "429": {
+            "description": "The provider’s quota is spent — retry shortly. Distinct from our own 60/min per-user limit.",
             "content": {
               "application/json": {
                 "schema": {
@@ -9400,11 +10675,11 @@
                         },
                         "status": {
                           "type": "integer",
-                          "example": 404
+                          "example": 429
                         },
                         "message": {
                           "type": "string",
-                          "example": "Fayl topilmadi"
+                          "example": "Xatolik yuz berdi"
                         },
                         "result": {
                           "nullable": true,
@@ -9417,8 +10692,102 @@
                             }
                           ],
                           "example": {
-                            "code": "MEDIA_NOT_FOUND",
-                            "message": "Fayl topilmadi",
+                            "code": "STICKER_PROVIDER_RATE_LIMITED",
+                            "message": "Xatolik yuz berdi",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The provider did not answer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 502
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Xatolik yuz berdi"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "STICKER_PROVIDER_ERROR",
+                            "message": "Xatolik yuz berdi",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "No provider API key is configured on this deployment (`KLIPY_API_KEY`). `GET /packs` is unaffected — the seeded catalogue keeps working.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 503
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Xatolik yuz berdi"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "STICKER_PROVIDER_ERROR",
+                            "message": "Xatolik yuz berdi",
                             "fields": {}
                           }
                         }
@@ -9440,25 +10809,35 @@
         ]
       }
     },
-    "/v1/stickers/packs": {
-      "get": {
-        "operationId": "StickersController_packs",
-        "summary": "Every sticker pack, with its stickers",
-        "description": "The whole catalogue in one response (~200 KB) — cache it. Send the previous `ETag` back as `If-None-Match` and an unchanged catalogue answers `304` with no body.",
+    "/v1/stickers/{id}/share": {
+      "post": {
+        "operationId": "StickersController_share",
+        "summary": "Tell the provider a search result was shared",
+        "description": "What makes their ranking improve, and required by some providers’ terms. A no-op for providers without such an endpoint. Best-effort — this never fails your send. Only for search results; a sticker from `/packs` has nothing to report.",
         "parameters": [
           {
-            "name": "If-None-Match",
-            "in": "header",
-            "description": "A previously received `ETag`.",
-            "required": false,
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "The `id` of the chosen search result",
             "schema": {
               "type": "string"
             }
           }
         ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StickerShareDto"
+              }
+            }
+          }
+        },
         "responses": {
           "200": {
-            "description": "OK",
+            "description": "Recorded; `result` is null.",
             "content": {
               "application/json": {
                 "schema": {
@@ -9470,7 +10849,9 @@
                       "type": "object",
                       "properties": {
                         "result": {
-                          "$ref": "#/components/schemas/StickerPacksDto"
+                          "nullable": true,
+                          "example": null,
+                          "description": "No payload for this endpoint."
                         }
                       }
                     }
@@ -9478,9 +10859,6 @@
                 }
               }
             }
-          },
-          "304": {
-            "description": "Catalogue unchanged; no body."
           },
           "401": {
             "description": "Missing or invalid access token (`UNAUTHORIZED`), or expired (`TOKEN_EXPIRED`) — refresh and retry.",
@@ -10063,6 +11441,1065 @@
           }
         ]
       }
+    },
+    "/v1/stories": {
+      "post": {
+        "operationId": "StoriesController_create",
+        "summary": "Post a story",
+        "description": "Upload the file first with `POST /v1/media/chat-upload` and `kind=STORY_IMAGE` or `STORY_VIDEO` (no `conversationId`; video ≤ 30 s, 48 MB), then post the `id` it returns. The story disappears 24 hours later. Stories cannot be edited — delete and post again.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateStoryDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "$ref": "#/components/schemas/StoryDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (`UNAUTHORIZED`), or expired (`TOKEN_EXPIRED`) — refresh and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 401
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Avtorizatsiyadan o‘tilmagan"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UNAUTHORIZED",
+                            "message": "Avtorizatsiyadan o‘tilmagan",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not a STUDENT account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 403
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Ruxsat yo‘q"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "FORBIDDEN",
+                            "message": "Ruxsat yo‘q",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Already 10 live stories, or 20 posted in the last day.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 422
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Xatolik yuz berdi"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "STORY_LIMIT_REACHED",
+                            "message": "Xatolik yuz berdi",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Stories"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/stories/feed": {
+      "get": {
+        "operationId": "StoriesController_feed",
+        "summary": "Your connections’ live stories, grouped by author",
+        "description": "Already grouped and ordered — authors with something unseen first, then by most recent story. Draw the avatar row straight from `items` and do not re-sort it. `viewsCount` is `null` on everyone else’s stories; only the author sees their own numbers.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "$ref": "#/components/schemas/StoryFeedDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (`UNAUTHORIZED`), or expired (`TOKEN_EXPIRED`) — refresh and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 401
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Avtorizatsiyadan o‘tilmagan"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UNAUTHORIZED",
+                            "message": "Avtorizatsiyadan o‘tilmagan",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not a STUDENT account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 403
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Ruxsat yo‘q"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "FORBIDDEN",
+                            "message": "Ruxsat yo‘q",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Stories"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/stories/mine": {
+      "get": {
+        "operationId": "StoriesController_mine",
+        "summary": "Your own live stories, with their view counts",
+        "description": "Expired stories are not returned.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "$ref": "#/components/schemas/MyStoriesDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (`UNAUTHORIZED`), or expired (`TOKEN_EXPIRED`) — refresh and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 401
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Avtorizatsiyadan o‘tilmagan"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UNAUTHORIZED",
+                            "message": "Avtorizatsiyadan o‘tilmagan",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not a STUDENT account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 403
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Ruxsat yo‘q"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "FORBIDDEN",
+                            "message": "Ruxsat yo‘q",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Stories"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/stories/{id}/view": {
+      "post": {
+        "operationId": "StoriesController_view",
+        "summary": "Mark a story as seen",
+        "description": "**Idempotent** — call it every time a frame opens. Re-opening the same story does not move `viewsCount`, and viewing your own story never counts. 120 calls a minute: tapping quickly through a feed is normal use.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Story id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Recorded; `result` is null.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "nullable": true,
+                          "example": null,
+                          "description": "No payload for this endpoint."
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (`UNAUTHORIZED`), or expired (`TOKEN_EXPIRED`) — refresh and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 401
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Avtorizatsiyadan o‘tilmagan"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UNAUTHORIZED",
+                            "message": "Avtorizatsiyadan o‘tilmagan",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not connected to the author, or one of you has blocked the other.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 403
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Xatolik yuz berdi"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "STORY_FORBIDDEN",
+                            "message": "Xatolik yuz berdi",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such story, or it has expired or been deleted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 404
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Story topilmadi"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "STORY_NOT_FOUND",
+                            "message": "Story topilmadi",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Stories"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/stories/{id}/views": {
+      "get": {
+        "operationId": "StoriesController_viewers",
+        "summary": "Who has seen a story — author only",
+        "description": "Deliberately **not** subject to `lastSeenVisibility`: opening someone’s story shows yourself to them. Hiding a viewer here would make the list and `viewsCount` disagree.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Story id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "format": "int32",
+              "default": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "size",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "format": "int32",
+              "default": 30,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "$ref": "#/components/schemas/StoryViewerPageDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (`UNAUTHORIZED`), or expired (`TOKEN_EXPIRED`) — refresh and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 401
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Avtorizatsiyadan o‘tilmagan"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UNAUTHORIZED",
+                            "message": "Avtorizatsiyadan o‘tilmagan",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "You are not the author.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 403
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Xatolik yuz berdi"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "STORY_FORBIDDEN",
+                            "message": "Xatolik yuz berdi",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such story, or it has expired or been deleted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 404
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Story topilmadi"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "STORY_NOT_FOUND",
+                            "message": "Story topilmadi",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Stories"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/stories/{id}": {
+      "delete": {
+        "operationId": "StoriesController_remove",
+        "summary": "Delete your own story",
+        "description": "Gone from every response immediately. The file itself is removed by the cleanup pass a day later — deleting it at once would break copies already in flight or in a CDN, which shows up as a broken image rather than a missing one.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Story id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted; `result` is null.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "nullable": true,
+                          "example": null,
+                          "description": "No payload for this endpoint."
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (`UNAUTHORIZED`), or expired (`TOKEN_EXPIRED`) — refresh and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 401
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Avtorizatsiyadan o‘tilmagan"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UNAUTHORIZED",
+                            "message": "Avtorizatsiyadan o‘tilmagan",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not a STUDENT account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 403
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Ruxsat yo‘q"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "FORBIDDEN",
+                            "message": "Ruxsat yo‘q",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not your story, or already gone.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 404
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Story topilmadi"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "STORY_NOT_FOUND",
+                            "message": "Story topilmadi",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Stories"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
     }
   },
   "info": {
@@ -10107,6 +12544,10 @@
     {
       "name": "Chat",
       "description": "Student app: conversations, messages and real-time chat (`/chat` WS)"
+    },
+    {
+      "name": "Stories",
+      "description": "Student app: 24-hour stories, visible to connections only"
     },
     {
       "name": "Notifications",
@@ -16216,6 +18657,15 @@
           "UNIVERSITY"
         ]
       },
+      "PhoneVisibilityDto": {
+        "type": "string",
+        "description": "Students only — who may see your `phoneNumber` on `StudentSummaryDto`. Defaults to **`NOBODY`**; set it explicitly to share your number.",
+        "enum": [
+          "EVERYONE",
+          "CONNECTIONS",
+          "NOBODY"
+        ]
+      },
       "UserProfileDto": {
         "type": "object",
         "properties": {
@@ -16271,6 +18721,17 @@
             "nullable": true,
             "$ref": "#/components/schemas/LastSeenVisibilityDto"
           },
+          "phoneVisibility": {
+            "nullable": true,
+            "$ref": "#/components/schemas/PhoneVisibilityDto"
+          },
+          "bio": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 140,
+            "description": "Students only — a short blurb, up to 140 characters. Links, `t.me/…`, `@handle`s and phone numbers are rejected with `422 BIO_NOT_ALLOWED`. Send an empty string to clear it.",
+            "example": "5/5 · Dasturiy injiniring"
+          },
           "avatarUrl": {
             "type": "string",
             "nullable": true,
@@ -16290,6 +18751,8 @@
           "birthYear",
           "courseYear",
           "lastSeenVisibility",
+          "phoneVisibility",
+          "bio",
           "avatarUrl"
         ]
       },
@@ -16345,11 +18808,227 @@
             "nullable": true,
             "$ref": "#/components/schemas/LastSeenVisibilityDto"
           },
+          "phoneVisibility": {
+            "nullable": true,
+            "$ref": "#/components/schemas/PhoneVisibilityDto"
+          },
+          "bio": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 140,
+            "description": "Students only — up to 140 characters. Links, `t.me/…`, `@handle`s and phone numbers are rejected with `422 BIO_NOT_ALLOWED`. An empty string clears it.",
+            "example": "5/5 · Dasturiy injiniring"
+          },
           "avatarUrl": {
             "type": "string",
             "nullable": true
           }
         }
+      },
+      "ProfilePhotoDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "description": "Full-size image. Requires the same bearer token as any other call."
+          },
+          "thumbUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "height": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "url",
+          "thumbUrl",
+          "width",
+          "height"
+        ]
+      },
+      "ProfilePhotoListDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "In display order. The first element is always the current avatar and always matches `avatarUrl` — that field is derived from this one, not stored separately.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProfilePhotoDto"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "AddProfilePhotoDto": {
+        "type": "object",
+        "properties": {
+          "mediaId": {
+            "type": "string",
+            "description": "The `id` returned by `POST /v1/media/chat-upload` with `kind=PROFILE_PHOTO`. Single-use: one asset belongs to one photo."
+          }
+        },
+        "required": [
+          "mediaId"
+        ]
+      },
+      "MediaUploadResponseDto": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "Full-size image URL",
+            "example": "http://localhost:3000/uploads/LISTING/8f14e45f-ceea-467d-9a3e-1a2b3c4d5e6f.jpg"
+          },
+          "thumbUrl": {
+            "type": "string",
+            "nullable": true,
+            "description": "200px variant — always null in v1 (deferred)"
+          },
+          "cardUrl": {
+            "type": "string",
+            "nullable": true,
+            "description": "800px variant — always null in v1 (deferred)"
+          }
+        },
+        "required": [
+          "url"
+        ]
+      },
+      "MediaKindDto": {
+        "type": "string",
+        "enum": [
+          "IMAGE",
+          "GIF",
+          "VIDEO",
+          "VOICE",
+          "FILE",
+          "PROFILE_PHOTO",
+          "STORY_IMAGE",
+          "STORY_VIDEO"
+        ]
+      },
+      "MediaStatusDto": {
+        "type": "string",
+        "description": "`PROCESSING` only ever appears on video that is still transcoding. Show the `thumbUrl` and wait for the `media:ready` event, which carries the finished attachment.",
+        "enum": [
+          "PROCESSING",
+          "READY",
+          "FAILED"
+        ]
+      },
+      "MediaProviderDto": {
+        "type": "string",
+        "description": "Whose catalogue answered — show the matching attribution.",
+        "enum": [
+          "KLIPY",
+          "GIPHY",
+          "TENOR"
+        ]
+      },
+      "AttachmentDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/MediaKindDto"
+          },
+          "status": {
+            "$ref": "#/components/schemas/MediaStatusDto"
+          },
+          "url": {
+            "type": "string",
+            "description": "Full-size media. Requires the same bearer token as any other call."
+          },
+          "thumbUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "mimeType": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "height": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "durationMs": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "waveform": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "description": "Voice notes only: 48 amplitude points in 0..100, computed server-side. Empty for every other kind — the client cannot derive it from an already-compressed file."
+          },
+          "fileName": {
+            "type": "string",
+            "nullable": true,
+            "description": "Original name, FILE only."
+          },
+          "blurHash": {
+            "type": "string",
+            "nullable": true,
+            "description": "BlurHash placeholder."
+          },
+          "isAnimated": {
+            "type": "boolean",
+            "description": "Play muted and looping when true (GIF and converted GIF-as-MP4)."
+          },
+          "provider": {
+            "nullable": true,
+            "$ref": "#/components/schemas/MediaProviderDto"
+          },
+          "externalId": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "status",
+          "url",
+          "thumbUrl",
+          "mimeType",
+          "sizeBytes",
+          "width",
+          "height",
+          "durationMs",
+          "waveform",
+          "fileName",
+          "blurHash",
+          "isAnimated",
+          "provider",
+          "externalId"
+        ]
       },
       "BusinessDto": {
         "type": "object",
@@ -17082,6 +19761,39 @@
           "hasNext"
         ]
       },
+      "StudentPhotoDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "description": "Requires the same bearer token as any other call."
+          },
+          "thumbUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "height": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "url",
+          "thumbUrl",
+          "width",
+          "height"
+        ]
+      },
       "ConnectionViewDto": {
         "type": "string",
         "enum": [
@@ -17108,6 +19820,26 @@
           "avatarUrl": {
             "type": "string",
             "nullable": true
+          },
+          "photos": {
+            "description": "The student’s profile pictures, in display order — swipe through them on the profile screen. The first element always matches `avatarUrl`. **Empty** for a student who has never added one, in which case fall back to `avatarUrl` (which may itself be null).",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StudentPhotoDto"
+            }
+          },
+          "bio": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 140,
+            "description": "Short profile blurb, up to 140 characters. Never contains a link, a `@handle` or a phone number — those are rejected on write, so this is safe to render as plain text.",
+            "example": "5/5 · Dasturiy injiniring"
+          },
+          "phoneNumber": {
+            "type": "string",
+            "nullable": true,
+            "description": "E.164 phone number, subject to the target’s `phoneVisibility`: `EVERYONE` always, `CONNECTIONS` only once connected, `NOBODY` (**the default**) never. `null` when hidden — so expect `null` for most students, and do not draw the row at all when it is.",
+            "example": "+998901234567"
           },
           "universityId": {
             "type": "string",
@@ -17142,6 +19874,9 @@
           "username",
           "fullName",
           "avatarUrl",
+          "photos",
+          "bio",
+          "phoneNumber",
           "universityId",
           "gender",
           "courseYear",
@@ -17261,6 +19996,26 @@
             "type": "string",
             "nullable": true
           },
+          "photos": {
+            "description": "The student’s profile pictures, in display order — swipe through them on the profile screen. The first element always matches `avatarUrl`. **Empty** for a student who has never added one, in which case fall back to `avatarUrl` (which may itself be null).",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StudentPhotoDto"
+            }
+          },
+          "bio": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 140,
+            "description": "Short profile blurb, up to 140 characters. Never contains a link, a `@handle` or a phone number — those are rejected on write, so this is safe to render as plain text.",
+            "example": "5/5 · Dasturiy injiniring"
+          },
+          "phoneNumber": {
+            "type": "string",
+            "nullable": true,
+            "description": "E.164 phone number, subject to the target’s `phoneVisibility`: `EVERYONE` always, `CONNECTIONS` only once connected, `NOBODY` (**the default**) never. `null` when hidden — so expect `null` for most students, and do not draw the row at all when it is.",
+            "example": "+998901234567"
+          },
           "universityId": {
             "type": "string",
             "nullable": true,
@@ -17291,6 +20046,9 @@
           "username",
           "fullName",
           "avatarUrl",
+          "photos",
+          "bio",
+          "phoneNumber",
           "universityId",
           "gender",
           "courseYear",
@@ -17578,140 +20336,36 @@
           "SYSTEM"
         ]
       },
-      "MediaKindDto": {
-        "type": "string",
-        "enum": [
-          "IMAGE",
-          "GIF",
-          "VIDEO",
-          "VOICE",
-          "FILE"
-        ]
-      },
-      "MediaStatusDto": {
-        "type": "string",
-        "description": "`PROCESSING` only ever appears on video that is still transcoding. Show the `thumbUrl` and wait for the `media:ready` event, which carries the finished attachment.",
-        "enum": [
-          "PROCESSING",
-          "READY",
-          "FAILED"
-        ]
-      },
-      "MediaProviderDto": {
-        "type": "string",
-        "description": "Whose catalogue answered — show the matching attribution.",
-        "enum": [
-          "KLIPY",
-          "GIPHY",
-          "TENOR"
-        ]
-      },
-      "AttachmentDto": {
+      "MessageStickerDto": {
         "type": "object",
         "properties": {
           "id": {
-            "type": "string"
-          },
-          "kind": {
-            "$ref": "#/components/schemas/MediaKindDto"
-          },
-          "status": {
-            "$ref": "#/components/schemas/MediaStatusDto"
-          },
-          "url": {
             "type": "string",
-            "description": "Full-size media. Requires the same bearer token as any other call."
-          },
-          "thumbUrl": {
-            "type": "string",
-            "nullable": true
-          },
-          "mimeType": {
-            "type": "string"
-          },
-          "sizeBytes": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "width": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
-          },
-          "height": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
-          },
-          "durationMs": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
-          },
-          "waveform": {
-            "type": "array",
-            "items": {
-              "type": "integer"
-            },
-            "description": "Voice notes only: 48 amplitude points in 0..100, computed server-side. Empty for every other kind — the client cannot derive it from an already-compressed file."
-          },
-          "fileName": {
-            "type": "string",
-            "nullable": true,
-            "description": "Original name, FILE only."
-          },
-          "blurHash": {
-            "type": "string",
-            "nullable": true,
-            "description": "BlurHash placeholder."
-          },
-          "isAnimated": {
-            "type": "boolean",
-            "description": "Play muted and looping when true (GIF and converted GIF-as-MP4)."
+            "description": "Catalogue id, or the provider’s own id."
           },
           "provider": {
             "nullable": true,
             "$ref": "#/components/schemas/MediaProviderDto"
           },
-          "externalId": {
-            "type": "string",
-            "nullable": true
-          }
-        },
-        "required": [
-          "id",
-          "kind",
-          "status",
-          "url",
-          "thumbUrl",
-          "mimeType",
-          "sizeBytes",
-          "width",
-          "height",
-          "durationMs",
-          "waveform",
-          "fileName",
-          "blurHash",
-          "isAnimated",
-          "provider",
-          "externalId"
-        ]
-      },
-      "MessageStickerDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
           "packId": {
-            "type": "string"
+            "type": "string",
+            "nullable": true,
+            "description": "Our pack id. `null` for a sticker from search, which belongs to no pack of ours."
           },
           "emoji": {
             "type": "string",
-            "example": "😄"
+            "nullable": true,
+            "example": "😄",
+            "description": "Catalogue stickers only; `null` for a sticker from search."
           },
           "url": {
-            "type": "string"
+            "type": "string",
+            "description": "WebP with a transparent background. Never an MP4 — that format has no alpha channel."
+          },
+          "thumbUrl": {
+            "type": "string",
+            "nullable": true,
+            "description": "Smaller preview, search results only. `null` for a catalogue sticker — a 512×512 WebP is already small enough to be its own preview, so fall back to `url`."
           },
           "width": {
             "type": "integer",
@@ -17724,9 +20378,11 @@
         },
         "required": [
           "id",
+          "provider",
           "packId",
           "emoji",
           "url",
+          "thumbUrl",
           "width",
           "height"
         ]
@@ -17969,6 +20625,41 @@
           "height"
         ]
       },
+      "StickerRefDto": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "$ref": "#/components/schemas/MediaProviderDto"
+          },
+          "externalId": {
+            "type": "string",
+            "description": "The search result `id`."
+          },
+          "url": {
+            "type": "string",
+            "description": "Provider CDN url. Checked against a host allowlist."
+          },
+          "thumbUrl": {
+            "type": "string"
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "height": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "required": [
+          "provider",
+          "externalId",
+          "url",
+          "thumbUrl",
+          "width",
+          "height"
+        ]
+      },
       "SendMessageDto": {
         "type": "object",
         "properties": {
@@ -17994,7 +20685,15 @@
           },
           "stickerId": {
             "type": "string",
-            "description": "Required for `STICKER`. An id from `GET /v1/stickers/packs`."
+            "description": "For a `STICKER` from our own catalogue — an id from `GET /v1/stickers/packs`. Use this **or** `sticker`, never both (422 `STICKER_SOURCE_AMBIGUOUS`); a `STICKER` message needs exactly one of them."
+          },
+          "sticker": {
+            "description": "For a `STICKER` taken from `GET /v1/stickers/search` — pass the search result back verbatim. Use this **or** `stickerId`, never both. The response renders both sources as the same `MessageDto.sticker`, so nothing downstream has to tell them apart.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StickerRefDto"
+              }
+            ]
           },
           "albumId": {
             "type": "string",
@@ -18056,29 +20755,6 @@
         "required": [
           "token",
           "platform"
-        ]
-      },
-      "MediaUploadResponseDto": {
-        "type": "object",
-        "properties": {
-          "url": {
-            "type": "string",
-            "description": "Full-size image URL",
-            "example": "http://localhost:3000/uploads/LISTING/8f14e45f-ceea-467d-9a3e-1a2b3c4d5e6f.jpg"
-          },
-          "thumbUrl": {
-            "type": "string",
-            "nullable": true,
-            "description": "200px variant — always null in v1 (deferred)"
-          },
-          "cardUrl": {
-            "type": "string",
-            "nullable": true,
-            "description": "800px variant — always null in v1 (deferred)"
-          }
-        },
-        "required": [
-          "url"
         ]
       },
       "StickerDto": {
@@ -18175,6 +20851,76 @@
           "version"
         ]
       },
+      "ProviderStickerDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Provider id — pass to `POST /v1/stickers/{id}/share`."
+          },
+          "url": {
+            "type": "string",
+            "description": "WebP with a transparent background (or an alpha-preserving GIF). Never MP4 — that format has no alpha channel, and the sticker would arrive as a white square."
+          },
+          "thumbUrl": {
+            "type": "string"
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "height": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "isAnimated": {
+            "type": "boolean",
+            "description": "Animated stickers loop forever; play them without a control."
+          }
+        },
+        "required": [
+          "id",
+          "url",
+          "thumbUrl",
+          "width",
+          "height",
+          "isAnimated"
+        ]
+      },
+      "StickerSearchResponseDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ProviderStickerDto"
+            }
+          },
+          "next": {
+            "type": "string",
+            "nullable": true,
+            "description": "Cursor for the next page; pass it back as `pos`. Null at the end."
+          },
+          "provider": {
+            "$ref": "#/components/schemas/MediaProviderDto"
+          }
+        },
+        "required": [
+          "items",
+          "next",
+          "provider"
+        ]
+      },
+      "StickerShareDto": {
+        "type": "object",
+        "properties": {
+          "q": {
+            "type": "string",
+            "maxLength": 100,
+            "description": "The search term the result was chosen from, when there was one."
+          }
+        }
+      },
       "GifDto": {
         "type": "object",
         "properties": {
@@ -18245,6 +20991,200 @@
             "description": "The search term the result was chosen from, when there was one."
           }
         }
+      },
+      "StoryKindDto": {
+        "type": "string",
+        "enum": [
+          "IMAGE",
+          "VIDEO"
+        ]
+      },
+      "StoryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "authorId": {
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/StoryKindDto"
+          },
+          "url": {
+            "type": "string",
+            "description": "Requires the same bearer token as any other call."
+          },
+          "thumbUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "height": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "durationMs": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "description": "Video only. `null` for an image — show those for a fixed few seconds instead."
+          },
+          "caption": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 200
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "24 hours after `createdAt`. Past this the story is gone from every response."
+          },
+          "seen": {
+            "type": "boolean",
+            "description": "Whether **you** have opened it. Always `true` on your own stories."
+          },
+          "viewsCount": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "description": "The real count on **your own** stories; `null` on everyone else’s. Someone else’s view count would let you measure the size of their network."
+          }
+        },
+        "required": [
+          "id",
+          "authorId",
+          "kind",
+          "url",
+          "thumbUrl",
+          "width",
+          "height",
+          "durationMs",
+          "caption",
+          "createdAt",
+          "expiresAt",
+          "seen",
+          "viewsCount"
+        ]
+      },
+      "CreateStoryDto": {
+        "type": "object",
+        "properties": {
+          "mediaId": {
+            "type": "string",
+            "description": "The `id` returned by `POST /v1/media/chat-upload` with `kind=STORY_IMAGE` or `STORY_VIDEO` (no `conversationId`). Single-use."
+          },
+          "caption": {
+            "type": "string",
+            "maxLength": 200,
+            "example": "Imtihon tugadi 🎓"
+          }
+        },
+        "required": [
+          "mediaId"
+        ]
+      },
+      "StoryGroupDto": {
+        "type": "object",
+        "properties": {
+          "author": {
+            "$ref": "#/components/schemas/StudentSummaryDto"
+          },
+          "stories": {
+            "description": "Oldest first — play them in this order.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StoryDto"
+            }
+          },
+          "hasUnseen": {
+            "type": "boolean",
+            "description": "Any unseen story in this group. This is what lights the ring around the avatar."
+          },
+          "lastCreatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "author",
+          "stories",
+          "hasUnseen",
+          "lastCreatedAt"
+        ]
+      },
+      "StoryFeedDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "Already ordered: authors with something unseen first, then by most recent story. Draw the avatar row in exactly this order — do not re-sort it.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StoryGroupDto"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "MyStoriesDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "Oldest first. Expired ones are not returned.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StoryDto"
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      },
+      "StoryViewerPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "Most recent viewer first.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StudentSummaryDto"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "hasNext": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "size",
+          "total",
+          "hasNext"
+        ]
       }
     }
   }

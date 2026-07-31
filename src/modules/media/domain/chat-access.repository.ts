@@ -15,4 +15,11 @@ export interface ChatAccessRepository {
    * never used as free file hosting by someone with no one to send to.
    */
   canSend(conversationId: string, studentId: string): Promise<boolean>;
+
+  /**
+   * Whether two students have an accepted connection and neither has blocked the other — the same
+   * gate chat itself uses. Story media is authorised by this rather than by conversation membership:
+   * a story is visible to every connection, including those you have never messaged.
+   */
+  areConnected(a: string, b: string): Promise<boolean>;
 }

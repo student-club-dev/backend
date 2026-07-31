@@ -7,10 +7,16 @@ import { MessageSticker, StickerDirectoryRepository } from '../domain/sticker-di
 export class StickerDirectoryPrismaRepository implements StickerDirectoryRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  findById(stickerId: string): Promise<MessageSticker | null> {
-    return this.prisma.sticker.findUnique({
+  async findById(stickerId: string): Promise<MessageSticker | null> {
+    const row = await this.prisma.sticker.findUnique({
       where: { id: stickerId },
       select: { id: true, packId: true, emoji: true, url: true, width: true, height: true },
     });
+    if (row === null) {
+      return null;
+    }
+    // `provider` and `thumbUrl` are the fields only a provider sticker fills. A catalogue sticker is
+    // a 512×512 WebP that needs no separate preview, and carries no attribution.
+    return { ...row, provider: null, thumbUrl: null };
   }
 }

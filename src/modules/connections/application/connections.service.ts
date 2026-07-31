@@ -189,6 +189,37 @@ export class ConnectionsService {
   }
 
   /**
+   * One student's profile (`GET /v1/students/{id}`), with presence and phone masked for this
+   * caller and the relationship annotated.
+   *
+   * Exists because the only other way to see a person was to find them in a list or already have a
+   * conversation with them — so a profile opened from anywhere else could not be shown at all.
+   *
+   * A block is a 403 rather than a 404: the caller can see this student exists (they were connected,
+   * or found them before), so pretending otherwise would just look broken. Self is allowed — opening
+   * your own profile through the same screen is the obvious thing for the client to do.
+   */
+  async getStudent(user: AuthenticatedUser, studentId: string): Promise<SearchResult> {
+    const student = await this.directory.findSummary(studentId);
+    if (student === null) {
+      throw AppException.notFound(ERROR_CODE.STUDENT_NOT_FOUND, 'Foydalanuvchi topilmadi');
+    }
+    if (studentId !== user.id && (await this.connections.isBlockedEitherWay(user.id, studentId))) {
+      throw new AppException(ERROR_CODE.USER_BLOCKED, 403, 'Bu profilni ko‘rib bo‘lmaydi');
+    }
+
+    const edge = studentId === user.id ? null : await this.connections.findEdge(user.id, studentId);
+    const view = studentId === user.id ? ConnectionView.NONE : this.viewFor(edge, user.id);
+    const [withPresence] = await this.withPresence(
+      [student],
+      // Your own profile counts as connected to yourself: otherwise you would open it and find your
+      // own phone number blanked out by your own privacy setting.
+      () => studentId === user.id || view === ConnectionView.CONNECTED,
+    );
+    return { student: withPresence, view };
+  }
+
+  /**
    * Discovery search by username/full-name (`GET /v1/students/search`, deprecated). A thin alias
    * over `listStudents` so the two endpoints can never drift apart.
    */

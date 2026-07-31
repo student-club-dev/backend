@@ -8,10 +8,15 @@ export interface UploadedChatFile {
   originalname?: string;
 }
 
-/** A validated `POST /v1/media/chat-upload` request. */
+/**
+ * A validated `POST /v1/media/chat-upload` request.
+ *
+ * `conversationId` is `null` for the kinds that have no conversation — `PROFILE_PHOTO` and the
+ * `STORY_*` pair. The controller rejects a missing one for every other kind before we get here.
+ */
 export interface ChatUploadInput {
   kind: MediaKind;
-  conversationId: string;
+  conversationId: string | null;
   file?: UploadedChatFile;
 }
 

@@ -3,6 +3,7 @@ import { AccountType } from '../../../common/enums/account-type.enum';
 import { ERROR_CODE } from '../../../common/errors/error-code';
 import { AppException } from '../../../common/exceptions/app.exception';
 import type { AuthenticatedUser } from '../../../common/types/authenticated-user';
+import { normalizeBio } from '../domain/bio';
 import { Profile, ProfilePatch } from '../domain/entities/profile.entity';
 import {
   BUSINESS_PROFILE_REPOSITORY,
@@ -106,6 +107,14 @@ export class ProfileService {
       }
       if (input.lastSeenVisibility !== undefined) {
         patch.lastSeenVisibility = input.lastSeenVisibility;
+      }
+      if (input.phoneVisibility !== undefined) {
+        patch.phoneVisibility = input.phoneVisibility;
+      }
+      // Rejects links, `@handle`s and phone numbers, and turns a blank bio into `null` so that
+      // clearing one and never setting one are the same stored state.
+      if (input.bio !== undefined) {
+        patch.bio = normalizeBio(input.bio);
       }
     }
     return patch;

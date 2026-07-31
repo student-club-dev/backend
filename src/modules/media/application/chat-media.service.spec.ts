@@ -34,6 +34,7 @@ function makeAssets(overrides: Partial<MediaAssetRepository> = {}): MediaAssetRe
       createdAt: new Date('2026-07-29T00:00:00Z'),
     })),
     findById: jest.fn().mockResolvedValue(null),
+    findByIds: jest.fn().mockResolvedValue([]),
     bytesUploadedSince: jest.fn().mockResolvedValue(0),
     markProcessed: jest.fn(),
     attachToMessage: jest.fn().mockResolvedValue(undefined),
@@ -43,10 +44,11 @@ function makeAssets(overrides: Partial<MediaAssetRepository> = {}): MediaAssetRe
   };
 }
 
-function makeAccess(canSend = true, isMember = true): ChatAccessRepository {
+function makeAccess(canSend = true, isMember = true, areConnected = true): ChatAccessRepository {
   return {
     isMember: jest.fn().mockResolvedValue(isMember),
     canSend: jest.fn().mockResolvedValue(canSend),
+    areConnected: jest.fn().mockResolvedValue(areConnected),
   };
 }
 

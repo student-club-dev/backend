@@ -1,9 +1,11 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEmail, IsEnum, IsInt, IsOptional, IsString, Matches } from 'class-validator';
+import { IsEmail, IsEnum, IsInt, IsOptional, IsString, Matches, MaxLength } from 'class-validator';
 import { UpdateProfileInput } from '../../application/profile.io';
+import { MAX_BIO_LENGTH } from '../../domain/bio';
 import { CourseYear } from '../../domain/enums/course-year.enum';
 import { Gender } from '../../domain/enums/gender.enum';
 import { LastSeenVisibility } from '../../domain/enums/last-seen-visibility.enum';
+import { PhoneVisibility } from '../../domain/enums/phone-visibility.enum';
 import { ProfileRole } from '../../domain/enums/profile-role.enum';
 
 /**
@@ -79,6 +81,32 @@ export class UpdateProfileDto {
   @IsEnum(LastSeenVisibility)
   lastSeenVisibility?: LastSeenVisibility;
 
+  @ApiPropertyOptional({
+    enum: PhoneVisibility,
+    enumName: 'PhoneVisibilityDto',
+    nullable: true,
+    description:
+      'Students only — who may see your `phoneNumber` on `StudentSummaryDto`. Defaults to ' +
+      '**`NOBODY`**; set it explicitly to share your number.',
+  })
+  @IsOptional()
+  @IsEnum(PhoneVisibility)
+  phoneVisibility?: PhoneVisibility;
+
+  @ApiPropertyOptional({
+    type: String,
+    nullable: true,
+    maxLength: 140,
+    description:
+      'Students only — up to 140 characters. Links, `t.me/…`, `@handle`s and phone numbers are ' +
+      'rejected with `422 BIO_NOT_ALLOWED`. An empty string clears it.',
+    example: '5/5 · Dasturiy injiniring',
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(MAX_BIO_LENGTH)
+  bio?: string;
+
   @ApiPropertyOptional({ nullable: true })
   @IsOptional()
   @IsString()
@@ -97,6 +125,10 @@ export class UpdateProfileDto {
       birthYear: this.birthYear ?? undefined,
       courseYear: this.courseYear ?? undefined,
       lastSeenVisibility: this.lastSeenVisibility ?? undefined,
+      phoneVisibility: this.phoneVisibility ?? undefined,
+      // `?? undefined` on purpose, like every other field here: an explicit `null` means "leave it
+      // alone". Clearing a bio is `""`, which survives this and normalises to `null` in the service.
+      bio: this.bio ?? undefined,
       avatarUrl: this.avatarUrl ?? undefined,
     };
   }

@@ -62,15 +62,22 @@ tasdiqlandi: `ffmpeg version 8.0.1`.
 Integratsiya tayyor va haqiqiy kalit bilan tekshirilgan. Qolgani — **test kalitidan production
 kalitiga o'tish** (test = soatiga 100 ta, prod uchun yetarli emas). Batafsil quyida.
 
-## 6. 🟡 Stiker kontenti — 2 paket × 24 ta WebP
+## 6. ✅ ~~Stiker kontenti — 2 paket × 24 ta WebP~~ — BEKOR QILINDI (2026-07-31)
 
-Backend sxemasi, endpointi va seed skripti tayyor bo'ladi, lekin **tasvirlarning o'zi** kontent
-ishi. Mobil jamoaning tavsiyasi (va u to'g'ri): **Microsoft Fluent Emoji, MIT litsenziya**.
+**Bu ish endi kerak emas.** Mobil jamoa o'z zaxira katalogini qurib oldi (1625 ta Fluent Emoji 3D
+stiker, MIT litsenziya, CDN'dan yuklanadi) va stiker paneli ilovada to'liq ishlayapti. Hech qanday
+tasvir tayyorlash, seed qilish yoki `GET /v1/stickers/packs` ni o'zgartirish shart emas —
+kontrakt o'z holicha qoldi.
 
-- Manba: <https://github.com/microsoft/fluentui-emoji>
-- Litsenziya: MIT — tijoriy ishlatishga ruxsat, atribut talab qilmaydi
-- Kerak: har biri **512×512 WebP, shaffof fon**, talaba mavzusida (imtihon, kutubxona, kofe, uyqu,
-  deadline, "5 baho")
+O'rniga **`GET /v1/stickers/search`** qo'shildi (KLIPY Sticker API — o'sha kalit, o'sha base URL,
+yangi shartnoma kerak bo'lmadi). Fluent Emoji emoji shaklidagi stikerlar edi; foydalanuvchi
+kutadigan **personaj** stikerlarini faqat qidiruv bera oladi. Batafsil:
+`docs/api/mobile_questions/STICKER_SEARCH_RESPONSE.md`.
+
+⚠️ **Qolgan yagona ish** — §5 dagi production kalit. Stiker qidiruvi qo'shilgani uchun test
+kalitining soatiga 100 ta chegarasi endi **ikki barobar tezroq** tugaydi (GIF + stiker bitta
+kvotani bo'lishadi). Prod kalit uchun so'raladigan videoda **ikkala panelni** ko'rsating — bitta
+ariza yetadi.
 
 ⛔ **Telegram stikerlarini olib ishlatmang.** Mobil jamoa buni to'g'ri ogohlantirgan: mualliflik
 huquqi buzilishi va ilovaning App Store / Google Play dan olib tashlanishi xavfi.
@@ -300,6 +307,17 @@ keyin ishlatilmaydi, o'chirish mumkin.
 | 6 | **`.env` sirlarini almashtirish** | siz | xavfsizlik — eng ustuvor |
 | 7 | `APPLE_ALLOWED_CLIENT_IDS` nomini to'g'rilash | siz | Apple orqali kirish |
 | 8 | Firebase'ga Android/iOS ilovalarini qo'shish + APNs `.p8` | mobil jamoa | push haqiqiy qurilmaga |
-| 9 | KLIPY **production access** (test kaliti 100/soat) | siz + mobil jamoa | GIF **qidiruvi** prod'da |
-| 10 | Stiker tasvirlari (512×512 WebP) | dizayn/kontent | faqat stikerlar |
+| 9 | KLIPY **production access** (test kaliti 100/soat) | siz + mobil jamoa | GIF **va stiker** qidiruvi prod'da |
+| 10 | ~~Stiker tasvirlari~~ — **bekor qilindi**, §6 ga qarang | — | — |
 | 11 | coturn | devops | qo'ng'iroq (keyinroq) |
+
+**2026-07-31, ikkinchi to'plam** (mobil jamoaning ikkita hujjati bo'yicha) — kod tayyor,
+deploy qilinmagan:
+
+| Ish | Hujjat |
+|---|---|
+| Stiker qidiruvi (KLIPY) + `SendMessageDto.sticker` | `docs/api/mobile_questions/STICKER_SEARCH_RESPONSE.md` |
+| Story (to'liq) + bio / phoneVisibility / profil rasmlari / `GET /v1/students/{id}` | `docs/api/mobile_questions/STORY_AND_PROFILE_RESPONSE.md` |
+
+Prod'ga chiqishdan oldin: 3 ta yangi migratsiyani qo'llash (hammasi additive) va
+`docs/handoff/mobile/student-api.json` dan Kotlin klientini qayta generatsiya qilish.

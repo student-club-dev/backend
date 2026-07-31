@@ -2,10 +2,12 @@ import {
   CourseYear as PrismaCourseYear,
   Gender as PrismaGender,
   LastSeenVisibility as PrismaLastSeenVisibility,
+  PhoneVisibility as PrismaPhoneVisibility,
 } from '@prisma/client';
 import { CourseYear } from '../domain/enums/course-year.enum';
 import { Gender } from '../domain/enums/gender.enum';
 import { LastSeenVisibility } from '../domain/enums/last-seen-visibility.enum';
+import { PhoneVisibility } from '../domain/enums/phone-visibility.enum';
 
 // The Prisma enums carry different values from the wire (Gender matches, CourseYear does not:
 // YEAR_1 <-> "1"), so both directions are mapped explicitly. Profiles owns these domain enums;
@@ -51,3 +53,15 @@ export const LAST_SEEN_VISIBILITY_TO_PRISMA: Record<LastSeenVisibility, PrismaLa
     [LastSeenVisibility.CONNECTIONS]: PrismaLastSeenVisibility.CONNECTIONS,
     [LastSeenVisibility.NOBODY]: PrismaLastSeenVisibility.NOBODY,
   };
+
+export const PHONE_VISIBILITY_TO_DOMAIN: Record<PrismaPhoneVisibility, PhoneVisibility> = {
+  EVERYONE: PhoneVisibility.EVERYONE,
+  CONNECTIONS: PhoneVisibility.CONNECTIONS,
+  NOBODY: PhoneVisibility.NOBODY,
+};
+
+export const PHONE_VISIBILITY_TO_PRISMA: Record<PhoneVisibility, PrismaPhoneVisibility> = {
+  [PhoneVisibility.EVERYONE]: PrismaPhoneVisibility.EVERYONE,
+  [PhoneVisibility.CONNECTIONS]: PrismaPhoneVisibility.CONNECTIONS,
+  [PhoneVisibility.NOBODY]: PrismaPhoneVisibility.NOBODY,
+};

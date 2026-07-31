@@ -1,3 +1,4 @@
+import { MediaProvider } from '../../media/domain/enums/media-kind.enum';
 import { LastSeenVisibility } from '../../profiles/domain/enums/last-seen-visibility.enum';
 import { MessageType } from './enums/message-type.enum';
 import { Conversation, ConversationMember } from './entities/conversation.entity';
@@ -27,8 +28,21 @@ export interface AppendMessageInput {
   body: string | null;
   clientMsgId: string | null;
   mediaId: string | null;
+  /** A sticker from our seeded catalogue. Never set together with `externalSticker`. */
   stickerId: string | null;
+  /** A sticker from provider search, stored on the row — there is no catalogue row to point at. */
+  externalSticker: ExternalStickerRow | null;
   albumId: string | null;
+}
+
+/** The provider-sticker columns denormalised onto a message. */
+export interface ExternalStickerRow {
+  provider: MediaProvider;
+  externalId: string;
+  url: string;
+  thumbUrl: string;
+  width: number;
+  height: number;
 }
 
 /**

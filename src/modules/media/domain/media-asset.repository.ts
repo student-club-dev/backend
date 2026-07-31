@@ -8,6 +8,9 @@ export interface MediaAssetRepository {
 
   findById(id: string): Promise<MediaAsset | null>;
 
+  /** Several assets at once — the cleanup passes, which need their storage keys before deleting. */
+  findByIds(ids: string[]): Promise<MediaAsset[]>;
+
   /** Bytes this student uploaded since `since` — the daily quota (chat media spec §9). */
   bytesUploadedSince(ownerId: string, since: Date): Promise<number>;
 

@@ -1,6 +1,7 @@
 import { CourseYear } from '../domain/enums/course-year.enum';
 import { Gender } from '../domain/enums/gender.enum';
 import { LastSeenVisibility } from '../domain/enums/last-seen-visibility.enum';
+import { PhoneVisibility } from '../domain/enums/phone-visibility.enum';
 
 /**
  * Fields the client may change on its own profile. Every field is optional (partial update);
@@ -18,5 +19,8 @@ export interface UpdateProfileInput {
   birthYear?: number;
   courseYear?: CourseYear;
   lastSeenVisibility?: LastSeenVisibility;
+  phoneVisibility?: PhoneVisibility;
+  /** Raw text — validated and normalised by the service, which rejects links and phone numbers. */
+  bio?: string;
   avatarUrl?: string;
 }

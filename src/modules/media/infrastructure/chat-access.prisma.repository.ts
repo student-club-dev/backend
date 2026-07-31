@@ -33,14 +33,20 @@ export class ChatAccessPrismaRepository implements ChatAccessRepository {
     if (!(await this.isMember(conversationId, studentId))) {
       return false;
     }
+    return this.areConnected(studentId, other.studentId);
+  }
 
+  async areConnected(a: string, b: string): Promise<boolean> {
+    if (a === b) {
+      return true;
+    }
     const [connection, block] = await Promise.all([
       this.prisma.connection.findFirst({
         where: {
           status: ConnectionStatus.ACCEPTED,
           OR: [
-            { requesterId: studentId, addresseeId: other.studentId },
-            { requesterId: other.studentId, addresseeId: studentId },
+            { requesterId: a, addresseeId: b },
+            { requesterId: b, addresseeId: a },
           ],
         },
         select: { id: true },
@@ -48,8 +54,8 @@ export class ChatAccessPrismaRepository implements ChatAccessRepository {
       this.prisma.block.findFirst({
         where: {
           OR: [
-            { blockerId: studentId, blockedId: other.studentId },
-            { blockerId: other.studentId, blockedId: studentId },
+            { blockerId: a, blockedId: b },
+            { blockerId: b, blockedId: a },
           ],
         },
         select: { id: true },

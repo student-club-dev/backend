@@ -41,5 +41,7 @@ import { StudentSearchController } from './presentation/student-search.controlle
     { provide: STUDENT_DIRECTORY, useClass: StudentDirectoryPrismaRepository },
     { provide: MESSAGE_DIRECTORY, useClass: MessageDirectoryPrismaRepository },
   ],
+  // Stories groups its feed by author and needs the full summary for each one.
+  exports: [STUDENT_DIRECTORY],
 })
 export class ConnectionsModule {}

@@ -1,11 +1,24 @@
-# Chat — backend o'zgarishlari (mobil jamoa uchun)
+# Backend o'zgarishlari (mobil jamoa uchun)
 
-Bu papka `CHAT_MEDIA_AND_CALLS_BACKEND.md` hujjatingizga javoban qilingan **barcha** backend
-ishlarini o'z ichiga oladi. Boshqa hech qayerga qarash shart emas.
+Bu papka sizning **uchta** hujjatingizga javoban qilingan barcha backend ishlarini o'z ichiga
+oladi. Boshqa hech qayerga qarash shart emas.
 
-Sana: **2026-07-31 — hammasi production'da** (`api.studentclub.uz`). Branch: `main`.
+| Sizning hujjatingiz | Javob | Holat |
+|---|---|---|
+| `CHAT_MEDIA_AND_CALLS_BACKEND.md` | `02`–`05` | ✅ **production'da** (2026-07-31) |
+| `backend-4-stiker-qidiruv-prompt.md` | `06` | 🟡 kod tayyor, **deploy qilinmagan** |
+| `STORY_AND_PROFILE_BACKEND.md` | `07`, `08` | 🟡 kod tayyor, **deploy qilinmagan** |
+
+Branch: `main`. Baza: `api.studentclub.uz`.
+
+> ⚠️ **Ikkinchi to'plam hali chiqmagan.** Kod yozildi, testlar o'tdi (890 unit + 114 e2e),
+> migratsiyalar dev bazada qo'llandi — lekin production'ga **deploy qilinmadi**. Klientni
+> yozishni boshlashingiz mumkin, ammo jonli baza bu endpointlarni hozircha 404 qaytaradi.
+> Deploy bo'lgach shu jadval yangilanadi.
 
 ## Nima o'qish kerak
+
+### Chat (allaqachon production'da)
 
 | Fayl | Nima uchun |
 |---|---|
@@ -13,7 +26,20 @@ Sana: **2026-07-31 — hammasi production'da** (`api.studentclub.uz`). Branch: `
 | **`03-WEBSOCKET.md`** | `/chat` WS protokoli. **Swagger'da yo'q** — generatsiya qilingan klient buni bilmaydi, qo'lda yoziladi |
 | **`04-GIF-INTEGRATION.md`** | GIF paneli: provayder, atribut majburiyati, xatolar |
 | **`05-PUSH-SETUP.md`** | Push: Firebase loyihasi, APNs kaliti, `/v1/devices`, payload shakli. **Sizda bajarilmagan ish shu yerda** |
-| **`student-api.json`** | OpenAPI 3.0 — **Kotlin klientini shundan generatsiya qiling** |
+
+### Yangi to'plam (deploy kutilmoqda)
+
+| Fayl | Nima uchun |
+|---|---|
+| **`06-STICKER-SEARCH.md`** | `GET /v1/stickers/search`, `SendMessageDto.sticker`. ⚠️ **`MessageDto.sticker` da buzuvchi o'zgarish bor** |
+| **`07-STORIES.md`** | Story: yuklash, lenta, ko'rish, o'chirish, cheklovlar |
+| **`08-PROFILE.md`** | Bir nechta profil rasmi, `bio`, `phoneVisibility`, `GET /v1/students/{id}` |
+
+### Hamma uchun
+
+| Fayl | Nima uchun |
+|---|---|
+| **`student-api.json`** | OpenAPI 3.0 — **Kotlin klientini shundan generatsiya qiling.** Uchala to'plam ham ichida |
 
 ## Eng qisqa xulosa
 
@@ -71,9 +97,33 @@ build toza.
 | FCM autentifikatsiyasi | `OK — project studentclub-191b0` |
 | Yuklangan fayllar doimiyligi | volume qo'shildi |
 
-⚠️ **Stiker paketlari hozircha bo'sh.** `GET /v1/stickers/packs` ishlaydi va to'g'ri shakl
-qaytaradi, lekin tasvirlar hali tayyorlanmagan (512×512 WebP, Fluent Emoji / MIT). Panelni bo'sh
-ro'yxatga chidamli qilib yozing — kontent keyinroq qo'shiladi va `version` o'zgaradi.
+> ~~⚠️ Stiker paketlari hozircha bo'sh — tasvirlar tayyorlanmagan.~~
+> **Bu eslatma bekor** (2026-07-31). Siz o'z zaxira katalogingizni qurib olganingizdan keyin
+> backend tomonda tasvir tayyorlash bekor qilindi. `GET /v1/stickers/packs` kontrakti o'zgarmadi.
+> O'rniga **stiker qidiruvi** qo'shildi — `06-STICKER-SEARCH.md`.
+
+---
+
+## Ikkinchi to'plam — eng qisqa xulosa
+
+**Stiker (`06`):** `GET /v1/stickers/search` + `POST /v1/stickers/{id}/share` (KLIPY, o'sha kalit).
+`SendMessageDto` ga `sticker` obyekti — `stickerId` bilan bir vaqtda emas.
+⚠️ **`MessageDto.sticker.packId` va `.emoji` endi nullable** — bu yagona buzuvchi o'zgarish.
+
+**Story (`07`):** 6 ta endpoint, `chat-upload` ga `STORY_IMAGE`/`STORY_VIDEO` turlari.
+Eshik chat bilan bir xil. Bir vaqtda 10 ta, kuniga 20 ta. **Push yuborilmaydi.**
+
+**Profil (`08`):** `photos[]` massivi + 4 ta endpoint (maks 6 ta), `bio` (140 belgi, spam filtri),
+`phoneVisibility` (**odatiy `NOBODY`**), `GET /v1/students/{id}`.
+`avatarUrl` **saqlanib qoldi** va `photos[0]` bilan sinxron.
+
+### Sizga bog'liq qo'shimcha ish
+
+1. **Klientni qayta generatsiya qiling** — `student-api.json` yangilangan (65 ta yo'l).
+2. **`MessageDto.sticker` nullability** — `packId`/`emoji` uchun `String?` ni ishlang (`06` §4).
+3. **Story media URL'lari token talab qiladi** — oddiy rasm yuklovchi ishlamaydi (`07` §11).
+
+---
 
 Nima qolganining to'liq ro'yxati backend repo'sida: `docs/handoff/PENDING_ACTIONS.md` — u
 backend/DevOps uchun va bu papkaga ataylab kiritilmagan.

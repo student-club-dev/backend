@@ -46,6 +46,15 @@ enum LastSeenVisibility {
   NOBODY
 }
 
+/// Who may see a student's phone number. Same three audiences as LastSeenVisibility and the same
+/// resolution logic, but a separate type: the two settings are independently chosen by the user, and
+/// sharing one Postgres enum would make adding an audience to one of them silently change both.
+enum PhoneVisibility {
+  EVERYONE
+  CONNECTIONS
+  NOBODY
+}
+
 enum BusinessStatus {
   DRAFT
   PENDING_REVIEW
@@ -185,6 +194,10 @@ model Student {
   lastName      String? @map("last_name")
   avatarUrl     String? @map("avatar_url")
   username      String? @unique
+  /// Short free-text blurb on the profile screen. Capped in the column, not just in the DTO, so a
+  /// direct write cannot smuggle in a longer one. Links and phone numbers are rejected by the
+  /// service — a bio is the cheapest ad slot on a social app if you let it be one.
+  bio           String? @db.VarChar(140)
 
   // Student-specific profile
   gender          Gender?
@@ -198,6 +211,10 @@ model Student {
   lastSeenAt         DateTime?          @map("last_seen_at")
   // Who may see `lastSeenAt`/`online` (C7 privacy). CONNECTIONS matches the pre-existing behaviour.
   lastSeenVisibility LastSeenVisibility @default(CONNECTIONS) @map("last_seen_visibility")
+  /// Who may see `phoneNumber` on this student's summary. Defaults to NOBODY, unlike the last-seen
+  /// switch: every existing student gave us their number to sign in with, not to publish, and a
+  /// default that exposes it would opt them into spam calls without ever asking.
+  phoneVisibility    PhoneVisibility    @default(NOBODY) @map("phone_visibility")
 
   // Admin ban/suspend (Faza 3). A non-ACTIVE account cannot log in or refresh.
   status    StudentStatus @default(ACTIVE)
@@ -222,6 +239,11 @@ model Student {
   messagesSent            Message[]
   mediaAssets             MediaAsset[]
   deviceTokens            DeviceToken[]
+
+  // Profile & stories
+  profilePhotos ProfilePhoto[]
+  stories       Story[]
+  storyViews    StoryView[]
 
   // Discovery filters on GET /v1/students — one index per column so Postgres can bitmap-AND any
   // combination of them; `createdAt` backs the RECENT sort.
@@ -983,9 +1005,23 @@ model Message {
 
   // Sticker messages carry no MediaAsset — the sticker is shared catalogue content, not an upload.
   stickerId String? @map("sticker_id")
+
+  // A sticker picked from provider search instead of our catalogue. Referenced, never copied:
+  // re-hosting their files is against their terms, which is also why there is no `mediaId` here.
+  // Mutually exclusive with `stickerId` — the service rejects a send that carries both, and
+  // `MessageDto.sticker` is assembled from whichever one is set so the client sees one shape.
+  // Denormalised onto the row on purpose: there is no provider row to join to, and a sticker sent
+  // last year must keep rendering even after it leaves the provider's catalogue.
+  stickerProvider   MediaProvider? @map("sticker_provider")
+  stickerExternalId String?        @map("sticker_external_id")
+  stickerUrl        String?        @map("sticker_url")
+  stickerThumbUrl   String?        @map("sticker_thumb_url")
+  stickerWidth      Int?           @map("sticker_width")
+  stickerHeight     Int?           @map("sticker_height")
+
   // Groups the messages of one multi-image send. Purely presentational: each image stays its own
   // message with its own `seq`, or unread counts and `?after=` paging would break (chat spec §3).
-  albumId   String? @map("album_id")
+  albumId String? @map("album_id")
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   sender       Student      @relation(fields: [senderId], references: [id], onDelete: Cascade)
@@ -1009,6 +1045,13 @@ enum MediaKind {
   VIDEO
   VOICE
   FILE
+  /// One of a student's profile pictures. Not conversation-scoped, and claimed by a ProfilePhoto row
+  /// rather than by a message.
+  PROFILE_PHOTO
+  /// Story media. Same processing as chat images/video (EXIF stripped, H.264/AAC, poster frame),
+  /// different retention: the Story row expires after 24h and the cron removes the bytes with it.
+  STORY_IMAGE
+  STORY_VIDEO
 }
 
 enum MediaStatus {
@@ -1040,9 +1083,14 @@ enum ModerationStatus {
 model MediaAsset {
   id             String           @id @default(cuid())
   ownerId        String           @map("owner_id")
-  // Uploads are scoped to a conversation up front: it is the permission check (only a member may
-  // upload) and it is what `GET /v1/media/{id}/raw` re-checks on every read.
-  conversationId String           @map("conversation_id")
+  // Chat uploads are scoped to a conversation up front: it is the permission check (only a member
+  // may upload) and it is what `GET /v1/media/{id}/raw` re-checks on every read.
+  //
+  // Null for the kinds that have no conversation — PROFILE_PHOTO and the STORY_* pair. Those are
+  // authorised by their own rule instead: a profile photo by "any signed-in student", story media by
+  // "the owner or someone connected to them". Making the column nullable rather than inventing a
+  // sentinel conversation keeps that distinction checkable in one place.
+  conversationId String?          @map("conversation_id")
   kind           MediaKind
   status         MediaStatus      @default(READY)
   moderation     ModerationStatus @default(PENDING)
@@ -1075,9 +1123,11 @@ model MediaAsset {
   messageId String?  @unique @map("message_id")
   createdAt DateTime @default(now()) @map("created_at")
 
-  owner        Student      @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  message      Message?     @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  owner        Student       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  message      Message?      @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  profilePhoto ProfilePhoto?
+  story        Story?
 
   // Serves the per-student daily byte quota (SUM(size_bytes) WHERE owner AND created_at > now()-24h).
   @@index([ownerId, createdAt])
@@ -1121,6 +1171,98 @@ model Sticker {
 
   @@index([packId])
   @@map("stickers")
+}
+
+// ---- Profile photos (the swipeable set on the profile screen) ----
+
+/// One of a student's profile pictures. A set rather than a single `avatarUrl`, so the profile
+/// screen can page through them the way Telegram's does.
+///
+/// `url`/`thumbUrl`/`width`/`height` are denormalised from the MediaAsset on purpose: this is read on
+/// every profile open and every student list, and joining media on each row to fetch four values
+/// that never change would cost more than storing them.
+model ProfilePhoto {
+  id        String @id @default(cuid())
+  studentId String @map("student_id")
+  mediaId   String @unique @map("media_id")
+
+  url       String
+  thumbUrl  String? @map("thumb_url")
+  width     Int?
+  height    Int?
+  /// Position in the set. 0 is the current avatar — `Student.avatarUrl` is kept in step with it,
+  /// because clients already in the field only read `avatarUrl` and would otherwise show a stale
+  /// picture to half the user's friends.
+  sortOrder Int     @default(0) @map("sort_order")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  student Student    @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  media   MediaAsset @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+
+  // Serves both reads there are: "this student's photos, in order" and the per-student count.
+  @@index([studentId, sortOrder])
+  @@map("profile_photos")
+}
+
+// ---- Stories (24-hour posts, gated by the same connection as chat) ----
+
+enum StoryKind {
+  IMAGE
+  VIDEO
+}
+
+/// A story: an image or a short video that disappears 24 hours after it is posted.
+model Story {
+  id       String    @id @default(cuid())
+  authorId String    @map("author_id")
+  kind     StoryKind
+  mediaId  String    @unique @map("media_id")
+  caption  String?   @db.VarChar(200)
+
+  url        String
+  thumbUrl   String? @map("thumb_url")
+  width      Int?
+  height     Int?
+  durationMs Int?    @map("duration_ms")
+
+  createdAt DateTime  @default(now()) @map("created_at")
+  /// Stored, not computed from `createdAt + 24h`. An expression cannot be indexed the way a column
+  /// can, and both the feed filter and the cleanup sweep are driven by exactly this comparison.
+  expiresAt DateTime  @map("expires_at")
+  /// Set when the author deletes it early. The row survives so the view rows keep their foreign key
+  /// until the cleanup pass takes both.
+  deletedAt DateTime? @map("deleted_at")
+
+  /// Denormalised count so the author's own list does not aggregate `story_views` per row. Kept in
+  /// step by the same statement that inserts the view.
+  viewsCount Int @default(0) @map("views_count")
+
+  author Student     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  media  MediaAsset  @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  views  StoryView[]
+
+  // The feed: one author's live stories, newest first.
+  @@index([authorId, createdAt])
+  // The cleanup sweep, and the `expiresAt > now()` filter every read carries.
+  @@index([expiresAt])
+  @@map("stories")
+}
+
+/// Who has seen a story. The composite primary key is what makes `POST /{id}/view` idempotent —
+/// re-opening a story cannot inflate the count, because the second insert simply conflicts.
+model StoryView {
+  storyId  String   @map("story_id")
+  viewerId String   @map("viewer_id")
+  viewedAt DateTime @default(now()) @map("viewed_at")
+
+  story  Story   @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  viewer Student @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+
+  @@id([storyId, viewerId])
+  // "Which of these stories have I already seen" — the feed's `hasUnseen` flag.
+  @@index([viewerId])
+  @@map("story_views")
 }
 
 // ---- Push notifications (device tokens for offline delivery — chat.md C8) ----

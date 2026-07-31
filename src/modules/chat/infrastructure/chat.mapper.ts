@@ -10,14 +10,20 @@ import { MediaAsset } from '../../media/domain/entities/media-asset.entity';
 import { MediaKind, MediaProvider, MediaStatus } from '../../media/domain/enums/media-kind.enum';
 import { StudentSummary } from '../../connections/domain/entities/student-summary.entity';
 import {
+  ProfilePhotoRow,
+  toStudentPhotos,
+} from '../../connections/infrastructure/connection.mapper';
+import {
   COURSE_YEAR_TO_DOMAIN,
   GENDER_TO_DOMAIN,
   LAST_SEEN_VISIBILITY_TO_DOMAIN,
+  PHONE_VISIBILITY_TO_DOMAIN,
 } from '../../profiles/infrastructure/profile-enums.mapper';
 import { Conversation, ConversationMember } from '../domain/entities/conversation.entity';
 import { Message } from '../domain/entities/message.entity';
 import { ConversationType } from '../domain/enums/conversation-type.enum';
 import { MessageType } from '../domain/enums/message-type.enum';
+import { MessageSticker } from '../domain/sticker-directory.repository';
 
 /** The student columns for a chat StudentSummary. */
 export type ChatSummaryRow = Pick<
@@ -27,12 +33,15 @@ export type ChatSummaryRow = Pick<
   | 'firstName'
   | 'lastName'
   | 'avatarUrl'
+  | 'bio'
   | 'universityId'
   | 'gender'
   | 'courseYear'
   | 'lastSeenAt'
   | 'lastSeenVisibility'
->;
+  | 'phoneNumber'
+  | 'phoneVisibility'
+> & { profilePhotos?: ProfilePhotoRow[] };
 
 /** Maps Prisma chat rows to the domain. Prisma enums carry the same wire values as ours. */
 export class ChatMapper {
@@ -65,18 +74,44 @@ export class ChatMapper {
         row.attachment === undefined || row.attachment === null
           ? null
           : ChatMapper.toAttachment(row.attachment),
-      sticker:
-        row.sticker === undefined || row.sticker === null
-          ? null
-          : {
-              id: row.sticker.id,
-              packId: row.sticker.packId,
-              emoji: row.sticker.emoji,
-              url: row.sticker.url,
-              width: row.sticker.width,
-              height: row.sticker.height,
-            },
+      sticker: ChatMapper.toSticker(row),
       createdAt: row.createdAt,
+    };
+  }
+
+  /**
+   * The message's sticker, whichever catalogue it came from — the joined `Sticker` row for one of
+   * ours, or the columns denormalised onto the message for a provider pick. One shape out, so
+   * `MessageDto.sticker` looks the same to the client either way.
+   */
+  private static toSticker(
+    row: PrismaMessage & { sticker?: PrismaSticker | null },
+  ): MessageSticker | null {
+    if (row.sticker !== undefined && row.sticker !== null) {
+      return {
+        id: row.sticker.id,
+        provider: null,
+        packId: row.sticker.packId,
+        emoji: row.sticker.emoji,
+        url: row.sticker.url,
+        thumbUrl: null,
+        width: row.sticker.width,
+        height: row.sticker.height,
+      };
+    }
+    // `stickerUrl` is what makes the row a provider sticker; the rest is written with it.
+    if (row.stickerUrl === null || row.stickerExternalId === null) {
+      return null;
+    }
+    return {
+      id: row.stickerExternalId,
+      provider: row.stickerProvider === null ? null : MediaProvider[row.stickerProvider],
+      packId: null,
+      emoji: null,
+      url: row.stickerUrl,
+      thumbUrl: row.stickerThumbUrl,
+      width: row.stickerWidth ?? 0,
+      height: row.stickerHeight ?? 0,
     };
   }
 
@@ -125,12 +160,17 @@ export class ChatMapper {
       username: row.username,
       fullName,
       avatarUrl: row.avatarUrl,
+      photos: toStudentPhotos(row.profilePhotos),
+      bio: row.bio,
       universityId: row.universityId,
       gender: row.gender === null ? null : GENDER_TO_DOMAIN[row.gender],
       courseYear: row.courseYear === null ? null : COURSE_YEAR_TO_DOMAIN[row.courseYear],
       online: false,
       lastSeenAt: row.lastSeenAt,
+      // Raw — `applyPresenceVisibility` blanks both this and presence for the specific reader.
+      phoneNumber: row.phoneNumber,
       lastSeenVisibility: LAST_SEEN_VISIBILITY_TO_DOMAIN[row.lastSeenVisibility],
+      phoneVisibility: PHONE_VISIBILITY_TO_DOMAIN[row.phoneVisibility],
     };
   }
 }

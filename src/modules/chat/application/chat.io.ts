@@ -33,7 +33,10 @@ export interface SendMessageInput {
   mediaId?: string | null;
   /** A GIF chosen from provider search — referenced, never re-hosted. */
   gif?: ExternalGifRef | null;
+  /** A sticker from our seeded catalogue. Use this **or** `sticker`, never both. */
   stickerId?: string | null;
+  /** A sticker chosen from provider search — referenced, never re-hosted. */
+  sticker?: ExternalStickerRef | null;
   albumId?: string | null;
   clientMsgId?: string | null;
 }
@@ -47,4 +50,14 @@ export interface ExternalGifRef {
   width: number;
   height: number;
   durationMs?: number | null;
+}
+
+/** A provider sticker the client picked from search. */
+export interface ExternalStickerRef {
+  provider: MediaProvider;
+  externalId: string;
+  url: string;
+  thumbUrl: string;
+  width: number;
+  height: number;
 }

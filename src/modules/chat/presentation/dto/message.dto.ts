@@ -1,22 +1,59 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { MediaProvider } from '../../../media/domain/enums/media-kind.enum';
 import { AttachmentDto } from '../../../media/presentation/dto/attachment.dto';
 import { Message } from '../../domain/entities/message.entity';
 import { MessageType } from '../../domain/enums/message-type.enum';
 import { MessageSticker } from '../../domain/sticker-directory.repository';
 
-/** The sticker carried by a `STICKER` message. */
+/**
+ * The sticker carried by a `STICKER` message — one shape whichever catalogue it came from.
+ *
+ * `id`, `url`, `width` and `height` are always set; render from those and you never have to ask
+ * where it came from. `packId` and `emoji` are catalogue-only and `provider` and `thumbUrl` are
+ * search-only, so each is null for the other source.
+ */
 export class MessageStickerDto {
-  @ApiProperty()
+  @ApiProperty({ description: 'Catalogue id, or the provider’s own id.' })
   id!: string;
 
-  @ApiProperty()
-  packId!: string;
+  @ApiProperty({
+    enum: MediaProvider,
+    enumName: 'MediaProviderDto',
+    nullable: true,
+    description:
+      'Which catalogue this came from. `null` ⇒ our own seeded packs — show no attribution badge.',
+  })
+  provider!: MediaProvider | null;
 
-  @ApiProperty({ example: '😄' })
-  emoji!: string;
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: 'Our pack id. `null` for a sticker from search, which belongs to no pack of ours.',
+  })
+  packId!: string | null;
 
-  @ApiProperty()
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    example: '😄',
+    description: 'Catalogue stickers only; `null` for a sticker from search.',
+  })
+  emoji!: string | null;
+
+  @ApiProperty({
+    description:
+      'WebP with a transparent background. Never an MP4 — that format has no alpha channel.',
+  })
   url!: string;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description:
+      'Smaller preview, search results only. `null` for a catalogue sticker — a 512×512 WebP is ' +
+      'already small enough to be its own preview, so fall back to `url`.',
+  })
+  thumbUrl!: string | null;
 
   @ApiProperty({ type: 'integer', format: 'int32' })
   width!: number;
@@ -27,9 +64,11 @@ export class MessageStickerDto {
   static fromDomain(sticker: MessageSticker): MessageStickerDto {
     const dto = new MessageStickerDto();
     dto.id = sticker.id;
+    dto.provider = sticker.provider;
     dto.packId = sticker.packId;
     dto.emoji = sticker.emoji;
     dto.url = sticker.url;
+    dto.thumbUrl = sticker.thumbUrl;
     dto.width = sticker.width;
     dto.height = sticker.height;
     return dto;

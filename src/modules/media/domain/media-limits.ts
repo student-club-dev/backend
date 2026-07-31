@@ -83,6 +83,26 @@ export const MEDIA_LIMITS: Record<MediaKind, KindLimits> = {
     maxDurationMs: null,
     maxDimension: null,
   },
+  [MediaKind.PROFILE_PHOTO]: {
+    mimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'],
+    maxBytes: 12 * MB,
+    maxDurationMs: null,
+    maxDimension: 8192,
+  },
+  [MediaKind.STORY_IMAGE]: {
+    mimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'],
+    maxBytes: 12 * MB,
+    maxDurationMs: null,
+    maxDimension: 8192,
+  },
+  [MediaKind.STORY_VIDEO]: {
+    mimeTypes: ['video/mp4', 'video/quicktime'],
+    maxBytes: 48 * MB,
+    // 30 seconds, deliberately far below the 3 minutes a chat VIDEO gets: a story is watched by
+    // tapping through, and anything longer is skipped rather than finished.
+    maxDurationMs: 30_000,
+    maxDimension: null,
+  },
 };
 
 /** The largest upload any kind allows — the multipart interceptor's hard ceiling. */

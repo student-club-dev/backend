@@ -24,6 +24,7 @@ import { ListingsModule } from './modules/listings/listings.module';
 import { GifsModule } from './modules/gifs/gifs.module';
 import { MediaModule } from './modules/media/media.module';
 import { StickersModule } from './modules/stickers/stickers.module';
+import { StoriesModule } from './modules/stories/stories.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { ProfileModule } from './modules/profiles/profile.module';
 import { RedemptionsModule } from './modules/redemptions/redemptions.module';
@@ -77,6 +78,7 @@ import { TradeCentersModule } from './modules/trade-centers/trade-centers.module
     MediaModule,
     StickersModule,
     GifsModule,
+    StoriesModule,
     CronModule,
   ],
 })

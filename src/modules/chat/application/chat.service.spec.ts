@@ -3,9 +3,10 @@ import { ERROR_CODE } from '../../../common/errors/error-code';
 import type { AuthenticatedUser } from '../../../common/types/authenticated-user';
 import { PresenceRepository } from '../../../infrastructure/presence/presence.repository';
 import { LastSeenVisibility } from '../../profiles/domain/enums/last-seen-visibility.enum';
+import { PhoneVisibility } from '../../profiles/domain/enums/phone-visibility.enum';
 import { MediaAsset } from '../../media/domain/entities/media-asset.entity';
 import { MediaAssetRepository } from '../../media/domain/media-asset.repository';
-import { MediaKind, MediaStatus } from '../../media/domain/enums/media-kind.enum';
+import { MediaKind, MediaProvider, MediaStatus } from '../../media/domain/enums/media-kind.enum';
 import { AppendMessageInput, ChatRepository } from '../domain/chat.repository';
 import { MessageSticker, StickerDirectoryRepository } from '../domain/sticker-directory.repository';
 import { ConnectionCheckRepository } from '../domain/connection-check.repository';
@@ -14,6 +15,7 @@ import { ConversationListItem } from '../domain/entities/conversation-view.entit
 import { Message } from '../domain/entities/message.entity';
 import { ConversationType } from '../domain/enums/conversation-type.enum';
 import { MessageType } from '../domain/enums/message-type.enum';
+import { ExternalStickerRef } from './chat.io';
 import { ChatService } from './chat.service';
 
 const me: AuthenticatedUser = { id: 'me', type: AccountType.STUDENT };
@@ -65,12 +67,16 @@ function summary(
     username: id,
     fullName: id,
     avatarUrl: null,
+    photos: [],
+    bio: null,
     universityId: null,
     gender: null,
     courseYear: null,
     online: false,
     lastSeenAt: null,
+    phoneNumber: null,
     lastSeenVisibility: LastSeenVisibility.CONNECTIONS,
+    phoneVisibility: PhoneVisibility.NOBODY,
     ...overrides,
   };
 }
@@ -147,6 +153,7 @@ function makeMedia(asset: MediaAsset | null = null): MediaAssetRepository {
   return {
     create: jest.fn(),
     findById: jest.fn().mockResolvedValue(asset),
+    findByIds: jest.fn().mockResolvedValue(asset === null ? [] : [asset]),
     bytesUploadedSince: jest.fn().mockResolvedValue(0),
     markProcessed: jest.fn(),
     attachToMessage: jest.fn(),
@@ -190,9 +197,21 @@ function makeStickers(found: MessageSticker | null = null): StickerDirectoryRepo
 
 const STICKER: MessageSticker = {
   id: 'st_1',
+  provider: null,
   packId: 'pk_1',
   emoji: '😄',
   url: 'https://cdn/st_1.webp',
+  thumbUrl: null,
+  width: 512,
+  height: 512,
+};
+
+/** A sticker as it comes back from `GET /v1/stickers/search`, echoed by the client on a send. */
+const PROVIDER_STICKER: ExternalStickerRef = {
+  provider: MediaProvider.KLIPY,
+  externalId: '8471021',
+  url: 'https://static.klipy.com/ii/abc/md.webp',
+  thumbUrl: 'https://static.klipy.com/ii/abc/xs.webp',
   width: 512,
   height: 512,
 };
@@ -426,6 +445,83 @@ describe('ChatService', () => {
         stickers,
       ).sendMessage(me, { conversationId: 'conv-1', body: 'salom' });
       expect(stickers.findById).not.toHaveBeenCalled();
+    });
+
+    it('stores a provider sticker on the row, without touching the catalogue', async () => {
+      const chat = makeChat();
+      const stickers = makeStickers(STICKER);
+      await makeService(
+        chat,
+        makeConnectionCheck(),
+        makePresence(),
+        makeMedia(),
+        stickers,
+      ).sendMessage(me, {
+        conversationId: 'conv-1',
+        type: MessageType.STICKER,
+        sticker: PROVIDER_STICKER,
+      });
+
+      // Nothing to look up: a KLIPY sticker has no row in our catalogue, which is the whole reason
+      // the object travels on the message instead of an id.
+      expect(stickers.findById).not.toHaveBeenCalled();
+      expect(chat.appendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          stickerId: null,
+          externalSticker: expect.objectContaining({
+            provider: MediaProvider.KLIPY,
+            externalId: '8471021',
+            url: PROVIDER_STICKER.url,
+          }),
+        }),
+      );
+    });
+
+    it('refuses a provider sticker served from a host outside the allowlist', async () => {
+      // The client hands this object back to us, so an unchecked url is an open redirect: a link
+      // that logs every recipient's IP renders exactly like a real sticker.
+      await expect(
+        makeService().sendMessage(me, {
+          conversationId: 'conv-1',
+          type: MessageType.STICKER,
+          sticker: { ...PROVIDER_STICKER, url: 'https://static.klipy.com.evil.example/x.webp' },
+        }),
+      ).rejects.toMatchObject({ code: ERROR_CODE.STICKER_URL_NOT_ALLOWED, status: 422 });
+    });
+
+    it('refuses a provider sticker whose thumbUrl is off-allowlist even when the url is fine', async () => {
+      await expect(
+        makeService().sendMessage(me, {
+          conversationId: 'conv-1',
+          type: MessageType.STICKER,
+          sticker: { ...PROVIDER_STICKER, thumbUrl: 'https://evil.example/x.webp' },
+        }),
+      ).rejects.toMatchObject({ code: ERROR_CODE.STICKER_URL_NOT_ALLOWED, status: 422 });
+    });
+
+    it('refuses a send that names both sticker sources', async () => {
+      // Refused rather than resolved by precedence: the client that did this has a bug, and quietly
+      // dropping half of what it sent is what would hide it.
+      await expect(
+        makeService().sendMessage(me, {
+          conversationId: 'conv-1',
+          type: MessageType.STICKER,
+          stickerId: 'st_1',
+          sticker: PROVIDER_STICKER,
+        }),
+      ).rejects.toMatchObject({ code: ERROR_CODE.STICKER_SOURCE_AMBIGUOUS, status: 422 });
+    });
+
+    it('keeps the old catalogue path working — an existing client sends stickerId alone', async () => {
+      const chat = makeChat();
+      await makeService(chat).sendMessage(me, {
+        conversationId: 'conv-1',
+        type: MessageType.STICKER,
+        stickerId: 'st_1',
+      });
+      expect(chat.appendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ stickerId: 'st_1', externalSticker: null }),
+      );
     });
 
     it('refuses a client-sent SYSTEM message', async () => {

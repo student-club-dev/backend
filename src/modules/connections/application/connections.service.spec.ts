@@ -3,6 +3,7 @@ import { ERROR_CODE } from '../../../common/errors/error-code';
 import type { AuthenticatedUser } from '../../../common/types/authenticated-user';
 import { PresenceRepository } from '../../../infrastructure/presence/presence.repository';
 import { LastSeenVisibility } from '../../profiles/domain/enums/last-seen-visibility.enum';
+import { PhoneVisibility } from '../../profiles/domain/enums/phone-visibility.enum';
 import { ConnectionsRepository } from '../domain/connections.repository';
 import { Connection } from '../domain/entities/connection.entity';
 import { StudentSummary } from '../domain/entities/student-summary.entity';
@@ -32,12 +33,16 @@ function summary(id: string, overrides: Partial<StudentSummary> = {}): StudentSu
     username: id,
     fullName: id,
     avatarUrl: null,
+    photos: [],
+    bio: null,
     universityId: null,
     gender: null,
     courseYear: null,
     online: false,
     lastSeenAt: null,
+    phoneNumber: null,
     lastSeenVisibility: LastSeenVisibility.CONNECTIONS,
+    phoneVisibility: PhoneVisibility.NOBODY,
     ...overrides,
   };
 }
@@ -298,6 +303,80 @@ describe('ConnectionsService', () => {
       const connections = makeConnections();
       await makeService(connections).block(me, 'other');
       expect(connections.block).toHaveBeenCalledWith('me', 'other');
+    });
+  });
+
+  describe('getStudent', () => {
+    it('throws 404 for an unknown student', async () => {
+      await expect(makeService().getStudent(me, 'ghost')).rejects.toMatchObject({
+        code: ERROR_CODE.STUDENT_NOT_FOUND,
+        status: 404,
+      });
+    });
+
+    it('throws 403 when either side has blocked', async () => {
+      // 403, not 404: the caller can already tell this account exists, so hiding it looks broken.
+      const service = makeService(
+        makeConnections({ isBlockedEitherWay: jest.fn().mockResolvedValue(true) }),
+        makeDirectory({ findSummary: jest.fn().mockResolvedValue(summary('other')) }),
+      );
+      await expect(service.getStudent(me, 'other')).rejects.toMatchObject({
+        code: ERROR_CODE.USER_BLOCKED,
+        status: 403,
+      });
+    });
+
+    it('returns a stranger with no relationship and their phone hidden', async () => {
+      const service = makeService(
+        makeConnections(),
+        makeDirectory({
+          findSummary: jest.fn().mockResolvedValue(
+            summary('other', {
+              phoneNumber: '+998901234567',
+              phoneVisibility: PhoneVisibility.CONNECTIONS,
+            }),
+          ),
+        }),
+      );
+      const result = await service.getStudent(me, 'other');
+      expect(result.view).toBe(ConnectionView.NONE);
+      expect(result.student.phoneNumber).toBeNull();
+    });
+
+    it('reveals a connection’s phone number when they share it with connections', async () => {
+      const service = makeService(
+        makeConnections({
+          findEdge: jest.fn().mockResolvedValue(edge({ status: ConnectionStatus.ACCEPTED })),
+        }),
+        makeDirectory({
+          findSummary: jest.fn().mockResolvedValue(
+            summary('other', {
+              phoneNumber: '+998901234567',
+              phoneVisibility: PhoneVisibility.CONNECTIONS,
+            }),
+          ),
+        }),
+      );
+      const result = await service.getStudent(me, 'other');
+      expect(result.view).toBe(ConnectionView.CONNECTED);
+      expect(result.student.phoneNumber).toBe('+998901234567');
+    });
+
+    it('shows you your own number on your own profile, whatever the setting', async () => {
+      // Otherwise you open your own profile and find your own number blanked by your own setting.
+      const service = makeService(
+        makeConnections(),
+        makeDirectory({
+          findSummary: jest.fn().mockResolvedValue(
+            summary('me', {
+              phoneNumber: '+998901234567',
+              phoneVisibility: PhoneVisibility.CONNECTIONS,
+            }),
+          ),
+        }),
+      );
+      const result = await service.getStudent(me, 'me');
+      expect(result.student.phoneNumber).toBe('+998901234567');
     });
   });
 

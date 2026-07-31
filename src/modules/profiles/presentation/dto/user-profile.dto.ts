@@ -3,6 +3,7 @@ import { Profile } from '../../domain/entities/profile.entity';
 import { CourseYear } from '../../domain/enums/course-year.enum';
 import { Gender } from '../../domain/enums/gender.enum';
 import { LastSeenVisibility } from '../../domain/enums/last-seen-visibility.enum';
+import { PhoneVisibility } from '../../domain/enums/phone-visibility.enum';
 import { ProfileRole } from '../../domain/enums/profile-role.enum';
 
 /**
@@ -62,6 +63,28 @@ export class UserProfileDto {
   lastSeenVisibility!: LastSeenVisibility | null;
 
   @ApiProperty({
+    enum: PhoneVisibility,
+    enumName: 'PhoneVisibilityDto',
+    nullable: true,
+    description:
+      'Students only — who may see your `phoneNumber` on `StudentSummaryDto`. Defaults to ' +
+      '**`NOBODY`**, unlike `lastSeenVisibility`: your number is how you sign in, not something we ' +
+      'publish unless you say so.',
+  })
+  phoneVisibility!: PhoneVisibility | null;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    maxLength: 140,
+    description:
+      'Students only — a short blurb, up to 140 characters. Links, `t.me/…`, `@handle`s and phone ' +
+      'numbers are rejected with `422 BIO_NOT_ALLOWED`. Send an empty string to clear it.',
+    example: '5/5 · Dasturiy injiniring',
+  })
+  bio!: string | null;
+
+  @ApiProperty({
     type: String,
     nullable: true,
     description: 'Public URL of the profile picture',
@@ -82,6 +105,8 @@ export class UserProfileDto {
     dto.birthYear = profile.birthYear;
     dto.courseYear = profile.courseYear;
     dto.lastSeenVisibility = profile.lastSeenVisibility;
+    dto.phoneVisibility = profile.phoneVisibility;
+    dto.bio = profile.bio;
     dto.avatarUrl = profile.avatarUrl;
     return dto;
   }

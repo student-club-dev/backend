@@ -64,6 +64,44 @@ export class GifRefDto {
   durationMs?: number;
 }
 
+/**
+ * A sticker picked from `GET /v1/stickers/search`. Sent instead of `stickerId`, which only names a
+ * row in our own seeded catalogue — a provider sticker has no such row, and provider terms forbid
+ * copying the file to get one.
+ */
+export class StickerRefDto {
+  @ApiProperty({ enum: MediaProvider, enumName: 'MediaProviderDto' })
+  @IsEnum(MediaProvider)
+  provider!: MediaProvider;
+
+  @ApiProperty({ description: 'The search result `id`.' })
+  @IsString()
+  @IsNotEmpty()
+  externalId!: string;
+
+  @ApiProperty({ description: 'Provider CDN url. Checked against a host allowlist.' })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(2048)
+  url!: string;
+
+  @ApiProperty()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(2048)
+  thumbUrl!: string;
+
+  @ApiProperty({ type: 'integer', format: 'int32' })
+  @IsInt()
+  @Min(1)
+  width!: number;
+
+  @ApiProperty({ type: 'integer', format: 'int32' })
+  @IsInt()
+  @Min(1)
+  height!: number;
+}
+
 /** Body of `POST /v1/conversations/:id/messages`. */
 export class SendMessageDto {
   @ApiPropertyOptional({
@@ -111,11 +149,26 @@ export class SendMessageDto {
 
   @ApiPropertyOptional({
     type: String,
-    description: 'Required for `STICKER`. An id from `GET /v1/stickers/packs`.',
+    description:
+      'For a `STICKER` from our own catalogue — an id from `GET /v1/stickers/packs`. Use this ' +
+      '**or** `sticker`, never both (422 `STICKER_SOURCE_AMBIGUOUS`); a `STICKER` message needs ' +
+      'exactly one of them.',
   })
   @IsOptional()
   @IsString()
   stickerId?: string;
+
+  @ApiPropertyOptional({
+    type: () => StickerRefDto,
+    description:
+      'For a `STICKER` taken from `GET /v1/stickers/search` — pass the search result back ' +
+      'verbatim. Use this **or** `stickerId`, never both. The response renders both sources as the ' +
+      'same `MessageDto.sticker`, so nothing downstream has to tell them apart.',
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => StickerRefDto)
+  sticker?: StickerRefDto;
 
   @ApiPropertyOptional({
     type: String,

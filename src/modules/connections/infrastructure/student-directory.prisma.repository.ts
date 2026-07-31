@@ -12,7 +12,7 @@ import {
   StudentSort,
   StudentSummaryPage,
 } from '../domain/student-directory.repository';
-import { ConnectionMapper } from './connection.mapper';
+import { ConnectionMapper, PROFILE_PHOTOS_INCLUDE } from './connection.mapper';
 
 const SUMMARY_SELECT = {
   id: true,
@@ -20,11 +20,16 @@ const SUMMARY_SELECT = {
   firstName: true,
   lastName: true,
   avatarUrl: true,
+  bio: true,
   universityId: true,
   gender: true,
   courseYear: true,
   lastSeenAt: true,
   lastSeenVisibility: true,
+  // Read raw and masked per-reader by `applyPresenceVisibility` — never serialised straight through.
+  phoneNumber: true,
+  phoneVisibility: true,
+  profilePhotos: PROFILE_PHOTOS_INCLUDE,
 } satisfies Prisma.StudentSelect;
 
 const ORDER_BY: Record<StudentSort, Prisma.StudentOrderByWithRelationInput[]> = {

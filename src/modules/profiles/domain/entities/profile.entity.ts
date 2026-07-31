@@ -1,6 +1,7 @@
 import { CourseYear } from '../enums/course-year.enum';
 import { Gender } from '../enums/gender.enum';
 import { LastSeenVisibility } from '../enums/last-seen-visibility.enum';
+import { PhoneVisibility } from '../enums/phone-visibility.enum';
 import { ProfileRole } from '../enums/profile-role.enum';
 
 /**
@@ -18,6 +19,8 @@ export interface Profile {
   username: string | null;
   phoneNumber: string | null;
   avatarUrl: string | null;
+  /** Short profile blurb (students only; always `null` for a business owner). */
+  bio: string | null;
   gender: Gender | null;
   universityId: string | null;
   universityEmail: string | null;
@@ -25,6 +28,8 @@ export interface Profile {
   courseYear: CourseYear | null;
   /** Students only — who may see this student's presence (C7). `null` for a business owner. */
   lastSeenVisibility: LastSeenVisibility | null;
+  /** Students only — who may see this student's phone number. `null` for a business owner. */
+  phoneVisibility: PhoneVisibility | null;
 }
 
 /**
@@ -37,11 +42,14 @@ export interface ProfilePatch {
   username?: string;
   phoneNumber?: string;
   avatarUrl?: string;
+  /** Already normalised by the service; `null` clears it. */
+  bio?: string | null;
   gender?: Gender;
   universityId?: string;
   universityEmail?: string;
   birthYear?: number;
   courseYear?: CourseYear;
   lastSeenVisibility?: LastSeenVisibility;
+  phoneVisibility?: PhoneVisibility;
   phoneVerified?: boolean;
 }

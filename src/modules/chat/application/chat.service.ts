@@ -14,7 +14,13 @@ import {
 } from '../../media/domain/media-asset.repository';
 import { MediaKind, MediaStatus } from '../../media/domain/enums/media-kind.enum';
 import { isAllowedGifUrl } from '../../gifs/domain/gif-source';
-import { CHAT_REPOSITORY, ChatRepository, UnreadSummary } from '../domain/chat.repository';
+import { isAllowedStickerUrl } from '../../stickers/domain/sticker-source';
+import {
+  CHAT_REPOSITORY,
+  ChatRepository,
+  ExternalStickerRow,
+  UnreadSummary,
+} from '../domain/chat.repository';
 import { MessageType } from '../domain/enums/message-type.enum';
 import {
   STICKER_DIRECTORY,
@@ -78,7 +84,7 @@ export class ChatService {
     }
 
     const mediaId = await this.resolveAttachment(user, type, input);
-    const stickerId = await this.resolveSticker(type, input.stickerId ?? null);
+    const sticker = await this.resolveSticker(type, input);
     await this.assertAlbumHasRoom(input.conversationId, input.albumId ?? null);
 
     return this.chat.appendMessage({
@@ -88,18 +94,59 @@ export class ChatService {
       body,
       clientMsgId: input.clientMsgId ?? null,
       mediaId,
-      stickerId,
+      stickerId: sticker.stickerId,
+      externalSticker: sticker.externalSticker,
       albumId: input.albumId ?? null,
     });
   }
 
-  /** A `STICKER` message must name a sticker that exists; every other type must not name one. */
+  /**
+   * Resolves the sticker on a `STICKER` message from whichever of the two sources named it, and
+   * rejects any other type that names one at all.
+   *
+   * The two sources cannot be merged: `stickerId` points at a row in our catalogue and is checked by
+   * looking it up, while `sticker` is a provider object that arrives from the client and is checked
+   * against the host allowlist. Sending both is refused rather than picking a winner — the client
+   * that did it has a bug, and silently dropping half of what it sent hides that.
+   */
   private async resolveSticker(
     type: MessageType,
-    stickerId: string | null,
-  ): Promise<string | null> {
+    input: SendMessageInput,
+  ): Promise<{ stickerId: string | null; externalSticker: ExternalStickerRow | null }> {
+    const stickerId = input.stickerId ?? null;
+    const external = input.sticker ?? null;
+
     if (type !== MessageType.STICKER) {
-      return null;
+      return { stickerId: null, externalSticker: null };
+    }
+    if (stickerId !== null && external !== null) {
+      throw new AppException(
+        ERROR_CODE.STICKER_SOURCE_AMBIGUOUS,
+        422,
+        'stickerId yoki sticker — ikkalasi emas',
+      );
+    }
+    if (external !== null) {
+      // Re-checked here, not just in search: the client hands this object back to us, so trusting it
+      // would turn the field into an open redirect to any host an attacker chooses.
+      if (!isAllowedStickerUrl(external.url) || !isAllowedStickerUrl(external.thumbUrl)) {
+        throw new AppException(
+          ERROR_CODE.STICKER_URL_NOT_ALLOWED,
+          422,
+          'Bu havoladan stiker yuborib bo‘lmaydi',
+        );
+      }
+      return {
+        stickerId: null,
+        externalSticker: {
+          provider: external.provider,
+          externalId: external.externalId,
+          url: external.url,
+          thumbUrl: external.thumbUrl,
+          width: external.width,
+          height: external.height,
+        },
+      };
     }
     if (stickerId === null) {
       throw AppException.validation({ stickerId: 'Stiker tanlang' });
@@ -107,7 +154,7 @@ export class ChatService {
     if ((await this.stickers.findById(stickerId)) === null) {
       throw new AppException(ERROR_CODE.STICKER_NOT_FOUND, 422, 'Stiker topilmadi');
     }
-    return stickerId;
+    return { stickerId, externalSticker: null };
   }
 
   /**

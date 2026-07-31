@@ -40,7 +40,7 @@ import type { AuthenticatedUser } from '../../../common/types/authenticated-user
 import type { Env } from '../../../config/env';
 import { ChatMediaService } from '../application/chat-media.service';
 import type { UploadedChatFile } from '../application/chat-media.io';
-import { MediaKind } from '../domain/enums/media-kind.enum';
+import { isChatKind, MediaKind } from '../domain/enums/media-kind.enum';
 import { MAX_UPLOAD_BYTES } from '../domain/media-limits';
 import { ChatMediaStorage } from '../infrastructure/chat-media.storage';
 import { AttachmentDto } from './dto/attachment.dto';
@@ -73,27 +73,39 @@ export class ChatMediaController {
   @Throttle({ default: { limit: 20, ttl: 60_000 } })
   @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_UPLOAD_BYTES } }))
   @ApiOperation({
-    summary: 'Upload a chat attachment',
+    summary: 'Upload an attachment, profile photo or story',
     description:
-      'multipart/form-data. `conversationId` is required and is the permission check — you must be ' +
-      "a member, still connected and not blocked. The type is decided by the file's magic bytes, " +
-      'never by `Content-Type` or the filename. Images are stripped of EXIF (including GPS), GIFs ' +
-      'are converted to silent looping MP4, voice notes get a 48-point waveform.',
+      'multipart/form-data. One pipeline for everything a student uploads: the type is decided by ' +
+      "the file's magic bytes, never by `Content-Type` or the filename; images are stripped of EXIF " +
+      '(including GPS); GIFs become silent looping MP4; video is transcoded to H.264/AAC and gets a ' +
+      'poster frame; voice notes get a 48-point waveform.\n\n' +
+      '`conversationId` is **required for the chat kinds** (`IMAGE`, `GIF`, `VIDEO`, `VOICE`, ' +
+      '`FILE`) and is their permission check — you must be a member, still connected and not ' +
+      'blocked. It is **ignored for `PROFILE_PHOTO`, `STORY_IMAGE` and `STORY_VIDEO`**, which have ' +
+      'no conversation; those are authorised on read by their own rule instead.\n\n' +
+      'The returned `id` is the `mediaId` you then pass to `POST /v1/profile/photos` or ' +
+      '`POST /v1/stories`. Story framing is yours: send a 9:16 crop if you want one — the server ' +
+      'accepts any ratio.',
   })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     required: true,
     schema: {
       type: 'object',
-      required: ['file', 'kind', 'conversationId'],
+      required: ['file', 'kind'],
       properties: {
         file: { type: 'string', format: 'binary' },
         kind: {
           type: 'string',
           enum: Object.values(MediaKind),
-          description: 'IMAGE 12 MB · GIF 20 MB · VIDEO 64 MB · VOICE 16 MB · FILE 48 MB',
+          description:
+            'IMAGE 12 MB · GIF 20 MB · VIDEO 64 MB · VOICE 16 MB · FILE 48 MB · ' +
+            'PROFILE_PHOTO 12 MB · STORY_IMAGE 12 MB · STORY_VIDEO 48 MB (≤ 30 s)',
         },
-        conversationId: { type: 'string' },
+        conversationId: {
+          type: 'string',
+          description: 'Required for the chat kinds; omit for PROFILE_PHOTO and STORY_*.',
+        },
       },
     },
   })
@@ -112,12 +124,19 @@ export class ChatMediaController {
     @UploadedFile() file?: UploadedChatFile,
   ): Promise<AttachmentDto> {
     if (!isMediaKind(kind)) {
-      throw AppException.validation({ kind: 'IMAGE, GIF, VIDEO, VOICE yoki FILE bo‘lishi kerak' });
+      throw AppException.validation({ kind: 'Yuklash turi noto‘g‘ri' });
     }
-    if (typeof conversationId !== 'string' || conversationId.length === 0) {
+    const scoped = typeof conversationId === 'string' && conversationId.length > 0;
+    if (isChatKind(kind) && !scoped) {
       throw AppException.validation({ conversationId: 'Suhbat id sini yuboring' });
     }
-    const asset = await this.media.upload(user, { kind, conversationId, file });
+    // Dropped rather than passed through for a profile photo or a story: a stray conversation id
+    // would otherwise make the asset readable to that conversation's members.
+    const asset = await this.media.upload(user, {
+      kind,
+      conversationId: isChatKind(kind) && scoped ? conversationId : null,
+      file,
+    });
     return AttachmentDto.fromDomain(asset, this.apiBase);
   }
 

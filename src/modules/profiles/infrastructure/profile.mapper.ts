@@ -8,6 +8,8 @@ import {
   GENDER_TO_PRISMA,
   LAST_SEEN_VISIBILITY_TO_DOMAIN,
   LAST_SEEN_VISIBILITY_TO_PRISMA,
+  PHONE_VISIBILITY_TO_DOMAIN,
+  PHONE_VISIBILITY_TO_PRISMA,
 } from './profile-enums.mapper';
 
 /** Maps a Student Prisma row to the profile domain type (role = STUDENT, all fields populated). */
@@ -20,12 +22,14 @@ export function toStudentProfile(row: Student): Profile {
     username: row.username,
     phoneNumber: row.phoneNumber,
     avatarUrl: row.avatarUrl,
+    bio: row.bio,
     gender: row.gender === null ? null : GENDER_TO_DOMAIN[row.gender],
     universityId: row.universityId,
     universityEmail: row.universityEmail,
     birthYear: row.birthYear,
     courseYear: row.courseYear === null ? null : COURSE_YEAR_TO_DOMAIN[row.courseYear],
     lastSeenVisibility: LAST_SEEN_VISIBILITY_TO_DOMAIN[row.lastSeenVisibility],
+    phoneVisibility: PHONE_VISIBILITY_TO_DOMAIN[row.phoneVisibility],
   };
 }
 
@@ -43,12 +47,15 @@ export function toBusinessProfile(row: BusinessOwner): Profile {
     username: null,
     phoneNumber: row.phoneNumber,
     avatarUrl: row.avatarUrl,
+    // Student-only, like the university/course fields — `business_owners` has no such column.
+    bio: null,
     gender: row.gender === null ? null : GENDER_TO_DOMAIN[row.gender],
     universityId: null,
     universityEmail: null,
     birthYear: null,
     courseYear: null,
     lastSeenVisibility: null,
+    phoneVisibility: null,
   };
 }
 
@@ -75,6 +82,13 @@ export function toStudentUpdateData(patch: ProfilePatch): Prisma.StudentUpdateIn
   }
   if (patch.lastSeenVisibility !== undefined) {
     data.lastSeenVisibility = LAST_SEEN_VISIBILITY_TO_PRISMA[patch.lastSeenVisibility];
+  }
+  if (patch.phoneVisibility !== undefined) {
+    data.phoneVisibility = PHONE_VISIBILITY_TO_PRISMA[patch.phoneVisibility];
+  }
+  // `null` is a real value here — it is how a bio gets cleared, so this cannot use `?? undefined`.
+  if (patch.bio !== undefined) {
+    data.bio = patch.bio;
   }
   return data;
 }

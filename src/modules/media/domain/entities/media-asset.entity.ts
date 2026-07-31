@@ -11,7 +11,8 @@ import { MediaKind, MediaProvider, MediaStatus } from '../enums/media-kind.enum'
 export interface MediaAsset {
   id: string;
   ownerId: string;
-  conversationId: string;
+  /** `null` for the kinds with no conversation — `PROFILE_PHOTO` and the `STORY_*` pair. */
+  conversationId: string | null;
   kind: MediaKind;
   status: MediaStatus;
   isAnimated: boolean;

@@ -1,3 +1,4 @@
+import { isAllowedProviderUrl } from '../../../common/validation/provider-url';
 import { MediaProvider } from '../../media/domain/enums/media-kind.enum';
 
 /** One search hit, already reduced to what the client needs. */
@@ -39,15 +40,5 @@ const ALLOWED_HOSTS: readonly RegExp[] = [
 
 /** Whether a provider URL may be stored on a message and rendered by the client. */
 export function isAllowedGifUrl(raw: string): boolean {
-  let url: URL;
-  try {
-    url = new URL(raw);
-  } catch {
-    return false;
-  }
-  // Plain http would let a network attacker swap the content on the way to the phone.
-  if (url.protocol !== 'https:') {
-    return false;
-  }
-  return ALLOWED_HOSTS.some((pattern) => pattern.test(url.hostname));
+  return isAllowedProviderUrl(raw, ALLOWED_HOSTS);
 }

@@ -1,3 +1,4 @@
+import { isWithinAudience } from '../../profiles/domain/audience';
 import { LastSeenVisibility } from '../../profiles/domain/enums/last-seen-visibility.enum';
 import { StudentSummary } from './entities/student-summary.entity';
 
@@ -6,27 +7,28 @@ import { StudentSummary } from './entities/student-summary.entity';
  * an accepted connection, `NOBODY` hides it from everyone — including existing connections.
  */
 export function canSeePresence(visibility: LastSeenVisibility, isConnected: boolean): boolean {
-  switch (visibility) {
-    case LastSeenVisibility.EVERYONE:
-      return true;
-    case LastSeenVisibility.CONNECTIONS:
-      return isConnected;
-    case LastSeenVisibility.NOBODY:
-      return false;
-  }
+  return isWithinAudience(visibility, isConnected);
 }
 
 /**
- * Returns the summary with presence filled in for one specific viewer: `online` from live presence,
- * `lastSeenAt` from the stored value — both blanked when the viewer may not see them. Blanking
- * `online` too is deliberate: leaking "currently online" would defeat hiding the last-seen time.
+ * Returns the summary with the viewer-dependent fields resolved for one specific reader.
+ *
+ * Two independent settings are applied here, not one: `lastSeenVisibility` governs
+ * `online`/`lastSeenAt`, and `phoneVisibility` governs `phoneNumber`. A student may well publish
+ * their presence and not their number, so they are masked separately.
+ *
+ * Blanking `online` alongside `lastSeenAt` is deliberate: leaking "currently online" would defeat
+ * hiding the last-seen time.
  */
 export function applyPresenceVisibility(
   student: StudentSummary,
   isConnected: boolean,
   online: boolean,
 ): StudentSummary {
+  const phoneNumber = isWithinAudience(student.phoneVisibility, isConnected)
+    ? student.phoneNumber
+    : null;
   return canSeePresence(student.lastSeenVisibility, isConnected)
-    ? { ...student, online }
-    : { ...student, online: false, lastSeenAt: null };
+    ? { ...student, online, phoneNumber }
+    : { ...student, online: false, lastSeenAt: null, phoneNumber };
 }

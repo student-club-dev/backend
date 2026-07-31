@@ -8,6 +8,7 @@ import { ERROR_CODE } from '../../../common/errors/error-code';
 import { AppException } from '../../../common/exceptions/app.exception';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { LastSeenVisibility } from '../../profiles/domain/enums/last-seen-visibility.enum';
+import { PhoneVisibility } from '../../profiles/domain/enums/phone-visibility.enum';
 import { LAST_SEEN_VISIBILITY_TO_DOMAIN } from '../../profiles/infrastructure/profile-enums.mapper';
 import {
   AppendMessageInput,
@@ -18,6 +19,7 @@ import {
 import { Conversation, ConversationMember } from '../domain/entities/conversation.entity';
 import { ConversationListItem } from '../domain/entities/conversation-view.entity';
 import { Message } from '../domain/entities/message.entity';
+import { PROFILE_PHOTOS_INCLUDE } from '../../connections/infrastructure/connection.mapper';
 import { ChatMapper, ChatSummaryRow } from './chat.mapper';
 
 /** A message is never useful without its attachment — load it everywhere, in one query. */
@@ -29,11 +31,16 @@ const SUMMARY_SELECT = {
   firstName: true,
   lastName: true,
   avatarUrl: true,
+  bio: true,
   universityId: true,
   gender: true,
   courseYear: true,
   lastSeenAt: true,
   lastSeenVisibility: true,
+  // Read raw and masked per-reader by `applyPresenceVisibility` — never serialised straight through.
+  phoneNumber: true,
+  phoneVisibility: true,
+  profilePhotos: PROFILE_PHOTOS_INCLUDE,
 } as const;
 
 /** The counterpart membership row, loaded with just enough of the student to build a summary. */
@@ -49,12 +56,16 @@ const MISSING_MEMBER: ConversationListItem['other'] = {
   username: null,
   fullName: null,
   avatarUrl: null,
+  photos: [],
+  bio: null,
   universityId: null,
   gender: null,
   courseYear: null,
   online: false,
   lastSeenAt: null,
+  phoneNumber: null,
   lastSeenVisibility: LastSeenVisibility.NOBODY,
+  phoneVisibility: PhoneVisibility.NOBODY,
 };
 
 /** Prisma implementation of the chat repository port. Prisma is used ONLY here. */
@@ -132,6 +143,12 @@ export class ChatPrismaRepository implements ChatRepository {
             clientMsgId,
             type: PrismaMessageType[input.type],
             stickerId: input.stickerId,
+            stickerProvider: input.externalSticker?.provider ?? null,
+            stickerExternalId: input.externalSticker?.externalId ?? null,
+            stickerUrl: input.externalSticker?.url ?? null,
+            stickerThumbUrl: input.externalSticker?.thumbUrl ?? null,
+            stickerWidth: input.externalSticker?.width ?? null,
+            stickerHeight: input.externalSticker?.height ?? null,
             albumId: input.albumId,
           },
         });

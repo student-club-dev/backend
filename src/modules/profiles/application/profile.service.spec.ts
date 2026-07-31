@@ -7,6 +7,7 @@ import { ProfileRepository } from '../domain/profile.repository';
 import { CourseYear } from '../domain/enums/course-year.enum';
 import { Gender } from '../domain/enums/gender.enum';
 import { LastSeenVisibility } from '../domain/enums/last-seen-visibility.enum';
+import { PhoneVisibility } from '../domain/enums/phone-visibility.enum';
 import { ProfileRole } from '../domain/enums/profile-role.enum';
 import { ProfileService } from './profile.service';
 
@@ -19,12 +20,14 @@ function studentProfile(overrides: Partial<Profile> = {}): Profile {
     username: 'ali_v',
     phoneNumber: '+998900000000',
     avatarUrl: null,
+    bio: null,
     gender: Gender.MALE,
     universityId: 'TATU',
     universityEmail: 'ali@tatu.uz',
     birthYear: 2004,
     courseYear: CourseYear.YEAR_2,
     lastSeenVisibility: LastSeenVisibility.CONNECTIONS,
+    phoneVisibility: PhoneVisibility.NOBODY,
     ...overrides,
   };
 }
@@ -38,12 +41,14 @@ function businessProfile(overrides: Partial<Profile> = {}): Profile {
     username: null,
     phoneNumber: '+998911111111',
     avatarUrl: null,
+    bio: null,
     gender: null,
     universityId: null,
     universityEmail: null,
     birthYear: null,
     courseYear: null,
     lastSeenVisibility: null,
+    phoneVisibility: null,
     ...overrides,
   };
 }
