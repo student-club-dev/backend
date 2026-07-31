@@ -311,13 +311,18 @@ keyin ishlatilmaydi, o'chirish mumkin.
 | 10 | ~~Stiker tasvirlari~~ — **bekor qilindi**, §6 ga qarang | — | — |
 | 11 | coturn | devops | qo'ng'iroq (keyinroq) |
 
-**2026-07-31, ikkinchi to'plam** (mobil jamoaning ikkita hujjati bo'yicha) — kod tayyor,
-deploy qilinmagan:
+**2026-07-31, ikkinchi to'plam** (mobil jamoaning ikkita hujjati bo'yicha) — ✅ **deploy qilindi**
+(`f56071f`):
 
 | Ish | Hujjat |
 |---|---|
 | Stiker qidiruvi (KLIPY) + `SendMessageDto.sticker` | `docs/api/mobile_questions/STICKER_SEARCH_RESPONSE.md` |
 | Story (to'liq) + bio / phoneVisibility / profil rasmlari / `GET /v1/students/{id}` | `docs/api/mobile_questions/STORY_AND_PROFILE_RESPONSE.md` |
 
-Prod'ga chiqishdan oldin: 3 ta yangi migratsiyani qo'llash (hammasi additive) va
-`docs/handoff/mobile/student-api.json` dan Kotlin klientini qayta generatsiya qilish.
+Deploy tasdig'i: uchala migratsiya `_prisma_migrations` da, `/v1/health` → `200`,
+`/v1/stories/feed` va `/v1/stickers/search` → `401` (marshrut bor, guard ishlayapti),
+boot loglarida xato yo'q.
+
+**Mobil jamoada qolgan ish:** `docs/handoff/mobile/student-api.json` dan Kotlin klientini qayta
+generatsiya qilish. ⚠️ `MessageDto.sticker.packId` va `.emoji` endi nullable — bu yagona buzuvchi
+o'zgarish.

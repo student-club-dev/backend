@@ -6,15 +6,18 @@ oladi. Boshqa hech qayerga qarash shart emas.
 | Sizning hujjatingiz | Javob | Holat |
 |---|---|---|
 | `CHAT_MEDIA_AND_CALLS_BACKEND.md` | `02`–`05` | ✅ **production'da** (2026-07-31) |
-| `backend-4-stiker-qidiruv-prompt.md` | `06` | 🟡 kod tayyor, **deploy qilinmagan** |
-| `STORY_AND_PROFILE_BACKEND.md` | `07`, `08` | 🟡 kod tayyor, **deploy qilinmagan** |
+| `backend-4-stiker-qidiruv-prompt.md` | `06` | ✅ **production'da** (2026-07-31) |
+| `STORY_AND_PROFILE_BACKEND.md` | `07`, `08` | ✅ **production'da** (2026-07-31) |
 
-Branch: `main`. Baza: `api.studentclub.uz`.
+Branch: `main` (`f56071f`). Baza: `api.studentclub.uz`.
 
-> ⚠️ **Ikkinchi to'plam hali chiqmagan.** Kod yozildi, testlar o'tdi (890 unit + 114 e2e),
-> migratsiyalar dev bazada qo'llandi — lekin production'ga **deploy qilinmadi**. Klientni
-> yozishni boshlashingiz mumkin, ammo jonli baza bu endpointlarni hozircha 404 qaytaradi.
-> Deploy bo'lgach shu jadval yangilanadi.
+> ✅ **Hammasi jonli.** Uchala migratsiya bazaga tushdi, backend ko'tarildi, boot loglarida xato
+> yo'q. Tasdiqlangan: `/v1/stories/feed` va `/v1/stickers/search` `401` qaytaradi (ya'ni marshrut
+> bor va guard ishlayapti), `/v1/health` — `200`.
+>
+> ⚠️ Bitta istisno: **stiker qidiruvi `503` qaytarishi mumkin**, agar production'da
+> `KLIPY_API_KEY` hali sozlanmagan bo'lsa. Bu boshqa hech narsani buzmaydi —
+> `GET /v1/stickers/packs` va butun chat ishlayveradi. Batafsil: `06-STICKER-SEARCH.md` §5.
 
 ## Nima o'qish kerak
 
@@ -27,7 +30,7 @@ Branch: `main`. Baza: `api.studentclub.uz`.
 | **`04-GIF-INTEGRATION.md`** | GIF paneli: provayder, atribut majburiyati, xatolar |
 | **`05-PUSH-SETUP.md`** | Push: Firebase loyihasi, APNs kaliti, `/v1/devices`, payload shakli. **Sizda bajarilmagan ish shu yerda** |
 
-### Yangi to'plam (deploy kutilmoqda)
+### Yangi to'plam (2026-07-31 dan production'da)
 
 | Fayl | Nima uchun |
 |---|---|
