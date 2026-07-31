@@ -17516,6 +17516,120 @@
           "seq"
         ]
       },
+      "ClearHistoryResultDto": {
+        "type": "object",
+        "properties": {
+          "conversationId": {
+            "type": "string"
+          },
+          "clearedBeforeSeq": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Everything with `seq <= clearedBeforeSeq` is gone for you. Drop it from the local cache; the server will never return it again. Messages sent after this keep climbing from here."
+          },
+          "unreadCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Always 0 — nothing is left to read."
+          }
+        },
+        "required": [
+          "conversationId",
+          "clearedBeforeSeq",
+          "unreadCount"
+        ]
+      },
+      "DeleteScopeDto": {
+        "type": "string",
+        "description": "`EVERYONE` deletes for both members and is allowed only on your own messages — anyone else’s land in `skipped` as `NOT_OWN`. `ME` hides the message on every device you own and leaves it untouched for the other member, so it works on any message in the conversation.",
+        "enum": [
+          "ME",
+          "EVERYONE"
+        ]
+      },
+      "SkippedMessageDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "NOT_OWN",
+              "NOT_FOUND",
+              "NOT_MEMBER"
+            ],
+            "description": "`NOT_OWN` — someone else’s message under `EVERYONE`. `NOT_FOUND` — no such id. `NOT_MEMBER` — the id belongs to a conversation you are not in."
+          }
+        },
+        "required": [
+          "id",
+          "reason"
+        ]
+      },
+      "BulkDeleteResultDto": {
+        "type": "object",
+        "properties": {
+          "conversationId": {
+            "type": "string"
+          },
+          "deleted": {
+            "description": "Ids actually deleted — or already deleted, which is the same result (idempotent).",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "skipped": {
+            "description": "Empty when everything was applied.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SkippedMessageDto"
+            }
+          },
+          "unreadCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Your unread count, recomputed."
+          },
+          "lastMessage": {
+            "nullable": true,
+            "description": "The newest message still visible to **you**, or `null` if none is left. Under `scope=ME` the other member keeps seeing a different one — that is the feature working, not a bug.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MessageDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "conversationId",
+          "deleted",
+          "skipped",
+          "unreadCount",
+          "lastMessage"
+        ]
+      },
+      "DeleteMessagesDto": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "description": "Message ids, 1–100, all from the same conversation (422 `MIXED_CONVERSATIONS` otherwise). Duplicates are collapsed. Ids that do not exist come back in `skipped` rather than failing the batch.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "scope": {
+            "$ref": "#/components/schemas/DeleteScopeDto"
+          }
+        },
+        "required": [
+          "ids",
+          "scope"
+        ]
+      },
       "DevicePlatformDto": {
         "type": "string",
         "enum": [

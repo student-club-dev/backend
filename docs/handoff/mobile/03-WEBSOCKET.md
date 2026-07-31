@@ -56,12 +56,65 @@ Socket **uzilmaydi**. Tokenni yangilab, yangi `auth.token` bilan qayta ulaning.
 | Hodisa | Payload |
 |---|---|
 | `message:new` | `{ conversationId, message }` — `message` to'liq `MessageDto` |
-| `message:deleted` | `{ conversationId, messageId, seq }` — **ikkala** a'zoga |
+| `message:deleted` | `{ conversationId, ids, seqs, scope, deletedBy, messageId, seq }` — auditoriya `scope` ga bog'liq, pastga qarang |
+| `history:cleared` | `{ conversationId, clearedBeforeSeq, scope, by }` — auditoriya `scope` ga bog'liq |
 | `media:ready` | `{ mediaId, conversationId, messageId, attachment }` — transkodlash tugadi |
 | `message:delivered` | `{ conversationId, seq, byStudentId }` |
 | `message:read` | `{ conversationId, seq, byStudentId }` |
 | `typing` | `{ conversationId, studentId, isTyping }` |
 | `presence:update` | `{ studentId, online, lastSeenAt }` |
+
+### `message:deleted` — endi bitta hodisa, butun paket uchun
+
+50 ta xabar belgilanib o'chirilganda 50 ta hodisa emas, **bitta** hodisa keladi:
+
+```json
+{
+  "conversationId": "clx…",
+  "ids":   ["clx…a", "clx…b"],
+  "seqs":  [141, 142],
+  "scope": "EVERYONE",
+  "deletedBy": "clx…user",
+
+  "messageId": "clx…a",
+  "seq": 141
+}
+```
+
+**Orqaga moslik:** `messageId` va `seq` — `ids[0]` va `seqs[0]`. Ular saqlanib qoladi, shuning uchun
+tarqatilgan klientlar hodisani o'zgarishsiz tushunishda davom etadi. Yangi kod `ids`/`seqs` ni o'qisin.
+
+> Eslatma: spec'da `id` deb yozilgan edi, lekin ishlab turgan hodisada maydon nomi `messageId`. Bor
+> nomni saqladik — orqaga moslik aynan shuni anglatadi.
+
+**Auditoriya `scope` ga bog'liq:**
+
+| `scope` | Kimga boradi |
+|---|---|
+| `EVERYONE` | **ikkala** a'zoning barcha qurilmalariga |
+| `ME` | **faqat o'chirgan odamning** o'z qurilmalariga |
+
+`ME` da suhbatdoshga hodisa **bormaydi** — xabar uning ekranida turibdi va turishi kerak. O'chirgan
+odamning boshqa qurilmalariga esa boradi: aynan shu narsa "faqat menda o'chirish" ni qayta
+o'rnatishdan va ikkinchi telefondan omon qoladigan qiladi.
+
+### `history:cleared` — tarix tozalandi
+
+```json
+{ "conversationId": "clx…", "clearedBeforeSeq": 812, "scope": "ME", "by": "clx…user" }
+```
+
+`seq <= clearedBeforeSeq` bo'lgan hamma narsani local keshdan o'chiring — server ularni boshqa
+qaytarmaydi. **Suhbatning o'zi ro'yxatda qoladi**, `lastMessage` `null` bo'ladi (Telegram ham
+shunday). Tozalashdan keyin kelgan xabarlar odatdagidek ko'rinadi — `seq` suv belgisidan yuqoriga
+o'sishda davom etadi.
+
+Auditoriya `message:deleted` dagidek: `ME` — faqat tozalagan odamning qurilmalariga, `EVERYONE` —
+ikkala a'zoga.
+
+> `DELETE /v1/conversations/{id}/history` da `scope` ni tushirib qoldirsangiz **`ME`** bo'ladi —
+> xabar o'chirishdagidan farqli. Sabab: bu endpoint suhbatdoshning butun tarixini ham o'chira oladi,
+> shuning uchun parametrsiz chaqiruv hech qachon buzuvchi variantga tushmasligi kerak.
 
 ### ⚠️ `message:new` va `clientMsgId` — eng muhim o'zgarish
 

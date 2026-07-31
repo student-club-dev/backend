@@ -149,6 +149,7 @@ export class ChatMapper {
       studentId: row.studentId,
       lastReadSeq: row.lastReadSeq,
       lastDeliveredSeq: row.lastDeliveredSeq,
+      clearedBeforeSeq: row.clearedBeforeSeq,
     };
   }
 

@@ -1,6 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { MediaProvider } from '../../../media/domain/enums/media-kind.enum';
 import { AttachmentDto } from '../../../media/presentation/dto/attachment.dto';
+import { BulkDeleteResult } from '../../domain/chat.repository';
 import { Message } from '../../domain/entities/message.entity';
 import { MessageType } from '../../domain/enums/message-type.enum';
 import { MessageSticker } from '../../domain/sticker-directory.repository';
@@ -166,6 +167,111 @@ export class MessageDto {
       message.attachment === null ? null : AttachmentDto.fromDomain(message.attachment, apiBase);
     dto.sticker = message.sticker === null ? null : MessageStickerDto.fromDomain(message.sticker);
     dto.createdAt = message.createdAt.toISOString();
+    return dto;
+  }
+}
+
+/** One id a batch delete left alone, with the reason (§A2). */
+export class SkippedMessageDto {
+  @ApiProperty()
+  id!: string;
+
+  @ApiProperty({
+    enum: ['NOT_OWN', 'NOT_FOUND', 'NOT_MEMBER'],
+    description:
+      '`NOT_OWN` — someone else’s message under `EVERYONE`. `NOT_FOUND` — no such id. ' +
+      '`NOT_MEMBER` — the id belongs to a conversation you are not in.',
+  })
+  reason!: 'NOT_OWN' | 'NOT_FOUND' | 'NOT_MEMBER';
+}
+
+/**
+ * The outcome of `POST /v1/messages/delete` (§A2). `unreadCount` and `lastMessage` are recomputed
+ * for the caller inside the same transaction, so the conversation list can settle without a second
+ * round trip — and cannot briefly show a count the history no longer supports.
+ */
+export class BulkDeleteResultDto {
+  @ApiProperty()
+  conversationId!: string;
+
+  @ApiProperty({
+    type: [String],
+    description:
+      'Ids actually deleted — or already deleted, which is the same result (idempotent).',
+  })
+  deleted!: string[];
+
+  @ApiProperty({ type: [SkippedMessageDto], description: 'Empty when everything was applied.' })
+  skipped!: SkippedMessageDto[];
+
+  @ApiProperty({ type: 'integer', format: 'int32', description: 'Your unread count, recomputed.' })
+  unreadCount!: number;
+
+  @ApiProperty({
+    type: () => MessageDto,
+    nullable: true,
+    description:
+      'The newest message still visible to **you**, or `null` if none is left. Under `scope=ME` ' +
+      'the other member keeps seeing a different one — that is the feature working, not a bug.',
+  })
+  lastMessage!: MessageDto | null;
+
+  static fromDomain(
+    result: BulkDeleteResult,
+    viewerId: string,
+    apiBase = '/v1',
+  ): BulkDeleteResultDto {
+    const dto = new BulkDeleteResultDto();
+    dto.conversationId = result.conversationId;
+    dto.deleted = result.deleted;
+    dto.skipped = result.skipped.map((entry) => {
+      const skipped = new SkippedMessageDto();
+      skipped.id = entry.id;
+      skipped.reason = entry.reason;
+      return skipped;
+    });
+    dto.unreadCount = result.unreadCount;
+    dto.lastMessage =
+      result.lastMessage === null
+        ? null
+        : MessageDto.fromDomain(result.lastMessage, viewerId, apiBase);
+    return dto;
+  }
+}
+
+/**
+ * The outcome of `DELETE /v1/conversations/:id/history` (§B1). No message row was removed — a
+ * per-member watermark rose, and everything at or below it is now invisible to you.
+ */
+export class ClearHistoryResultDto {
+  @ApiProperty()
+  conversationId!: string;
+
+  @ApiProperty({
+    type: 'integer',
+    format: 'int32',
+    description:
+      'Everything with `seq <= clearedBeforeSeq` is gone for you. Drop it from the local cache; ' +
+      'the server will never return it again. Messages sent after this keep climbing from here.',
+  })
+  clearedBeforeSeq!: number;
+
+  @ApiProperty({
+    type: 'integer',
+    format: 'int32',
+    description: 'Always 0 — nothing is left to read.',
+  })
+  unreadCount!: number;
+
+  static from(result: {
+    conversationId: string;
+    clearedBeforeSeq: number;
+    unreadCount: number;
+  }): ClearHistoryResultDto {
+    const dto = new ClearHistoryResultDto();
+    dto.conversationId = result.conversationId;
+    dto.clearedBeforeSeq = result.clearedBeforeSeq;
+    dto.unreadCount = result.unreadCount;
     return dto;
   }
 }

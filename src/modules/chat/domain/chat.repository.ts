@@ -1,5 +1,6 @@
 import { MediaProvider } from '../../media/domain/enums/media-kind.enum';
 import { LastSeenVisibility } from '../../profiles/domain/enums/last-seen-visibility.enum';
+import { DeleteScope } from './enums/delete-scope.enum';
 import { MessageType } from './enums/message-type.enum';
 import { Conversation, ConversationMember } from './entities/conversation.entity';
 import { ConversationListItem } from './entities/conversation-view.entity';
@@ -18,6 +19,50 @@ export interface ConversationPage {
 export interface UnreadSummary {
   total: number;
   conversations: number;
+}
+
+/** Why one id in a bulk delete was left alone (§A2). */
+export interface SkippedMessage {
+  id: string;
+  reason: 'NOT_OWN' | 'NOT_FOUND' | 'NOT_MEMBER';
+}
+
+/**
+ * The outcome of one bulk delete. `unreadCount` and `lastMessage` are recomputed once, inside the
+ * same transaction, so the client can settle its conversation list without a follow-up round trip
+ * — and so the two numbers can never disagree with the history they were derived from (§A2).
+ */
+export interface BulkDeleteResult {
+  conversationId: string;
+  deleted: string[];
+  deletedSeqs: number[];
+  skipped: SkippedMessage[];
+  unreadCount: number;
+  lastMessage: Message | null;
+}
+
+/**
+ * Who is reading. Every history query is filtered through this (§A4.3) — a membership row is all it
+ * takes, which is why the service resolves one before any read.
+ */
+export interface MessageViewer {
+  studentId: string;
+  clearedBeforeSeq: number;
+  /**
+   * Carried so the unread recount after a delete uses the same threshold the conversation list does.
+   * Two different bounds would make the number the delete returns disagree with the one the next
+   * `GET /v1/conversations` reports — and the badge would flicker between them.
+   */
+  lastReadSeq: number;
+}
+
+/** The columns a bulk delete has to authorise against, without loading whole messages. */
+export interface MessageAuthRow {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  /** Carried so the WS event's `seqs` can be built in the same order as `deleted` (§A3). */
+  seq: number;
 }
 
 /** Everything a new message row needs. `mediaId` is linked to the message in the same transaction. */
@@ -77,14 +122,28 @@ export interface ChatRepository {
   /**
    * History strictly before `beforeSeq` (null = latest), newest-first, capped at `size`. Callers
    * pass `size + 1` and drop the extra row to compute `hasMore` exactly (§17.5).
+   *
+   * Rows the viewer hid or cleared past are excluded in the `WHERE`, never after `take`: filtering a
+   * page that is already limited returns short pages, and a client that asked for 50 and got 12
+   * concludes the history is over and stops scrolling — leaving a hole it never fills (§A4.3).
    */
-  listMessages(conversationId: string, beforeSeq: number | null, size: number): Promise<Message[]>;
+  listMessages(
+    conversationId: string,
+    viewer: MessageViewer,
+    beforeSeq: number | null,
+    size: number,
+  ): Promise<Message[]>;
 
   /**
    * Messages strictly after `afterSeq`, oldest-first — for reconnect catch-up (C6). Same `size + 1`
-   * convention as `listMessages`.
+   * convention and the same viewer filtering as `listMessages`.
    */
-  listSince(conversationId: string, afterSeq: number, size: number): Promise<Message[]>;
+  listSince(
+    conversationId: string,
+    viewer: MessageViewer,
+    afterSeq: number,
+    size: number,
+  ): Promise<Message[]>;
 
   /** The caller's conversations (other member + last message + unread), by `lastMessageAt` desc. */
   listConversations(studentId: string, page: number, size: number): Promise<ConversationPage>;
@@ -107,6 +166,40 @@ export interface ChatRepository {
    * Idempotent — deleting an already-deleted message changes nothing.
    */
   softDeleteMessage(messageId: string): Promise<Message>;
+
+  /** Every message named by `ids`, with just the columns a bulk delete authorises against (§A2). */
+  findMessagesByIds(ids: string[]): Promise<MessageAuthRow[]>;
+
+  /**
+   * Applies one delete to many messages in a single transaction (§A4.4), then recomputes the
+   * conversation's unread count and newest visible message once. Either everything lands or nothing
+   * does — a half-applied batch leaves the badge and the list disagreeing with the history, and
+   * decrementing per message races with a concurrent send straight into a negative count.
+   */
+  deleteMessages(
+    conversationId: string,
+    viewer: MessageViewer,
+    ids: string[],
+    scope: DeleteScope,
+  ): Promise<{ unreadCount: number; lastMessage: Message | null }>;
+
+  /**
+   * Raises the clear watermark to the conversation's highest `seq` — for one member (`ME`) or both
+   * (`EVERYONE`) — and parks their read cursor there. Returns the watermark written (§B1).
+   *
+   * Nothing is deleted: `seq` has to stay gapless while the other member's cursors still walk it.
+   * Messages sent after the clear appear normally, because `seq` keeps climbing past the watermark.
+   */
+  clearHistory(conversationId: string, studentId: string, scope: DeleteScope): Promise<number>;
+
+  /**
+   * Physically removes messages every member of their conversation has already cleared past (§B1).
+   * The lowest watermark across a conversation's members is what makes it safe — a row only goes
+   * once nobody can still reach it, so no live cursor is left pointing into a hole. Deletes are
+   * issued per conversation rather than as one sweep, so the cost tracks the rows removed instead of
+   * the size of `messages`. Returns how many rows went.
+   */
+  purgeClearedMessages(): Promise<number>;
 
   /** Advances a member's `read`/`delivered` cursor to at least `seq` (never backwards). */
   advanceCursor(

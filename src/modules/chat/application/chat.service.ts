@@ -16,11 +16,15 @@ import { MediaKind, MediaStatus } from '../../media/domain/enums/media-kind.enum
 import { isAllowedGifUrl } from '../../gifs/domain/gif-source';
 import { isAllowedStickerUrl } from '../../stickers/domain/sticker-source';
 import {
+  BulkDeleteResult,
   CHAT_REPOSITORY,
   ChatRepository,
   ExternalStickerRow,
+  MessageViewer,
+  SkippedMessage,
   UnreadSummary,
 } from '../domain/chat.repository';
+import { DeleteScope } from '../domain/enums/delete-scope.enum';
 import { MessageType } from '../domain/enums/message-type.enum';
 import {
   STICKER_DIRECTORY,
@@ -28,10 +32,13 @@ import {
 } from '../domain/sticker-directory.repository';
 import { MAX_ALBUM_SIZE, normalizeBody, requiredKindFor } from '../domain/message-composition';
 import { CONNECTION_CHECK, ConnectionCheckRepository } from '../domain/connection-check.repository';
-import { Conversation } from '../domain/entities/conversation.entity';
+import { Conversation, ConversationMember } from '../domain/entities/conversation.entity';
 import { ConversationListItem } from '../domain/entities/conversation-view.entity';
 import { Message } from '../domain/entities/message.entity';
 import { directKeyOf, ExternalGifRef, MessagePage, Page, SendMessageInput } from './chat.io';
+
+/** §A2 caps one batch at 100 ids — the client's selection mode cannot exceed that in practice. */
+const MAX_DELETE_IDS = 100;
 
 /**
  * Chat use-cases (docs/architecture/chat.md). 1:1 DIRECT conversations gated by an accepted
@@ -278,8 +285,11 @@ export class ChatService {
     afterSeq: number,
     size: number,
   ): Promise<MessagePage> {
-    await this.assertMember(conversationId, user.id);
-    return trim(await this.chat.listSince(conversationId, afterSeq, size + 1), size);
+    const membership = await this.assertMember(conversationId, user.id);
+    return trim(
+      await this.chat.listSince(conversationId, viewerOf(membership), afterSeq, size + 1),
+      size,
+    );
   }
 
   /** History for a conversation the caller belongs to (newest-first, `seq`-cursor). */
@@ -289,8 +299,11 @@ export class ChatService {
     beforeSeq: number | null,
     size: number,
   ): Promise<MessagePage> {
-    await this.assertMember(conversationId, user.id);
-    return trim(await this.chat.listMessages(conversationId, beforeSeq, size + 1), size);
+    const membership = await this.assertMember(conversationId, user.id);
+    return trim(
+      await this.chat.listMessages(conversationId, viewerOf(membership), beforeSeq, size + 1),
+      size,
+    );
   }
 
   /** Advances the caller's read cursor. */
@@ -378,6 +391,153 @@ export class ChatService {
     return this.chat.softDeleteMessage(messageId);
   }
 
+  /**
+   * Deletes many messages at once (§A2). One transaction, one recount, one WS event — selecting 50
+   * messages used to mean 50 requests, and a partial failure left the list and the badge disagreeing
+   * with the history that produced them.
+   *
+   * `EVERYONE` may only touch your own messages; the rest come back in `skipped` rather than failing
+   * the batch, because the client selected them in good faith and a partial delete is still the
+   * result the user asked for. `ME` may touch any message in the conversation — it mutates no
+   * message row, it only records that this member stopped seeing them.
+   */
+  async deleteMessages(
+    user: AuthenticatedUser,
+    ids: string[],
+    scope: DeleteScope,
+  ): Promise<BulkDeleteResult> {
+    if (ids.length > MAX_DELETE_IDS) {
+      throw new AppException(
+        ERROR_CODE.TOO_MANY_IDS,
+        422,
+        `Bir vaqtda ${MAX_DELETE_IDS} tadan ko'p xabarni o'chirib bo'lmaydi`,
+      );
+    }
+    const unique = [...new Set(ids)];
+    const found = await this.chat.findMessagesByIds(unique);
+
+    if (new Set(found.map((message) => message.conversationId)).size > 1) {
+      throw new AppException(
+        ERROR_CODE.MIXED_CONVERSATIONS,
+        422,
+        'Xabarlar bitta suhbatdan bo‘lishi kerak',
+      );
+    }
+    const conversationId = found[0]?.conversationId;
+    if (conversationId === undefined) {
+      // Nothing resolved, so there is no conversation whose `unreadCount`/`lastMessage` the 200
+      // response is supposed to carry. The spec leaves this case open; 404 is the honest answer.
+      throw AppException.notFound(ERROR_CODE.MESSAGE_NOT_FOUND, 'Xabar topilmadi');
+    }
+
+    const membership = await this.chat.findMembership(conversationId, user.id);
+    if (membership === null) {
+      // 403 here, but 404 in `deleteMessage` above — deliberate, not an oversight.
+      //
+      // The single-message route takes one id blind, so answering "not yours" would turn it into a
+      // probe for message ids. This one cannot be probed the same way: reaching this line at all
+      // means the caller already holds a real message id, which they can only have got from someone
+      // who was in that conversation. The existence is already out; 403 tells them nothing new and
+      // saves the client from rendering "message not found" for a permission problem.
+      throw new AppException(ERROR_CODE.NOT_MEMBER, 403, 'Siz bu suhbat a’zosi emassiz');
+    }
+
+    const byId = new Map(found.map((message) => [message.id, message]));
+    const deletable: string[] = [];
+    const skipped: SkippedMessage[] = [];
+    for (const id of unique) {
+      const message = byId.get(id);
+      if (message === undefined) {
+        skipped.push({ id, reason: 'NOT_FOUND' });
+      } else if (scope === DeleteScope.EVERYONE && message.senderId !== user.id) {
+        skipped.push({ id, reason: 'NOT_OWN' });
+      } else {
+        deletable.push(id);
+      }
+    }
+
+    if (deletable.length === 0) {
+      // Still a 200: "nothing you selected could be deleted" is a result, not a failure (§A2). The
+      // counters come from the list projection so the client can settle on them either way.
+      const item = await this.chat.findConversationItem(conversationId, user.id);
+      return {
+        conversationId,
+        deleted: [],
+        deletedSeqs: [],
+        skipped,
+        unreadCount: item?.unreadCount ?? 0,
+        lastMessage: item?.lastMessage ?? null,
+      };
+    }
+
+    const outcome = await this.chat.deleteMessages(
+      conversationId,
+      viewerOf(membership),
+      deletable,
+      scope,
+    );
+    return {
+      conversationId,
+      deleted: deletable,
+      // Built from the same list, in the same order — the WS event ships these as parallel arrays,
+      // and a client that zips them would mispair every batch whose selection order is not seq order.
+      deletedSeqs: deletable.map((id) => byId.get(id)!.seq),
+      skipped,
+      unreadCount: outcome.unreadCount,
+      lastMessage: outcome.lastMessage,
+    };
+  }
+
+  /**
+   * The single-message delete, now scope-aware (§A2).
+   *
+   * `EVERYONE` runs the pre-batch path unchanged, down to its 403-on-someone-else's-message and its
+   * 404-for-a-non-member — clients built before the batch endpoint must not notice this parameter
+   * exists. `ME` goes through the batch path and returns the message untouched, because hiding it
+   * for one member mutates no row.
+   */
+  async deleteSingleMessage(
+    user: AuthenticatedUser,
+    messageId: string,
+    scope: DeleteScope,
+  ): Promise<{ message: Message; result: BulkDeleteResult | null }> {
+    if (scope === DeleteScope.EVERYONE) {
+      return { message: await this.deleteMessage(user, messageId), result: null };
+    }
+    const result = await this.deleteMessages(user, [messageId], DeleteScope.ME);
+    const message = await this.chat.findMessage(messageId);
+    if (message === null) {
+      // Unreachable in practice — `deleteMessages` already 404s on an id that resolves to nothing.
+      throw AppException.notFound(ERROR_CODE.MESSAGE_NOT_FOUND, 'Xabar topilmadi');
+    }
+    return { message, result };
+  }
+
+  /**
+   * Clears the conversation history (§B1).
+   *
+   * Nothing is deleted — a per-member watermark rises, so the other member's read and delivered
+   * cursors keep pointing at rows that still exist. The conversation itself stays in the list with a
+   * null `lastMessage`, which is what Telegram does; messages sent afterwards show up normally
+   * because `seq` keeps climbing past the watermark.
+   */
+  async clearHistory(
+    user: AuthenticatedUser,
+    conversationId: string,
+    scope: DeleteScope,
+  ): Promise<{ conversationId: string; clearedBeforeSeq: number; unreadCount: number }> {
+    await this.assertMember(conversationId, user.id);
+    const clearedBeforeSeq = await this.chat.clearHistory(conversationId, user.id, scope);
+    // Zero by construction: the read cursor was just parked on the watermark, so nothing below it
+    // can still be unread and nothing above it exists yet.
+    return { conversationId, clearedBeforeSeq, unreadCount: 0 };
+  }
+
+  /** Physically drops messages every member has cleared past — the weekly sweep's use-case (§B1). */
+  purgeClearedMessages(): Promise<number> {
+    return this.chat.purgeClearedMessages();
+  }
+
   /** A message by id, with its attachment — used when a transcode finishes (chat media spec §6.3). */
   findMessageById(messageId: string): Promise<Message | null> {
     return this.chat.findMessage(messageId);
@@ -426,12 +586,25 @@ export class ChatService {
     return this.presence.isOnline(studentId);
   }
 
-  private async assertMember(conversationId: string, studentId: string): Promise<void> {
+  private async assertMember(
+    conversationId: string,
+    studentId: string,
+  ): Promise<ConversationMember> {
     const membership = await this.chat.findMembership(conversationId, studentId);
     if (membership === null) {
       throw AppException.notFound(ERROR_CODE.CONVERSATION_NOT_FOUND, 'Suhbat topilmadi');
     }
+    return membership;
   }
+}
+
+/** A membership row is everything a read needs to know about who is looking (§A4.3). */
+function viewerOf(membership: ConversationMember): MessageViewer {
+  return {
+    studentId: membership.studentId,
+    clearedBeforeSeq: membership.clearedBeforeSeq,
+    lastReadSeq: membership.lastReadSeq,
+  };
 }
 
 /**

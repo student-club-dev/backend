@@ -1,6 +1,8 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 import {
+  ArrayMinSize,
+  IsArray,
   IsEnum,
   IsInt,
   IsNotEmpty,
@@ -11,6 +13,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { MediaProvider } from '../../../media/domain/enums/media-kind.enum';
+import { DeleteScope } from '../../domain/enums/delete-scope.enum';
 import { MessageType } from '../../domain/enums/message-type.enum';
 
 /** Body of `POST /v1/conversations` — open (or fetch) a direct conversation with a connection. */
@@ -186,6 +189,37 @@ export class SendMessageDto {
   @IsOptional()
   @IsString()
   clientMsgId?: string;
+}
+
+/**
+ * Body of `POST /v1/messages/delete` — one batch, one transaction (§A2).
+ *
+ * The 100-id ceiling is enforced in the service rather than with `@ArrayMaxSize`: the contract names
+ * `TOO_MANY_IDS` as the error code, and class-validator would report `VALIDATION_ERROR` instead.
+ */
+export class DeleteMessagesDto {
+  @ApiProperty({
+    type: [String],
+    description:
+      'Message ids, 1–100, all from the same conversation (422 `MIXED_CONVERSATIONS` otherwise). ' +
+      'Duplicates are collapsed. Ids that do not exist come back in `skipped` rather than failing ' +
+      'the batch.',
+  })
+  @IsArray()
+  @ArrayMinSize(1)
+  @IsString({ each: true })
+  ids!: string[];
+
+  @ApiProperty({
+    enum: DeleteScope,
+    enumName: 'DeleteScopeDto',
+    description:
+      '`EVERYONE` deletes for both members and is allowed only on your own messages — anyone ' +
+      'else’s land in `skipped` as `NOT_OWN`. `ME` hides the message on every device you own and ' +
+      'leaves it untouched for the other member, so it works on any message in the conversation.',
+  })
+  @IsEnum(DeleteScope)
+  scope!: DeleteScope;
 }
 
 /** Body of `POST /v1/conversations/:id/read`. */

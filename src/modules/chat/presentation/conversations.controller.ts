@@ -1,5 +1,15 @@
-import { Body, Controller, Get, HttpCode, Param, Post, Query, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  Param,
+  Post,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { ERROR_CODE } from '../../../common/errors/error-code';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
@@ -21,8 +31,9 @@ import {
   ConversationPageDto,
   UnreadCountDto,
 } from './dto/conversation.dto';
-import { MessageDto, MessageListDto } from './dto/message.dto';
-import { ConversationsQueryDto, HistoryQueryDto } from './dto/queries.dto';
+import { DeleteScope } from '../domain/enums/delete-scope.enum';
+import { ClearHistoryResultDto, MessageDto, MessageListDto } from './dto/message.dto';
+import { ConversationsQueryDto, HistoryQueryDto, ScopeQueryDto } from './dto/queries.dto';
 import { MarkDeliveredDto, MarkReadDto, OpenDirectDto, SendMessageDto } from './dto/requests.dto';
 
 /**
@@ -180,5 +191,43 @@ export class ConversationsController {
   ): Promise<void> {
     await this.chat.markDelivered(user, id, dto.seq);
     await this.gateway.broadcastDelivered(id, user.id, dto.seq);
+  }
+
+  @Delete(':id/history')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Clear the conversation history',
+    description:
+      'Raises a per-member watermark (§B1) — no message row is removed, so `seq` stays gapless and ' +
+      'the other member’s read cursors keep working. The conversation itself stays in your list ' +
+      'with a null `lastMessage`, exactly as Telegram leaves it, and messages sent after the clear ' +
+      'appear normally. `ME` clears it for you on every device you own; `EVERYONE` clears it for ' +
+      'both members. Idempotent — clearing twice just rewrites the same watermark.',
+  })
+  @ApiParam({ name: 'id', description: 'Conversation id' })
+  @ApiQuery({
+    name: 'scope',
+    enum: DeleteScope,
+    required: false,
+    description:
+      'Defaults to `ME` — the conservative choice, since `EVERYONE` also wipes the other member’s copy.',
+  })
+  @ApiOkEnvelope(ClearHistoryResultDto, 'The watermark written, and your now-zero unread count.')
+  @ApiNotFoundEnvelope(
+    ERROR_CODE.CONVERSATION_NOT_FOUND,
+    'No such conversation, or you are not a member.',
+    'Suhbat topilmadi',
+  )
+  async clearHistory(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Query() query: ScopeQueryDto,
+  ): Promise<ClearHistoryResultDto> {
+    // `ME` by default, unlike the message routes: this one can erase the other member's entire
+    // history, so the destructive reading is never the one you get by omitting the parameter.
+    const scope = query.scope ?? DeleteScope.ME;
+    const result = await this.chat.clearHistory(user, id, scope);
+    await this.gateway.broadcastHistoryCleared(id, user.id, result.clearedBeforeSeq, scope);
+    return ClearHistoryResultDto.from(result);
   }
 }

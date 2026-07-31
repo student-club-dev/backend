@@ -1,6 +1,15 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsInt, IsOptional, Max, Min } from 'class-validator';
+import { IsEnum, IsInt, IsOptional, Max, Min } from 'class-validator';
+import { DeleteScope } from '../../domain/enums/delete-scope.enum';
+
+/** `?scope=` on the delete routes. Omitted means `EVERYONE`, which is what they did before it existed. */
+export class ScopeQueryDto {
+  @ApiPropertyOptional({ enum: DeleteScope, enumName: 'DeleteScopeDto' })
+  @IsOptional()
+  @IsEnum(DeleteScope)
+  scope?: DeleteScope;
+}
 
 /** Query for `GET /v1/conversations` (page/size). */
 export class ConversationsQueryDto {

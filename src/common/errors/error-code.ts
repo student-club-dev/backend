@@ -116,6 +116,12 @@ export const ERROR_CODE = {
   // Returned as 422, not the usual 404 for `*_NOT_FOUND`: the mobile contract (§17.4) specifies
   // 422 for an unreportable messageId, and it is a body-validation failure rather than a bad route.
   MESSAGE_NOT_FOUND: 'MESSAGE_NOT_FOUND',
+  // chat — bulk delete (§A2). NOT_MEMBER is 403 and distinct from CONVERSATION_NOT_FOUND (404):
+  // once at least one id has resolved to a real conversation, hiding its existence buys nothing —
+  // the caller already holds a message id from it.
+  NOT_MEMBER: 'NOT_MEMBER',
+  TOO_MANY_IDS: 'TOO_MANY_IDS',
+  MIXED_CONVERSATIONS: 'MIXED_CONVERSATIONS',
   // chat media (attachments, stickers, GIF search)
   FILE_TYPE_NOT_ALLOWED: 'FILE_TYPE_NOT_ALLOWED',
   MEDIA_TOO_LONG: 'MEDIA_TOO_LONG',

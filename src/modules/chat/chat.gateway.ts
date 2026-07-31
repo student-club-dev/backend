@@ -22,11 +22,14 @@ import { NotificationsService } from '../notifications/application/notifications
 import {
   CHAT_EVENT,
   CursorPayload,
+  HistoryClearedPayload,
+  MessageDeletedPayload,
   SendMessagePayload,
   TypingPayload,
 } from './application/chat-events';
 import { ChatService } from './application/chat.service';
 import { Message } from './domain/entities/message.entity';
+import { DeleteScope } from './domain/enums/delete-scope.enum';
 import { MessageType } from './domain/enums/message-type.enum';
 import { VerifiedSocket, verifyStudentSocket } from './infrastructure/ws-jwt';
 import { MessageDto } from './presentation/dto/message.dto';
@@ -235,20 +238,79 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
    * and the recipient already holds the row it needs to replace with a tombstone.
    */
   async broadcastDeleted(message: Message): Promise<void> {
+    await this.broadcastBulkDeleted(
+      message.conversationId,
+      message.senderId,
+      [message.id],
+      [message.seq],
+      DeleteScope.EVERYONE,
+    );
+  }
+
+  /**
+   * Tell the right audience a batch was deleted (§A3).
+   *
+   * A `ME` delete never reaches the other member — the message is still on their screen and belongs
+   * there. It does reach the deleter's *other* devices, which is the only thing that makes "hidden
+   * for me" survive a reinstall or a second phone; without it the hiding is a local lie.
+   */
+  async broadcastBulkDeleted(
+    conversationId: string,
+    deletedBy: string,
+    ids: string[],
+    seqs: number[],
+    scope: DeleteScope,
+  ): Promise<void> {
+    const firstId = ids[0];
+    if (this.server === undefined || firstId === undefined) {
+      return;
+    }
+    const rooms = await this.roomsFor(conversationId, deletedBy, scope);
+    const payload: MessageDeletedPayload = {
+      conversationId,
+      ids,
+      seqs,
+      scope,
+      deletedBy,
+      messageId: firstId,
+      seq: seqs[0] ?? 0,
+    };
+    this.server.to(rooms).emit(CHAT_EVENT.MESSAGE_DELETED, payload);
+  }
+
+  /** Tell the right audience a history was cleared (§B1). */
+  async broadcastHistoryCleared(
+    conversationId: string,
+    by: string,
+    clearedBeforeSeq: number,
+    scope: DeleteScope,
+  ): Promise<void> {
     if (this.server === undefined) {
       return;
     }
-    const otherId = await this.chat.otherMemberId(message.conversationId, message.senderId);
-    const payload = {
-      conversationId: message.conversationId,
-      messageId: message.id,
-      seq: message.seq,
-    };
-    const rooms = [personalRoom(message.senderId)];
-    if (otherId !== null) {
-      rooms.push(personalRoom(otherId));
+    const payload: HistoryClearedPayload = { conversationId, clearedBeforeSeq, scope, by };
+    this.server
+      .to(await this.roomsFor(conversationId, by, scope))
+      .emit(CHAT_EVENT.HISTORY_CLEARED, payload);
+  }
+
+  /**
+   * Who a scoped change reaches. `ME` stops at the actor's own devices — the other member's copy is
+   * untouched, and telling them would wipe a screen that should not change. `EVERYONE` reaches both.
+   */
+  private async roomsFor(
+    conversationId: string,
+    actorId: string,
+    scope: DeleteScope,
+  ): Promise<string[]> {
+    const rooms = [personalRoom(actorId)];
+    if (scope === DeleteScope.EVERYONE) {
+      const otherId = await this.chat.otherMemberId(conversationId, actorId);
+      if (otherId !== null) {
+        rooms.push(personalRoom(otherId));
+      }
     }
-    this.server.to(rooms).emit(CHAT_EVENT.MESSAGE_DELETED, payload);
+    return rooms;
   }
 
   /** Tell both members an attachment finished processing (chat media spec §6.3). */

@@ -8,6 +8,7 @@ import { ResponseInterceptor } from '../src/common/interceptors/response.interce
 import { validationExceptionFactory } from '../src/common/validation/validation-exception.factory';
 import type { Env } from '../src/config/env';
 import { PrismaService } from '../src/infrastructure/database/prisma.service';
+import { ChatService } from '../src/modules/chat/application/chat.service';
 
 const A_EMAIL = 'e2e-chat-a@example.com';
 const B_EMAIL = 'e2e-chat-b@example.com';
@@ -438,6 +439,328 @@ describe('Connections + Chat — e2e', () => {
     expect(tombstone).toBeDefined();
     expect(tombstone.body).toBeNull();
     expect(tombstone.deletedAt).not.toBeNull();
+  });
+
+  // §A4.6 — the acceptance criteria for multi-select delete. Each runs against its own conversation
+  // with an exact, known message set: the shared one is rewritten by the tests above, and every
+  // assertion here is about a precise count or a precise `seq` position.
+  describe('multi-select delete (§A2, §A4.6)', () => {
+    let seed = 0;
+
+    /** A conversation between A and B with `count` messages, seq 1..count, written straight to the
+     *  database. The writes are not what is under test — the reads are. */
+    async function seedConversation(count: number, senderOf: (index: number) => string) {
+      seed += 1;
+      const convo = await prisma.conversation.create({
+        data: {
+          directKey: `bulk-${seed}:${aId}`,
+          nextSeq: count + 1,
+          lastMessageAt: new Date(),
+          members: { create: [{ studentId: aId }, { studentId: bId }] },
+        },
+      });
+      if (count > 0) {
+        await prisma.message.createMany({
+          data: Array.from({ length: count }, (_, index) => ({
+            conversationId: convo.id,
+            senderId: senderOf(index),
+            seq: index + 1,
+            type: 'TEXT' as const,
+            body: `xabar ${index + 1}`,
+          })),
+        });
+      }
+      return convo.id;
+    }
+
+    async function idsOfSeqs(convId: string, from: number, to: number): Promise<string[]> {
+      const rows = await prisma.message.findMany({
+        where: { conversationId: convId, seq: { gte: from, lte: to } },
+        orderBy: { seq: 'asc' },
+        select: { id: true },
+      });
+      return rows.map((row) => row.id);
+    }
+
+    /** Walks the whole history with `?before=`, exactly the way the client scrolls up. Criterion 3
+     *  is about this loop: a filter applied after `LIMIT` shows up here as a short page. */
+    async function fullHistory(
+      token: string,
+      convId: string,
+      size = 50,
+    ): Promise<{ id: string; seq: number; deletedAt: string | null }[]> {
+      const items: { id: string; seq: number; deletedAt: string | null }[] = [];
+      let before: number | undefined;
+      for (;;) {
+        const cursor = before === undefined ? '' : `&before=${before}`;
+        const res = await request(app.getHttpServer())
+          .get(`/v1/conversations/${convId}/messages?size=${size}${cursor}`)
+          .set('Authorization', auth(token))
+          .expect(200);
+        const page = res.body.result.items as typeof items;
+        items.push(...page);
+        if (!res.body.result.hasMore || page.length === 0) {
+          break;
+        }
+        before = page[page.length - 1]!.seq;
+      }
+      return items.sort((left, right) => left.seq - right.seq);
+    }
+
+    async function unreadIn(token: string, convId: string): Promise<number> {
+      const res = await request(app.getHttpServer())
+        .get('/v1/conversations?page=1&size=100')
+        .set('Authorization', auth(token))
+        .expect(200);
+      const row = (
+        res.body.result.items as { conversation: { id: string }; unreadCount: number }[]
+      ).find((item) => item.conversation.id === convId);
+      return row?.unreadCount ?? 0;
+    }
+
+    const deleteMessages = (token: string, ids: string[], scope: 'ME' | 'EVERYONE') =>
+      request(app.getHttpServer())
+        .post('/v1/messages/delete')
+        .set('Authorization', auth(token))
+        .send({ ids, scope });
+
+    it('1. EVERYONE keeps the list length and every seq position, on both sides', async () => {
+      const convId = await seedConversation(50, () => aId);
+      const ids = await idsOfSeqs(convId, 21, 30);
+
+      const res = await deleteMessages(aToken, ids, 'EVERYONE').expect(200);
+      expect(res.body.result.deleted).toHaveLength(10);
+      expect(res.body.result.skipped).toEqual([]);
+
+      for (const token of [aToken, bToken]) {
+        const history = await fullHistory(token, convId);
+        expect(history).toHaveLength(50);
+        expect(history.map((item) => item.seq)).toEqual(
+          Array.from({ length: 50 }, (_, index) => index + 1),
+        );
+        expect(history.filter((item) => item.deletedAt !== null).map((item) => item.seq)).toEqual([
+          21, 22, 23, 24, 25, 26, 27, 28, 29, 30,
+        ]);
+      }
+    });
+
+    it('2. ME shortens the requester’s history and leaves the peer’s untouched', async () => {
+      const convId = await seedConversation(50, () => aId);
+      const ids = await idsOfSeqs(convId, 21, 30);
+
+      await deleteMessages(aToken, ids, 'ME').expect(200);
+
+      const mine = await fullHistory(aToken, convId);
+      const theirs = await fullHistory(bToken, convId);
+      expect(mine).toHaveLength(40);
+      expect(theirs).toHaveLength(50);
+      // The rows both still see must stay in the same order, at the same seqs.
+      expect(mine.map((item) => item.seq)).toEqual(
+        theirs.map((item) => item.seq).filter((seq) => seq < 21 || seq > 30),
+      );
+    });
+
+    it('2b. ME works on the other member’s messages too — nothing is mutated', async () => {
+      const convId = await seedConversation(4, () => bId);
+      const ids = await idsOfSeqs(convId, 1, 2);
+
+      const res = await deleteMessages(aToken, ids, 'ME').expect(200);
+      expect(res.body.result.deleted).toHaveLength(2);
+      expect(await fullHistory(aToken, convId)).toHaveLength(2);
+      expect(await fullHistory(bToken, convId)).toHaveLength(4);
+    });
+
+    it('3. paging with ?before= returns every visible message once — no gaps, no duplicates', async () => {
+      const convId = await seedConversation(50, () => aId);
+      await deleteMessages(aToken, await idsOfSeqs(convId, 10, 12), 'ME').expect(200);
+
+      // A page size that divides neither 50 nor 47, so a short page would be unmistakable.
+      const seen = await fullHistory(aToken, convId, 7);
+      const seqs = seen.map((item) => item.seq);
+
+      expect(new Set(seqs).size).toBe(seqs.length);
+      expect(seqs).toEqual(
+        Array.from({ length: 50 }, (_, index) => index + 1).filter((seq) => seq < 10 || seq > 12),
+      );
+    });
+
+    it('5. the badge drops by what was deleted, never below zero, and is idempotent', async () => {
+      const convId = await seedConversation(5, () => bId);
+      expect(await unreadIn(aToken, convId)).toBe(5);
+
+      const ids = await idsOfSeqs(convId, 1, 3);
+      const first = await deleteMessages(aToken, ids, 'ME').expect(200);
+      expect(first.body.result.unreadCount).toBe(2);
+      expect(await unreadIn(aToken, convId)).toBe(2);
+
+      // Replaying the same call must not move the number again.
+      const second = await deleteMessages(aToken, ids, 'ME').expect(200);
+      expect(second.body.result.unreadCount).toBe(2);
+      expect(await unreadIn(aToken, convId)).toBe(2);
+    });
+
+    it('skips the other member’s messages under EVERYONE instead of failing the batch', async () => {
+      const convId = await seedConversation(4, (index) => (index % 2 === 0 ? aId : bId));
+      const ids = await idsOfSeqs(convId, 1, 4);
+
+      const res = await deleteMessages(aToken, ids, 'EVERYONE').expect(200);
+
+      expect(res.body.result.deleted).toHaveLength(2); // seq 1 and 3 — A's own
+      expect(res.body.result.skipped).toHaveLength(2);
+      expect(
+        (res.body.result.skipped as { reason: string }[]).every(
+          (entry) => entry.reason === 'NOT_OWN',
+        ),
+      ).toBe(true);
+    });
+
+    it('refuses ids drawn from two conversations (422 MIXED_CONVERSATIONS)', async () => {
+      const first = await seedConversation(2, () => aId);
+      const second = await seedConversation(2, () => aId);
+      const ids = [...(await idsOfSeqs(first, 1, 1)), ...(await idsOfSeqs(second, 1, 1))];
+
+      const res = await deleteMessages(aToken, ids, 'EVERYONE').expect(422);
+      expect(res.body.error.code).toBe('MIXED_CONVERSATIONS');
+    });
+
+    it('refuses more than 100 ids (422 TOO_MANY_IDS)', async () => {
+      const ids = Array.from({ length: 101 }, (_, index) => `ghost-${index}`);
+      const res = await deleteMessages(aToken, ids, 'ME').expect(422);
+      expect(res.body.error.code).toBe('TOO_MANY_IDS');
+    });
+
+    it('403s a batch from a conversation the caller does not belong to', async () => {
+      const convId = await seedConversation(2, () => aId);
+      const ids = await idsOfSeqs(convId, 1, 1);
+
+      const res = await deleteMessages(cToken, ids, 'ME').expect(403);
+      expect(res.body.error.code).toBe('NOT_MEMBER');
+    });
+
+    it('404s when not one id resolves', async () => {
+      const res = await deleteMessages(aToken, ['ghost-1', 'ghost-2'], 'ME').expect(404);
+      expect(res.body.error.code).toBe('MESSAGE_NOT_FOUND');
+    });
+
+    it('4. after clearing, a new message stands alone for me and the peer keeps everything', async () => {
+      const convId = await seedConversation(20, () => bId);
+
+      const cleared = await request(app.getHttpServer())
+        .delete(`/v1/conversations/${convId}/history?scope=ME`)
+        .set('Authorization', auth(aToken))
+        .expect(200);
+      expect(cleared.body.result.clearedBeforeSeq).toBe(20);
+      expect(cleared.body.result.unreadCount).toBe(0);
+
+      expect(await fullHistory(aToken, convId)).toHaveLength(0);
+      expect(await unreadIn(aToken, convId)).toBe(0);
+
+      // A message sent after the clear is visible again — `seq` keeps climbing past the watermark.
+      await request(app.getHttpServer())
+        .post(`/v1/conversations/${convId}/messages`)
+        .set('Authorization', auth(bToken))
+        .send({ body: 'tozalashdan keyin' })
+        .expect(201);
+
+      const mine = await fullHistory(aToken, convId);
+      expect(mine).toHaveLength(1);
+      expect(mine[0]!.seq).toBe(21);
+      expect(await fullHistory(bToken, convId)).toHaveLength(21);
+    });
+
+    it('clearing with EVERYONE empties it for both members', async () => {
+      const convId = await seedConversation(6, () => aId);
+
+      await request(app.getHttpServer())
+        .delete(`/v1/conversations/${convId}/history?scope=EVERYONE`)
+        .set('Authorization', auth(aToken))
+        .expect(200);
+
+      expect(await fullHistory(aToken, convId)).toHaveLength(0);
+      expect(await fullHistory(bToken, convId)).toHaveLength(0);
+    });
+
+    it('keeps the conversation in the list with a null lastMessage after a clear (§B1)', async () => {
+      const convId = await seedConversation(4, () => bId);
+      await request(app.getHttpServer())
+        .delete(`/v1/conversations/${convId}/history`)
+        .set('Authorization', auth(aToken))
+        .expect(200);
+
+      const list = await request(app.getHttpServer())
+        .get('/v1/conversations?page=1&size=100')
+        .set('Authorization', auth(aToken))
+        .expect(200);
+      const row = (
+        list.body.result.items as { conversation: { id: string }; lastMessage: unknown }[]
+      ).find((item) => item.conversation.id === convId);
+
+      expect(row).toBeDefined(); // Telegram keeps the row; only the history goes.
+      expect(row!.lastMessage).toBeNull();
+    });
+
+    it('clearing is idempotent and 404s for a non-member', async () => {
+      const convId = await seedConversation(3, () => aId);
+      const clear = () =>
+        request(app.getHttpServer())
+          .delete(`/v1/conversations/${convId}/history?scope=ME`)
+          .set('Authorization', auth(aToken));
+
+      const first = await clear().expect(200);
+      const second = await clear().expect(200);
+      expect(second.body.result.clearedBeforeSeq).toBe(first.body.result.clearedBeforeSeq);
+
+      const outsider = await request(app.getHttpServer())
+        .delete(`/v1/conversations/${convId}/history`)
+        .set('Authorization', auth(cToken))
+        .expect(404);
+      expect(outsider.body.error.code).toBe('CONVERSATION_NOT_FOUND');
+    });
+
+    // The purge is raw SQL, so nothing but a real database proves it. The unit test only asserts the
+    // cron swallows failures — it mocks exactly the statement that could be wrong.
+    it('purges only messages BOTH members have cleared past (§B1)', async () => {
+      const bothCleared = await seedConversation(5, () => aId);
+      const oneCleared = await seedConversation(5, () => aId);
+
+      await request(app.getHttpServer())
+        .delete(`/v1/conversations/${bothCleared}/history?scope=EVERYONE`)
+        .set('Authorization', auth(aToken))
+        .expect(200);
+      await request(app.getHttpServer())
+        .delete(`/v1/conversations/${oneCleared}/history?scope=ME`)
+        .set('Authorization', auth(aToken))
+        .expect(200);
+
+      const removed = await app.get(ChatService).purgeClearedMessages();
+
+      expect(removed).toBeGreaterThanOrEqual(5);
+      expect(await prisma.message.count({ where: { conversationId: bothCleared } })).toBe(0);
+      // B never cleared this one, so their history must survive untouched.
+      expect(await prisma.message.count({ where: { conversationId: oneCleared } })).toBe(5);
+      expect(await fullHistory(bToken, oneCleared)).toHaveLength(5);
+    });
+
+    it('hides a message from the conversation list’s lastMessage for the hider only (§A4.5)', async () => {
+      const convId = await seedConversation(3, () => bId);
+      await deleteMessages(aToken, await idsOfSeqs(convId, 3, 3), 'ME').expect(200);
+
+      const forA = await request(app.getHttpServer())
+        .get('/v1/conversations?page=1&size=100')
+        .set('Authorization', auth(aToken))
+        .expect(200);
+      const forB = await request(app.getHttpServer())
+        .get('/v1/conversations?page=1&size=100')
+        .set('Authorization', auth(bToken))
+        .expect(200);
+
+      type Row = { conversation: { id: string }; lastMessage: { seq: number } | null };
+      const rowA = (forA.body.result.items as Row[]).find((r) => r.conversation.id === convId);
+      const rowB = (forB.body.result.items as Row[]).find((r) => r.conversation.id === convId);
+
+      expect(rowA?.lastMessage?.seq).toBe(2); // A's newest visible message moved down
+      expect(rowB?.lastMessage?.seq).toBe(3); // B is unaffected
+    });
   });
 
   it('sorts conversations that never received a message last (§17.7)', async () => {

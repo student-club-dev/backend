@@ -8,10 +8,12 @@ export interface Conversation {
   lastMessageAt: Date | null;
 }
 
-/** A member's row, carrying the per-member read/delivered cursors (C5). */
+/** A member's row, carrying the per-member read/delivered cursors (C5) and history watermark (§B1). */
 export interface ConversationMember {
   conversationId: string;
   studentId: string;
   lastReadSeq: number;
   lastDeliveredSeq: number;
+  /** Reads hide `seq <= clearedBeforeSeq` for this member alone. `0` ⇒ nothing cleared. */
+  clearedBeforeSeq: number;
 }

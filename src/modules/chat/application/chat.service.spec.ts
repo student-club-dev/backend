@@ -7,7 +7,8 @@ import { PhoneVisibility } from '../../profiles/domain/enums/phone-visibility.en
 import { MediaAsset } from '../../media/domain/entities/media-asset.entity';
 import { MediaAssetRepository } from '../../media/domain/media-asset.repository';
 import { MediaKind, MediaProvider, MediaStatus } from '../../media/domain/enums/media-kind.enum';
-import { AppendMessageInput, ChatRepository } from '../domain/chat.repository';
+import { AppendMessageInput, ChatRepository, MessageAuthRow } from '../domain/chat.repository';
+import { DeleteScope } from '../domain/enums/delete-scope.enum';
 import { MessageSticker, StickerDirectoryRepository } from '../domain/sticker-directory.repository';
 import { ConnectionCheckRepository } from '../domain/connection-check.repository';
 import { Conversation, ConversationMember } from '../domain/entities/conversation.entity';
@@ -48,12 +49,16 @@ function message(overrides: Partial<Message> = {}): Message {
   };
 }
 
+/** What `viewerOf(member())` produces — every read is expected to be filtered through it (§A4.3). */
+const VIEWER = { studentId: 'me', clearedBeforeSeq: 0, lastReadSeq: 0 };
+
 function member(overrides: Partial<ConversationMember> = {}): ConversationMember {
   return {
     conversationId: 'conv-1',
     studentId: 'me',
     lastReadSeq: 0,
     lastDeliveredSeq: 0,
+    clearedBeforeSeq: 0,
     ...overrides,
   };
 }
@@ -122,6 +127,10 @@ function makeChat(overrides: Partial<ChatRepository> = {}): ChatRepository {
     softDeleteMessage: jest.fn(async (id: string) =>
       message({ id, body: null, deletedAt: new Date('2026-07-29T00:00:00Z') }),
     ),
+    findMessagesByIds: jest.fn().mockResolvedValue([]),
+    deleteMessages: jest.fn().mockResolvedValue({ unreadCount: 0, lastMessage: null }),
+    clearHistory: jest.fn().mockResolvedValue(812),
+    purgeClearedMessages: jest.fn().mockResolvedValue(0),
     advanceCursor: jest.fn().mockResolvedValue(undefined),
     touchLastSeen: jest.fn().mockResolvedValue(new Date('2026-07-27T00:00:00Z')),
     lastSeenVisibilityOf: jest.fn().mockResolvedValue(LastSeenVisibility.CONNECTIONS),
@@ -542,7 +551,7 @@ describe('ChatService', () => {
     it('returns messages after the cursor for a member', async () => {
       const chat = makeChat({ listSince: jest.fn().mockResolvedValue([message({ seq: 4 })]) });
       const result = await makeService(chat).messagesSince(me, 'conv-1', 3, 20);
-      expect(chat.listSince).toHaveBeenCalledWith('conv-1', 3, 21);
+      expect(chat.listSince).toHaveBeenCalledWith('conv-1', VIEWER, 3, 21);
       expect(result.items).toHaveLength(1);
       expect(result.hasMore).toBe(false);
     });
@@ -559,7 +568,7 @@ describe('ChatService', () => {
     it('history: returns the repository page for a member', async () => {
       const chat = makeChat({ listMessages: jest.fn().mockResolvedValue([message()]) });
       const result = await makeService(chat).history(me, 'conv-1', 5, 20);
-      expect(chat.listMessages).toHaveBeenCalledWith('conv-1', 5, 21);
+      expect(chat.listMessages).toHaveBeenCalledWith('conv-1', VIEWER, 5, 21);
       expect(result.items).toHaveLength(1);
     });
 
@@ -584,7 +593,7 @@ describe('ChatService', () => {
 
       const page = await makeService(chat).history(me, 'conv-1', null, 3);
 
-      expect(chat.listMessages).toHaveBeenCalledWith('conv-1', null, 4);
+      expect(chat.listMessages).toHaveBeenCalledWith('conv-1', VIEWER, null, 4);
       expect(page.items).toHaveLength(3);
       expect(page.hasMore).toBe(true);
     });
@@ -607,7 +616,7 @@ describe('ChatService', () => {
 
       const page = await makeService(chat).messagesSince(me, 'conv-1', 0, 1);
 
-      expect(chat.listSince).toHaveBeenCalledWith('conv-1', 0, 2);
+      expect(chat.listSince).toHaveBeenCalledWith('conv-1', VIEWER, 0, 2);
       expect(page.items).toHaveLength(1);
       expect(page.hasMore).toBe(true);
     });
@@ -712,6 +721,205 @@ describe('ChatService', () => {
       const result = await makeService(chat).deleteMessage(me, 'm1');
       expect(result).toBe(already);
       expect(chat.softDeleteMessage).not.toHaveBeenCalled();
+    });
+  });
+
+  // §A2 — 50 selected messages used to mean 50 requests. These cover the authorisation split
+  // between the two scopes, which is the part a client cannot enforce for us.
+  describe('deleteMessages (§A2)', () => {
+    const authRow = (overrides: Partial<MessageAuthRow> = {}): MessageAuthRow => ({
+      id: 'm1',
+      conversationId: 'conv-1',
+      senderId: 'me',
+      seq: 1,
+      ...overrides,
+    });
+
+    it('skips someone else’s message under EVERYONE and deletes the rest', async () => {
+      const chat = makeChat({
+        findMessagesByIds: jest
+          .fn()
+          .mockResolvedValue([
+            authRow({ id: 'a', seq: 1 }),
+            authRow({ id: 'b', seq: 2, senderId: 'other' }),
+          ]),
+        deleteMessages: jest
+          .fn()
+          .mockResolvedValue({ deletedSeqs: [1], unreadCount: 0, lastMessage: null }),
+      });
+
+      const result = await makeService(chat).deleteMessages(me, ['a', 'b'], DeleteScope.EVERYONE);
+
+      expect(result.deleted).toEqual(['a']);
+      expect(result.skipped).toEqual([{ id: 'b', reason: 'NOT_OWN' }]);
+      expect(chat.deleteMessages).toHaveBeenCalledWith(
+        'conv-1',
+        VIEWER,
+        ['a'],
+        DeleteScope.EVERYONE,
+      );
+    });
+
+    it('hides anyone’s message under ME — nothing is mutated, so ownership is irrelevant', async () => {
+      const chat = makeChat({
+        findMessagesByIds: jest.fn().mockResolvedValue([authRow({ id: 'b', senderId: 'other' })]),
+        deleteMessages: jest
+          .fn()
+          .mockResolvedValue({ deletedSeqs: [1], unreadCount: 0, lastMessage: null }),
+      });
+
+      const result = await makeService(chat).deleteMessages(me, ['b'], DeleteScope.ME);
+
+      expect(result.deleted).toEqual(['b']);
+      expect(result.skipped).toEqual([]);
+    });
+
+    it('rejects ids drawn from more than one conversation', async () => {
+      const chat = makeChat({
+        findMessagesByIds: jest
+          .fn()
+          .mockResolvedValue([
+            authRow({ id: 'a' }),
+            authRow({ id: 'b', conversationId: 'conv-2' }),
+          ]),
+      });
+
+      await expect(
+        makeService(chat).deleteMessages(me, ['a', 'b'], DeleteScope.ME),
+      ).rejects.toMatchObject({ code: ERROR_CODE.MIXED_CONVERSATIONS, status: 422 });
+      expect(chat.deleteMessages).not.toHaveBeenCalled();
+    });
+
+    it('rejects more than 100 ids before touching the database', async () => {
+      const chat = makeChat();
+      const ids = Array.from({ length: 101 }, (_, index) => `m${index}`);
+
+      await expect(makeService(chat).deleteMessages(me, ids, DeleteScope.ME)).rejects.toMatchObject(
+        {
+          code: ERROR_CODE.TOO_MANY_IDS,
+          status: 422,
+        },
+      );
+      expect(chat.findMessagesByIds).not.toHaveBeenCalled();
+    });
+
+    it('reports unknown ids as skipped rather than failing the whole batch', async () => {
+      const chat = makeChat({
+        findMessagesByIds: jest.fn().mockResolvedValue([authRow({ id: 'a' })]),
+        deleteMessages: jest
+          .fn()
+          .mockResolvedValue({ deletedSeqs: [1], unreadCount: 0, lastMessage: null }),
+      });
+
+      const result = await makeService(chat).deleteMessages(
+        me,
+        ['a', 'ghost'],
+        DeleteScope.EVERYONE,
+      );
+
+      expect(result.deleted).toEqual(['a']);
+      expect(result.skipped).toEqual([{ id: 'ghost', reason: 'NOT_FOUND' }]);
+    });
+
+    it('throws 403 NOT_MEMBER when the caller does not belong to the conversation', async () => {
+      const chat = makeChat({
+        findMessagesByIds: jest.fn().mockResolvedValue([authRow({ senderId: 'other' })]),
+        findMembership: jest.fn().mockResolvedValue(null),
+      });
+
+      await expect(
+        makeService(chat).deleteMessages(me, ['m1'], DeleteScope.ME),
+      ).rejects.toMatchObject({ code: ERROR_CODE.NOT_MEMBER, status: 403 });
+    });
+
+    it('throws 404 when not one id resolves — there is no conversation to report on', async () => {
+      const chat = makeChat({ findMessagesByIds: jest.fn().mockResolvedValue([]) });
+
+      await expect(
+        makeService(chat).deleteMessages(me, ['ghost'], DeleteScope.ME),
+      ).rejects.toMatchObject({ code: ERROR_CODE.MESSAGE_NOT_FOUND, status: 404 });
+    });
+
+    it('returns 200 with an empty `deleted` when everything was skipped', async () => {
+      const chat = makeChat({
+        findMessagesByIds: jest.fn().mockResolvedValue([authRow({ senderId: 'other' })]),
+      });
+
+      const result = await makeService(chat).deleteMessages(me, ['m1'], DeleteScope.EVERYONE);
+
+      expect(result.deleted).toEqual([]);
+      expect(result.skipped).toEqual([{ id: 'm1', reason: 'NOT_OWN' }]);
+      // Counters still come back, from the list projection — the client settles on them either way.
+      expect(result.unreadCount).toBe(2);
+      expect(chat.deleteMessages).not.toHaveBeenCalled();
+    });
+
+    // The WS event ships `ids` and `seqs` as parallel arrays, and the deprecated `{messageId, seq}`
+    // pair is element 0 of each. Sorting one and not the other made that pair name two different
+    // messages whenever the selection order was not seq order.
+    it('returns deletedSeqs aligned with deleted, not sorted independently', async () => {
+      const chat = makeChat({
+        findMessagesByIds: jest
+          .fn()
+          .mockResolvedValue([
+            authRow({ id: 'c', seq: 30 }),
+            authRow({ id: 'a', seq: 10 }),
+            authRow({ id: 'b', seq: 20 }),
+          ]),
+      });
+
+      // Selected newest-first, which is how a client's selection mode hands them over.
+      const result = await makeService(chat).deleteMessages(
+        me,
+        ['c', 'a', 'b'],
+        DeleteScope.EVERYONE,
+      );
+
+      expect(result.deleted).toEqual(['c', 'a', 'b']);
+      expect(result.deletedSeqs).toEqual([30, 10, 20]);
+    });
+
+    it('collapses duplicate ids so one message is not reported twice', async () => {
+      const chat = makeChat({
+        findMessagesByIds: jest.fn().mockResolvedValue([authRow({ id: 'a' })]),
+        deleteMessages: jest
+          .fn()
+          .mockResolvedValue({ deletedSeqs: [1], unreadCount: 0, lastMessage: null }),
+      });
+
+      const result = await makeService(chat).deleteMessages(
+        me,
+        ['a', 'a', 'a'],
+        DeleteScope.EVERYONE,
+      );
+
+      expect(result.deleted).toEqual(['a']);
+      expect(chat.findMessagesByIds).toHaveBeenCalledWith(['a']);
+    });
+  });
+
+  describe('clearHistory (§B1)', () => {
+    it('raises the watermark for the caller and reports a zero unread count', async () => {
+      const chat = makeChat();
+      const result = await makeService(chat).clearHistory(me, 'conv-1', DeleteScope.ME);
+
+      expect(chat.clearHistory).toHaveBeenCalledWith('conv-1', 'me', DeleteScope.ME);
+      expect(result).toEqual({ conversationId: 'conv-1', clearedBeforeSeq: 812, unreadCount: 0 });
+    });
+
+    it('passes EVERYONE through so both members are cleared', async () => {
+      const chat = makeChat();
+      await makeService(chat).clearHistory(me, 'conv-1', DeleteScope.EVERYONE);
+      expect(chat.clearHistory).toHaveBeenCalledWith('conv-1', 'me', DeleteScope.EVERYONE);
+    });
+
+    it('404s for a non-member before touching the watermark', async () => {
+      const chat = makeChat({ findMembership: jest.fn().mockResolvedValue(null) });
+
+      await expect(
+        makeService(chat).clearHistory(me, 'conv-1', DeleteScope.ME),
+      ).rejects.toMatchObject({ code: ERROR_CODE.CONVERSATION_NOT_FOUND, status: 404 });
+      expect(chat.clearHistory).not.toHaveBeenCalled();
     });
   });
 
