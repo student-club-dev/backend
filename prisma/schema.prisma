@@ -237,6 +237,7 @@ model Student {
   // Chat
   conversationMemberships ConversationMember[]
   messagesSent            Message[]
+  hiddenMessages          MessageHidden[]
   mediaAssets             MediaAsset[]
   deviceTokens            DeviceToken[]
 
@@ -979,6 +980,11 @@ model ConversationMember {
   mutedUntil       DateTime? @map("muted_until")
   joinedAt         DateTime  @default(now()) @map("joined_at")
 
+  /// History watermark (§B1). Reads filter `seq > clearedBeforeSeq` for THIS member only, so
+  /// "clear history" costs one integer instead of deleting rows — deleting them would tear holes in
+  /// the `seq` axis the other member's read/delivered cursors still walk.
+  clearedBeforeSeq Int @default(0) @map("cleared_before_seq")
+
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   student      Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
@@ -1023,11 +1029,12 @@ model Message {
   // message with its own `seq`, or unread counts and `?after=` paging would break (chat spec §3).
   albumId String? @map("album_id")
 
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  sender       Student      @relation(fields: [senderId], references: [id], onDelete: Cascade)
-  sticker      Sticker?     @relation(fields: [stickerId], references: [id], onDelete: SetNull)
+  conversation Conversation    @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       Student         @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  sticker      Sticker?        @relation(fields: [stickerId], references: [id], onDelete: SetNull)
   attachment   MediaAsset?
-  reports      Report[]     @relation("ReportMessage")
+  reports      Report[]        @relation("ReportMessage")
+  hidden       MessageHidden[]
 
   @@unique([conversationId, seq])
   @@unique([senderId, clientMsgId])
@@ -1035,6 +1042,25 @@ model Message {
   @@index([albumId])
   @@index([stickerId])
   @@map("messages")
+}
+
+/// Per-member "delete for me" tombstone (§A1). Deliberately not a column on `messages`: the same row
+/// is visible to one member and hidden from the other, which a per-message flag cannot express.
+model MessageHidden {
+  studentId String   @map("student_id")
+  messageId String   @map("message_id")
+  hiddenAt  DateTime @default(now()) @map("hidden_at")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  // The primary key already serves every read this table has: "is (me, message) hidden" and
+  // "everything I hid". A second index on the same two columns in the same order — as the mobile
+  // spec sketched it — would never be chosen by the planner. The reverse direction is the one worth
+  // having: the purge job and the FK cascade both look rows up by message.
+  @@id([studentId, messageId])
+  @@index([messageId])
+  @@map("message_hidden")
 }
 
 // ---- Chat media (uploads + sticker catalogue — chat media spec parts A/§1–§5) ----
