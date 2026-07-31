@@ -33,8 +33,7 @@ import { MessagesController } from './presentation/messages.controller';
     { provide: CONNECTION_CHECK, useClass: ConnectionCheckPrismaRepository },
     { provide: STICKER_DIRECTORY, useClass: StickerDirectoryPrismaRepository },
   ],
-  // Exported for `CronModule`'s weekly purge of fully-cleared messages (§B1). Only the service —
-  // the repository stays private, so nothing outside this module can reach Prisma through it.
+  // For CronModule's weekly purge (§B1). Service only — the repository stays private.
   exports: [ChatService],
 })
 export class ChatModule {}

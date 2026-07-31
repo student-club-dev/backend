@@ -27,7 +27,7 @@ generator client {
 datasource db {
   provider   = "postgresql"
   url        = env("DATABASE_URL")
-  extensions = [postgis]
+  extensions = [postgis, pg_trgm]
 }
 
 // ============================================================================
@@ -820,6 +820,8 @@ model CatalogSynonym {
 
   @@unique([businessType, categoryKey, term])
   @@index([term])
+  // Modelled here rather than left as raw SQL, so `migrate dev` stops emitting a DROP for it.
+  @@index([term(ops: raw("gin_trgm_ops"))], map: "catalog_synonyms_term_trgm", type: Gin)
   @@map("catalog_synonyms")
 }
 
@@ -980,10 +982,13 @@ model ConversationMember {
   mutedUntil       DateTime? @map("muted_until")
   joinedAt         DateTime  @default(now()) @map("joined_at")
 
-  /// History watermark (§B1). Reads filter `seq > clearedBeforeSeq` for THIS member only, so
-  /// "clear history" costs one integer instead of deleting rows — deleting them would tear holes in
-  /// the `seq` axis the other member's read/delivered cursors still walk.
+  /// History watermark (§B1): reads filter `seq > clearedBeforeSeq` for THIS member only, so
+  /// clearing costs one integer instead of tearing holes in the `seq` axis.
   clearedBeforeSeq Int @default(0) @map("cleared_before_seq")
+
+  /// Removed from this member's list (§B2). A new message clears the flag and the conversation
+  /// returns under the same id, so the history never forks.
+  hidden Boolean @default(false)
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   student      Student      @relation(fields: [studentId], references: [id], onDelete: Cascade)
@@ -1029,23 +1034,40 @@ model Message {
   // message with its own `seq`, or unread counts and `?after=` paging would break (chat spec §3).
   albumId String? @map("album_id")
 
+  // Quoted reply (§C). Denormalised like the sticker columns: a snapshot taken at send time, so it
+  // keeps rendering after the target is deleted. `replyToMessageId` exists only for "jump to
+  // original" and is nulled by the purge cron.
+  replyToMessageId  String?      @map("reply_to_message_id")
+  replyToSenderId   String?      @map("reply_to_sender_id")
+  replyToSenderName String?      @map("reply_to_sender_name")
+  replyToSeq        Int?         @map("reply_to_seq")
+  replyToType       MessageType? @map("reply_to_type")
+  // Capped in the column too: a snapshot is written once and read forever.
+  replyToPreview    String?      @map("reply_to_preview") @db.VarChar(120)
+  quoteText         String?      @map("quote_text") @db.VarChar(300)
+  quoteOffset       Int?         @map("quote_offset")
+
   conversation Conversation    @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   sender       Student         @relation(fields: [senderId], references: [id], onDelete: Cascade)
   sticker      Sticker?        @relation(fields: [stickerId], references: [id], onDelete: SetNull)
   attachment   MediaAsset?
   reports      Report[]        @relation("ReportMessage")
   hidden       MessageHidden[]
+  replyTo      Message?        @relation("MessageReply", fields: [replyToMessageId], references: [id], onDelete: SetNull)
+  replies      Message[]       @relation("MessageReply")
 
   @@unique([conversationId, seq])
   @@unique([senderId, clientMsgId])
   @@index([conversationId, seq])
   @@index([albumId])
   @@index([stickerId])
+  // Serves the SET NULL the purge cron triggers.
+  @@index([replyToMessageId])
   @@map("messages")
 }
 
-/// Per-member "delete for me" tombstone (§A1). Deliberately not a column on `messages`: the same row
-/// is visible to one member and hidden from the other, which a per-message flag cannot express.
+/// Per-member "delete for me" tombstone (§A1). Not a column on `messages`: the same row is visible
+/// to one member and hidden from the other.
 model MessageHidden {
   studentId String   @map("student_id")
   messageId String   @map("message_id")
@@ -1054,10 +1076,7 @@ model MessageHidden {
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
   message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
 
-  // The primary key already serves every read this table has: "is (me, message) hidden" and
-  // "everything I hid". A second index on the same two columns in the same order — as the mobile
-  // spec sketched it — would never be chosen by the planner. The reverse direction is the one worth
-  // having: the purge job and the FK cascade both look rows up by message.
+  // The PK serves the forward reads; this index serves the purge job and the FK cascade.
   @@id([studentId, messageId])
   @@index([messageId])
   @@map("message_hidden")

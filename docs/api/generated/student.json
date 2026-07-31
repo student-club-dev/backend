@@ -8847,6 +8847,204 @@
             "bearer": []
           }
         ]
+      },
+      "delete": {
+        "operationId": "ConversationsController_deleteConversation",
+        "summary": "Delete the conversation",
+        "description": "Clears the history and removes the conversation from your list (§B2). Nothing is destroyed: the membership row survives so your read cursors and the conversation id do too. A new message brings it back under the **same** `conversationId`, carrying only what was sent after the delete — which is why `POST /v1/conversations` keeps resolving here rather than forking the history into a second row. `ME` removes it for you on every device you own; `EVERYONE` removes it for both members.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Conversation id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "scope",
+            "required": false,
+            "in": "query",
+            "description": "Defaults to `ME` — `EVERYONE` also wipes the other member’s copy.",
+            "schema": {
+              "$ref": "#/components/schemas/DeleteScopeDto"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The watermark written, and your now-zero unread count.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "$ref": "#/components/schemas/ClearHistoryResultDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (`UNAUTHORIZED`), or expired (`TOKEN_EXPIRED`) — refresh and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 401
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Avtorizatsiyadan o‘tilmagan"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UNAUTHORIZED",
+                            "message": "Avtorizatsiyadan o‘tilmagan",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not a STUDENT account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 403
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Ruxsat yo‘q"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "FORBIDDEN",
+                            "message": "Ruxsat yo‘q",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such conversation, or you are not a member.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 404
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Suhbat topilmadi"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "CONVERSATION_NOT_FOUND",
+                            "message": "Suhbat topilmadi",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Chat"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
       }
     },
     "/v1/conversations/{id}/messages": {
@@ -8877,6 +9075,15 @@
             "required": false,
             "in": "query",
             "description": "Reconnect catch-up: messages with seq > after, oldest-first (C6)",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "around",
+            "required": false,
+            "in": "query",
+            "description": "Jump target: the window centred on this `seq` — roughly half before it, the rest from it onwards. Mutually exclusive with `before` and `after` (422). Use it when a tapped quote points at a message too far back to be in the local cache (§C3). `hasMore` then reports whether *older* messages exist below the window, which is the direction you scroll next.",
             "schema": {
               "type": "number"
             }
@@ -20787,6 +20994,78 @@
           "height"
         ]
       },
+      "QuoteDto": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "offset": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Start of the selection in UTF-16 code units — the same units Kotlin/Swift count."
+          }
+        },
+        "required": [
+          "text",
+          "offset"
+        ]
+      },
+      "ReplyToDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "nullable": true,
+            "description": "`null` once the original has been purged — there is nothing left to jump to."
+          },
+          "seq": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Use with `?around=` to jump."
+          },
+          "senderId": {
+            "type": "string"
+          },
+          "senderName": {
+            "type": "string",
+            "nullable": true,
+            "description": "Name to draw above the bubble — already resolved, do not look it up by id."
+          },
+          "type": {
+            "$ref": "#/components/schemas/MessageTypeDto"
+          },
+          "preview": {
+            "type": "string",
+            "nullable": true,
+            "description": "Shortened original text (≤120). `null` for media — draw \"📷 Rasm\" and friends from `type`."
+          },
+          "quote": {
+            "nullable": true,
+            "description": "The fragment the sender highlighted, or `null` for a plain reply.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QuoteDto"
+              }
+            ]
+          },
+          "originalDeleted": {
+            "type": "boolean",
+            "description": "The original was deleted or purged after this reply was sent. Keep showing the quote — it is a snapshot — but drop the tap-to-jump affordance."
+          }
+        },
+        "required": [
+          "id",
+          "seq",
+          "senderId",
+          "senderName",
+          "type",
+          "preview",
+          "quote",
+          "originalDeleted"
+        ]
+      },
       "MessageDto": {
         "type": "object",
         "properties": {
@@ -20845,6 +21124,15 @@
               }
             ]
           },
+          "replyTo": {
+            "nullable": true,
+            "description": "Set when this message replies to another; null otherwise (§C2).",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReplyToDto"
+              }
+            ]
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -20862,6 +21150,7 @@
           "albumId",
           "attachment",
           "sticker",
+          "replyTo",
           "createdAt"
         ]
       },
@@ -20985,6 +21274,26 @@
           "hasMore"
         ]
       },
+      "QuoteInputDto": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 300,
+            "description": "Max 300 characters (422 `QUOTE_TOO_LONG`). Must be a real slice of the target’s body at `offset` — the server checks it and rejects a mismatch with 422 `QUOTE_NOT_FOUND`. It is stored as a snapshot, so an unchecked one would render forever as text the original never contained."
+          },
+          "offset": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0,
+            "description": "Start of the selection in UTF-16 code units. Kotlin and Swift already count in these, so pass the index straight through — no conversion on either side."
+          }
+        },
+        "required": [
+          "text",
+          "offset"
+        ]
+      },
       "GifRefDto": {
         "type": "object",
         "properties": {
@@ -21063,6 +21372,18 @@
       "SendMessageDto": {
         "type": "object",
         "properties": {
+          "replyToMessageId": {
+            "type": "string",
+            "description": "Reply to this message. It must live in the same conversation (422 `REPLY_TARGET_NOT_FOUND`) and must not be deleted (422 `REPLY_TARGET_DELETED`)."
+          },
+          "quote": {
+            "description": "Quote a fragment of the target instead of the whole message. Never valid on its own — without `replyToMessageId` it is 422 `QUOTE_WITHOUT_REPLY`. Text messages only: media has no body to slice.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QuoteInputDto"
+              }
+            ]
+          },
           "type": {
             "$ref": "#/components/schemas/MessageTypeDto"
           },

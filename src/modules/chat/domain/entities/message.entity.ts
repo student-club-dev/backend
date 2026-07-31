@@ -2,6 +2,20 @@ import { MediaAsset } from '../../../media/domain/entities/media-asset.entity';
 import { MessageType } from '../enums/message-type.enum';
 import { MessageSticker } from '../sticker-directory.repository';
 
+/** A frozen copy of what a message replied to (§C2). Only `originalDeleted` is read live. */
+export interface ReplySnapshot {
+  /** `null` once the target row has been purged. */
+  id: string | null;
+  seq: number;
+  senderId: string;
+  senderName: string | null;
+  type: MessageType;
+  /** Shortened target text; `null` for media. */
+  preview: string | null;
+  quote: { text: string; offset: number } | null;
+  originalDeleted: boolean;
+}
+
 /** A chat message with a per-conversation monotonic `seq` (C4). */
 export interface Message {
   id: string;
@@ -23,5 +37,7 @@ export interface Message {
   attachment: MediaAsset | null;
   /** The sticker, for `STICKER` messages. Catalogue content, not an upload. */
   sticker: MessageSticker | null;
+  /** What this message replied to, frozen at send time (§C2). */
+  replyTo: ReplySnapshot | null;
   createdAt: Date;
 }

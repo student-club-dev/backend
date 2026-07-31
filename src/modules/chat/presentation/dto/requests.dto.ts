@@ -105,8 +105,58 @@ export class StickerRefDto {
   height!: number;
 }
 
+/** The fragment of the target the user highlighted before hitting reply (§C1). */
+export class QuoteInputDto {
+  @ApiProperty({
+    maxLength: 300,
+    description:
+      'Max 300 characters (422 `QUOTE_TOO_LONG`). Must be a real slice of the target’s body at `offset` — the server checks it and rejects a ' +
+      'mismatch with 422 `QUOTE_NOT_FOUND`. It is stored as a snapshot, so an unchecked one would ' +
+      'render forever as text the original never contained.',
+  })
+  // Length is checked in the domain: the contract names `QUOTE_TOO_LONG`, and a DTO rule would
+  // answer `VALIDATION_ERROR` over REST while the WS path still answered `QUOTE_TOO_LONG`.
+  @IsString()
+  @IsNotEmpty()
+  text!: string;
+
+  @ApiProperty({
+    type: 'integer',
+    format: 'int32',
+    minimum: 0,
+    description:
+      'Start of the selection in UTF-16 code units. Kotlin and Swift already count in these, so ' +
+      'pass the index straight through — no conversion on either side.',
+  })
+  @IsInt()
+  @Min(0)
+  offset!: number;
+}
+
 /** Body of `POST /v1/conversations/:id/messages`. */
 export class SendMessageDto {
+  @ApiPropertyOptional({
+    type: String,
+    description:
+      'Reply to this message. It must live in the same conversation (422 ' +
+      '`REPLY_TARGET_NOT_FOUND`) and must not be deleted (422 `REPLY_TARGET_DELETED`).',
+  })
+  @IsOptional()
+  @IsString()
+  replyToMessageId?: string;
+
+  @ApiPropertyOptional({
+    type: () => QuoteInputDto,
+    description:
+      'Quote a fragment of the target instead of the whole message. Never valid on its own — ' +
+      'without `replyToMessageId` it is 422 `QUOTE_WITHOUT_REPLY`. Text messages only: media has ' +
+      'no body to slice.',
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => QuoteInputDto)
+  quote?: QuoteInputDto;
+
   @ApiPropertyOptional({
     enum: MessageType,
     enumName: 'MessageTypeDto',
@@ -192,10 +242,8 @@ export class SendMessageDto {
 }
 
 /**
- * Body of `POST /v1/messages/delete` — one batch, one transaction (§A2).
- *
- * The 100-id ceiling is enforced in the service rather than with `@ArrayMaxSize`: the contract names
- * `TOO_MANY_IDS` as the error code, and class-validator would report `VALIDATION_ERROR` instead.
+ * Body of `POST /v1/messages/delete` (§A2). The 100-id ceiling lives in the service, not in
+ * `@ArrayMaxSize` — the contract names `TOO_MANY_IDS`, not `VALIDATION_ERROR`.
  */
 export class DeleteMessagesDto {
   @ApiProperty({

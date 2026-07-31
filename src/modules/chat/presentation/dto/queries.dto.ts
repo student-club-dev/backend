@@ -47,6 +47,19 @@ export class HistoryQueryDto {
   @Min(0)
   after?: number;
 
+  @ApiPropertyOptional({
+    description:
+      'Jump target: the window centred on this `seq` — roughly half before it, the rest from it ' +
+      'onwards. Mutually exclusive with `before` and `after` (422). Use it when a tapped quote ' +
+      'points at a message too far back to be in the local cache (§C3). `hasMore` then reports ' +
+      'whether *older* messages exist below the window, which is the direction you scroll next.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  around?: number;
+
   @ApiPropertyOptional({ type: 'integer', format: 'int32', minimum: 1, maximum: 100, default: 30 })
   @IsOptional()
   @Type(() => Number)

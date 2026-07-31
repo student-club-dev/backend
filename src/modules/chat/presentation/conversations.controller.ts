@@ -12,6 +12,7 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { ERROR_CODE } from '../../../common/errors/error-code';
+import { AppException } from '../../../common/exceptions/app.exception';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import { StudentGuard } from '../../../common/guards/student.guard';
 import {
@@ -120,11 +121,21 @@ export class ConversationsController {
     @Param('id') id: string,
     @Query() query: HistoryQueryDto,
   ): Promise<MessageListDto> {
+    // Three cursors, three directions — combining them has no coherent answer.
+    const cursors = [query.before, query.after, query.around].filter(
+      (value) => value !== undefined,
+    );
+    if (cursors.length > 1) {
+      throw AppException.validation({ around: 'before, after va around birga kelmasin' });
+    }
+
     const size = query.size ?? 30;
     const page =
-      query.after === undefined
-        ? await this.chat.history(user, id, query.before ?? null, size)
-        : await this.chat.messagesSince(user, id, query.after, size);
+      query.around !== undefined
+        ? await this.chat.historyAround(user, id, query.around, size)
+        : query.after !== undefined
+          ? await this.chat.messagesSince(user, id, query.after, size)
+          : await this.chat.history(user, id, query.before ?? null, size);
     return MessageListDto.from(page.items, page.hasMore, user.id);
   }
 
@@ -150,6 +161,8 @@ export class ConversationsController {
       sticker: dto.sticker,
       albumId: dto.albumId,
       clientMsgId: dto.clientMsgId ?? null,
+      replyToMessageId: dto.replyToMessageId,
+      quote: dto.quote,
     });
     await this.gateway.broadcastMessage(message);
     return MessageDto.fromDomain(message, user.id);
@@ -193,6 +206,42 @@ export class ConversationsController {
     await this.gateway.broadcastDelivered(id, user.id, dto.seq);
   }
 
+  @Delete(':id')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Delete the conversation',
+    description:
+      'Clears the history and removes the conversation from your list (§B2). Nothing is destroyed: ' +
+      'the membership row survives so your read cursors and the conversation id do too. A new ' +
+      'message brings it back under the **same** `conversationId`, carrying only what was sent ' +
+      'after the delete — which is why `POST /v1/conversations` keeps resolving here rather than ' +
+      'forking the history into a second row. `ME` removes it for you on every device you own; ' +
+      '`EVERYONE` removes it for both members.',
+  })
+  @ApiParam({ name: 'id', description: 'Conversation id' })
+  @ApiQuery({
+    name: 'scope',
+    enum: DeleteScope,
+    required: false,
+    description: 'Defaults to `ME` — `EVERYONE` also wipes the other member\u2019s copy.',
+  })
+  @ApiOkEnvelope(ClearHistoryResultDto, 'The watermark written, and your now-zero unread count.')
+  @ApiNotFoundEnvelope(
+    ERROR_CODE.CONVERSATION_NOT_FOUND,
+    'No such conversation, or you are not a member.',
+    'Suhbat topilmadi',
+  )
+  async deleteConversation(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+    @Query() query: ScopeQueryDto,
+  ): Promise<ClearHistoryResultDto> {
+    const scope = query.scope ?? DeleteScope.ME;
+    const result = await this.chat.deleteConversation(user, id, scope);
+    await this.gateway.broadcastConversationDeleted(id, user.id, scope);
+    return ClearHistoryResultDto.from({ ...result, unreadCount: 0 });
+  }
+
   @Delete(':id/history')
   @HttpCode(200)
   @ApiOperation({
@@ -223,8 +272,7 @@ export class ConversationsController {
     @Param('id') id: string,
     @Query() query: ScopeQueryDto,
   ): Promise<ClearHistoryResultDto> {
-    // `ME` by default, unlike the message routes: this one can erase the other member's entire
-    // history, so the destructive reading is never the one you get by omitting the parameter.
+    // `ME` by default, unlike the message routes — this one can erase the other member's history.
     const scope = query.scope ?? DeleteScope.ME;
     const result = await this.chat.clearHistory(user, id, scope);
     await this.gateway.broadcastHistoryCleared(id, user.id, result.clearedBeforeSeq, scope);

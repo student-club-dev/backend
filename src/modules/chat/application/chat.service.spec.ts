@@ -44,6 +44,7 @@ function message(overrides: Partial<Message> = {}): Message {
     albumId: null,
     attachment: null,
     sticker: null,
+    replyTo: null,
     createdAt: new Date('2026-07-01T00:00:00Z'),
     ...overrides,
   };
@@ -59,6 +60,7 @@ function member(overrides: Partial<ConversationMember> = {}): ConversationMember
     lastReadSeq: 0,
     lastDeliveredSeq: 0,
     clearedBeforeSeq: 0,
+    hidden: false,
     ...overrides,
   };
 }
@@ -127,9 +129,12 @@ function makeChat(overrides: Partial<ChatRepository> = {}): ChatRepository {
     softDeleteMessage: jest.fn(async (id: string) =>
       message({ id, body: null, deletedAt: new Date('2026-07-29T00:00:00Z') }),
     ),
+    displayNameOf: jest.fn().mockResolvedValue('Kumushim'),
+    listAround: jest.fn().mockResolvedValue({ items: [], hasMore: false }),
     findMessagesByIds: jest.fn().mockResolvedValue([]),
     deleteMessages: jest.fn().mockResolvedValue({ unreadCount: 0, lastMessage: null }),
     clearHistory: jest.fn().mockResolvedValue(812),
+    deleteConversation: jest.fn().mockResolvedValue(812),
     purgeClearedMessages: jest.fn().mockResolvedValue(0),
     advanceCursor: jest.fn().mockResolvedValue(undefined),
     touchLastSeen: jest.fn().mockResolvedValue(new Date('2026-07-27T00:00:00Z')),
@@ -724,8 +729,6 @@ describe('ChatService', () => {
     });
   });
 
-  // §A2 — 50 selected messages used to mean 50 requests. These cover the authorisation split
-  // between the two scopes, which is the part a client cannot enforce for us.
   describe('deleteMessages (§A2)', () => {
     const authRow = (overrides: Partial<MessageAuthRow> = {}): MessageAuthRow => ({
       id: 'm1',
@@ -849,14 +852,11 @@ describe('ChatService', () => {
 
       expect(result.deleted).toEqual([]);
       expect(result.skipped).toEqual([{ id: 'm1', reason: 'NOT_OWN' }]);
-      // Counters still come back, from the list projection — the client settles on them either way.
       expect(result.unreadCount).toBe(2);
       expect(chat.deleteMessages).not.toHaveBeenCalled();
     });
 
-    // The WS event ships `ids` and `seqs` as parallel arrays, and the deprecated `{messageId, seq}`
-    // pair is element 0 of each. Sorting one and not the other made that pair name two different
-    // messages whenever the selection order was not seq order.
+    // The WS event ships `ids` and `seqs` as parallel arrays.
     it('returns deletedSeqs aligned with deleted, not sorted independently', async () => {
       const chat = makeChat({
         findMessagesByIds: jest
@@ -868,7 +868,6 @@ describe('ChatService', () => {
           ]),
       });
 
-      // Selected newest-first, which is how a client's selection mode hands them over.
       const result = await makeService(chat).deleteMessages(
         me,
         ['c', 'a', 'b'],
@@ -898,6 +897,133 @@ describe('ChatService', () => {
     });
   });
 
+  describe('sendMessage with a reply/quote (§C1)', () => {
+    const send = (chat: ChatRepository, extra: Record<string, unknown>) =>
+      makeService(chat).sendMessage(me, { conversationId: 'conv-1', body: 'ha', ...extra });
+
+    it('freezes the target into a snapshot', async () => {
+      const chat = makeChat({
+        findMessage: jest
+          .fn()
+          .mockResolvedValue(
+            message({ id: 't1', seq: 9, senderId: 'other', body: 'ertaga soat 10 da' }),
+          ),
+      });
+
+      await send(chat, { replyToMessageId: 't1', quote: { text: 'soat 10', offset: 7 } });
+
+      expect(chat.appendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reply: {
+            replyToMessageId: 't1',
+            replyToSenderId: 'other',
+            replyToSenderName: 'Kumushim',
+            replyToSeq: 9,
+            replyToType: MessageType.TEXT,
+            replyToPreview: 'ertaga soat 10 da',
+            quoteText: 'soat 10',
+            quoteOffset: 7,
+          },
+        }),
+      );
+    });
+
+    it('sends no reply columns when nothing was replied to', async () => {
+      const chat = makeChat();
+      await send(chat, {});
+      expect(chat.appendMessage).toHaveBeenCalledWith(expect.objectContaining({ reply: null }));
+    });
+
+    it('rejects a target from another conversation — it would leak a stranger\u2019s text', async () => {
+      const chat = makeChat({
+        findMessage: jest
+          .fn()
+          .mockResolvedValue(message({ id: 't1', conversationId: 'other-conv' })),
+      });
+      await expect(send(chat, { replyToMessageId: 't1' })).rejects.toMatchObject({
+        code: ERROR_CODE.REPLY_TARGET_NOT_FOUND,
+        status: 422,
+      });
+      expect(chat.appendMessage).not.toHaveBeenCalled();
+    });
+
+    it('rejects an unknown target', async () => {
+      const chat = makeChat({ findMessage: jest.fn().mockResolvedValue(null) });
+      await expect(send(chat, { replyToMessageId: 'ghost' })).rejects.toMatchObject({
+        code: ERROR_CODE.REPLY_TARGET_NOT_FOUND,
+      });
+    });
+
+    it('rejects a reply to a deleted message', async () => {
+      const chat = makeChat({
+        findMessage: jest.fn().mockResolvedValue(message({ id: 't1', deletedAt: new Date() })),
+      });
+      await expect(send(chat, { replyToMessageId: 't1' })).rejects.toMatchObject({
+        code: ERROR_CODE.REPLY_TARGET_DELETED,
+      });
+    });
+
+    it('rejects a quote that is not the slice at the offset', async () => {
+      const chat = makeChat({
+        findMessage: jest.fn().mockResolvedValue(message({ id: 't1', body: 'ertaga soat 10 da' })),
+      });
+      await expect(
+        send(chat, { replyToMessageId: 't1', quote: { text: 'soat 10', offset: 0 } }),
+      ).rejects.toMatchObject({ code: ERROR_CODE.QUOTE_NOT_FOUND });
+    });
+
+    it('rejects a quote with no reply target', async () => {
+      const chat = makeChat();
+      await expect(send(chat, { quote: { text: 'x', offset: 0 } })).rejects.toMatchObject({
+        code: ERROR_CODE.QUOTE_WITHOUT_REPLY,
+      });
+      expect(chat.findMessage).not.toHaveBeenCalled();
+    });
+
+    it('stores a null preview when replying to media, which has no text', async () => {
+      const chat = makeChat({
+        findMessage: jest
+          .fn()
+          .mockResolvedValue(message({ id: 't1', type: MessageType.IMAGE, body: null })),
+      });
+      await send(chat, { replyToMessageId: 't1' });
+      expect(chat.appendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          reply: expect.objectContaining({ replyToPreview: null, replyToType: MessageType.IMAGE }),
+        }),
+      );
+    });
+
+    it('truncates a long preview to 120 characters', async () => {
+      const chat = makeChat({
+        findMessage: jest.fn().mockResolvedValue(message({ id: 't1', body: 'a'.repeat(400) })),
+      });
+      await send(chat, { replyToMessageId: 't1' });
+      const input = (chat.appendMessage as jest.Mock).mock.calls[0][0];
+      expect(input.reply.replyToPreview).toHaveLength(120);
+    });
+  });
+
+  describe('historyAround (§C3)', () => {
+    it('asks the repository for a window centred on the seq', async () => {
+      const chat = makeChat({
+        listAround: jest.fn().mockResolvedValue({ items: [message()], hasMore: true }),
+      });
+      const page = await makeService(chat).historyAround(me, 'conv-1', 141, 50);
+
+      expect(chat.listAround).toHaveBeenCalledWith('conv-1', VIEWER, 141, 50);
+      expect(page.items).toHaveLength(1);
+      expect(page.hasMore).toBe(true);
+    });
+
+    it('404s for a non-member', async () => {
+      const chat = makeChat({ findMembership: jest.fn().mockResolvedValue(null) });
+      await expect(makeService(chat).historyAround(me, 'conv-1', 5, 50)).rejects.toMatchObject({
+        code: ERROR_CODE.CONVERSATION_NOT_FOUND,
+      });
+    });
+  });
+
   describe('clearHistory (§B1)', () => {
     it('raises the watermark for the caller and reports a zero unread count', async () => {
       const chat = makeChat();
@@ -920,6 +1046,30 @@ describe('ChatService', () => {
         makeService(chat).clearHistory(me, 'conv-1', DeleteScope.ME),
       ).rejects.toMatchObject({ code: ERROR_CODE.CONVERSATION_NOT_FOUND, status: 404 });
       expect(chat.clearHistory).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('deleteConversation (§B2)', () => {
+    it('clears and hides for the caller', async () => {
+      const chat = makeChat();
+      const result = await makeService(chat).deleteConversation(me, 'conv-1', DeleteScope.ME);
+
+      expect(chat.deleteConversation).toHaveBeenCalledWith('conv-1', 'me', DeleteScope.ME);
+      expect(result).toEqual({ conversationId: 'conv-1', clearedBeforeSeq: 812 });
+    });
+
+    it('passes EVERYONE through so both members lose it', async () => {
+      const chat = makeChat();
+      await makeService(chat).deleteConversation(me, 'conv-1', DeleteScope.EVERYONE);
+      expect(chat.deleteConversation).toHaveBeenCalledWith('conv-1', 'me', DeleteScope.EVERYONE);
+    });
+
+    it('404s for a non-member before touching anything', async () => {
+      const chat = makeChat({ findMembership: jest.fn().mockResolvedValue(null) });
+      await expect(
+        makeService(chat).deleteConversation(me, 'conv-1', DeleteScope.ME),
+      ).rejects.toMatchObject({ code: ERROR_CODE.CONVERSATION_NOT_FOUND });
+      expect(chat.deleteConversation).not.toHaveBeenCalled();
     });
   });
 

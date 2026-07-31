@@ -79,7 +79,9 @@ import { TradeCentersModule } from './modules/trade-centers/trade-centers.module
     StickersModule,
     GifsModule,
     StoriesModule,
-    CronModule,
+    // Off under test: the listing sweep runs every minute and rewrites listing status mid-suite,
+    // which failed whichever e2e file happened to be running when the tick landed.
+    ...(process.env.NODE_ENV === 'test' ? [] : [CronModule]),
   ],
 })
 export class AppModule {}

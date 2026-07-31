@@ -21,6 +21,7 @@ import { AttachmentDto } from '../media/presentation/dto/attachment.dto';
 import { NotificationsService } from '../notifications/application/notifications.service';
 import {
   CHAT_EVENT,
+  ConversationDeletedPayload,
   CursorPayload,
   HistoryClearedPayload,
   MessageDeletedPayload,
@@ -119,6 +120,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
         stickerId: payload.stickerId,
         albumId: payload.albumId,
         clientMsgId: payload.clientMsgId ?? null,
+        replyToMessageId: payload.replyToMessageId,
+        quote: payload.quote,
       });
       await this.broadcastMessage(message);
       return {
@@ -248,11 +251,8 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
   }
 
   /**
-   * Tell the right audience a batch was deleted (§A3).
-   *
-   * A `ME` delete never reaches the other member — the message is still on their screen and belongs
-   * there. It does reach the deleter's *other* devices, which is the only thing that makes "hidden
-   * for me" survive a reinstall or a second phone; without it the hiding is a local lie.
+   * Tell the right audience a batch was deleted (§A3). A `ME` delete reaches the deleter's other
+   * devices only — which is what makes "hidden for me" survive a reinstall.
    */
   async broadcastBulkDeleted(
     conversationId: string,
@@ -294,10 +294,22 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
       .emit(CHAT_EVENT.HISTORY_CLEARED, payload);
   }
 
-  /**
-   * Who a scoped change reaches. `ME` stops at the actor's own devices — the other member's copy is
-   * untouched, and telling them would wipe a screen that should not change. `EVERYONE` reaches both.
-   */
+  /** Tell the right audience a conversation was removed from a list (§B2). */
+  async broadcastConversationDeleted(
+    conversationId: string,
+    by: string,
+    scope: DeleteScope,
+  ): Promise<void> {
+    if (this.server === undefined) {
+      return;
+    }
+    const payload: ConversationDeletedPayload = { conversationId, scope, by };
+    this.server
+      .to(await this.roomsFor(conversationId, by, scope))
+      .emit(CHAT_EVENT.CONVERSATION_DELETED, payload);
+  }
+
+  /** Who a scoped change reaches: `ME` the actor's own devices, `EVERYONE` both members. */
   private async roomsFor(
     conversationId: string,
     actorId: string,

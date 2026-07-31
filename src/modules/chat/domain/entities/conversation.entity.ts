@@ -14,6 +14,8 @@ export interface ConversationMember {
   studentId: string;
   lastReadSeq: number;
   lastDeliveredSeq: number;
-  /** Reads hide `seq <= clearedBeforeSeq` for this member alone. `0` ⇒ nothing cleared. */
+  /** Reads hide `seq <= clearedBeforeSeq` for this member alone (§B1). */
   clearedBeforeSeq: number;
+  /** Removed from this member's list (§B2); a new message un-hides it. */
+  hidden: boolean;
 }

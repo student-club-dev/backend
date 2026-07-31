@@ -10,6 +10,7 @@ export const CHAT_EVENT = {
   MESSAGE_NEW: 'message:new',
   MESSAGE_DELETED: 'message:deleted',
   HISTORY_CLEARED: 'history:cleared',
+  CONVERSATION_DELETED: 'conversation:deleted',
   MEDIA_READY: 'media:ready',
   READ_RECEIPT: 'message:read',
   DELIVERED_RECEIPT: 'message:delivered',
@@ -30,18 +31,15 @@ export interface SendMessagePayload {
   mediaId?: string;
   stickerId?: string;
   albumId?: string;
+  /** Reply target (§C1) — same validation as REST. */
+  replyToMessageId?: string;
+  quote?: { text: string; offset: number };
 }
 
 /**
- * `message:deleted` — one event per batch, not per message (§A3). Deleting 50 selected messages
- * used to mean 50 events, each triggering its own list re-render on the receiving device.
- *
- * `messageId`/`seq` repeat the first element so clients built against the single-message version
- * keep working untouched; anything new reads `ids`/`seqs`.
- *
- * Audience depends on `scope`: `EVERYONE` reaches both members, `ME` reaches only the deleter's own
- * devices — the message is still there for the other member, and telling them otherwise would erase
- * it from their screen too.
+ * `message:deleted` — one event per batch (§A3). `messageId`/`seq` repeat the first element for
+ * clients built against the single-message version. `EVERYONE` reaches both members, `ME` only the
+ * deleter's own devices.
  */
 export interface MessageDeletedPayload {
   conversationId: string;
@@ -56,13 +54,19 @@ export interface MessageDeletedPayload {
 }
 
 /**
- * `history:cleared` (§B1). Same audience rule as `message:deleted`: `ME` reaches only the clearer's
- * own devices, `EVERYONE` reaches both members. Clients drop everything at or below
- * `clearedBeforeSeq` and keep the conversation in the list with a null last message.
+ * `history:cleared` (§B1). Same audience rule as `message:deleted`. Clients drop everything at or
+ * below `clearedBeforeSeq` and keep the conversation in the list.
  */
 export interface HistoryClearedPayload {
   conversationId: string;
   clearedBeforeSeq: number;
+  scope: string;
+  by: string;
+}
+
+/** `conversation:deleted` (§B2). A later `message:new` for the same id brings it back. */
+export interface ConversationDeletedPayload {
+  conversationId: string;
   scope: string;
   by: string;
 }

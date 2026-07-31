@@ -2,7 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { MediaProvider } from '../../../media/domain/enums/media-kind.enum';
 import { AttachmentDto } from '../../../media/presentation/dto/attachment.dto';
 import { BulkDeleteResult } from '../../domain/chat.repository';
-import { Message } from '../../domain/entities/message.entity';
+import { Message, ReplySnapshot } from '../../domain/entities/message.entity';
 import { MessageType } from '../../domain/enums/message-type.enum';
 import { MessageSticker } from '../../domain/sticker-directory.repository';
 
@@ -76,6 +76,92 @@ export class MessageStickerDto {
   }
 }
 
+/** The highlighted fragment of the target, echoed back exactly as it was sent (§C2). */
+export class QuoteDto {
+  @ApiProperty({ maxLength: 300 })
+  text!: string;
+
+  @ApiProperty({
+    type: 'integer',
+    format: 'int32',
+    description: 'Start of the selection in UTF-16 code units — the same units Kotlin/Swift count.',
+  })
+  offset!: number;
+}
+
+/**
+ * What a message replied to — a snapshot frozen at send time (§C2).
+ *
+ * Immutable on purpose: it keeps rendering after the original is deleted, which is the whole point.
+ * Only `originalDeleted` is live, and it tells you whether to offer "jump to original".
+ */
+export class ReplyToDto {
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: '`null` once the original has been purged — there is nothing left to jump to.',
+  })
+  id!: string | null;
+
+  @ApiProperty({ type: 'integer', format: 'int32', description: 'Use with `?around=` to jump.' })
+  seq!: number;
+
+  @ApiProperty()
+  senderId!: string;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description: 'Name to draw above the bubble — already resolved, do not look it up by id.',
+  })
+  senderName!: string | null;
+
+  @ApiProperty({ enum: MessageType, enumName: 'MessageTypeDto' })
+  type!: MessageType;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description:
+      'Shortened original text (≤120). `null` for media — draw "📷 Rasm" and friends from `type`.',
+  })
+  preview!: string | null;
+
+  @ApiProperty({
+    type: () => QuoteDto,
+    nullable: true,
+    description: 'The fragment the sender highlighted, or `null` for a plain reply.',
+  })
+  quote!: QuoteDto | null;
+
+  @ApiProperty({
+    description:
+      'The original was deleted or purged after this reply was sent. Keep showing the quote — it ' +
+      'is a snapshot — but drop the tap-to-jump affordance.',
+  })
+  originalDeleted!: boolean;
+
+  static fromDomain(snapshot: ReplySnapshot): ReplyToDto {
+    const dto = new ReplyToDto();
+    dto.id = snapshot.id;
+    dto.seq = snapshot.seq;
+    dto.senderId = snapshot.senderId;
+    dto.senderName = snapshot.senderName;
+    dto.type = snapshot.type;
+    dto.preview = snapshot.preview;
+    if (snapshot.quote === null) {
+      dto.quote = null;
+    } else {
+      const quote = new QuoteDto();
+      quote.text = snapshot.quote.text;
+      quote.offset = snapshot.quote.offset;
+      dto.quote = quote;
+    }
+    dto.originalDeleted = snapshot.originalDeleted;
+    return dto;
+  }
+}
+
 /** A chat message on the wire. */
 export class MessageDto {
   @ApiProperty()
@@ -145,6 +231,13 @@ export class MessageDto {
   })
   sticker!: MessageStickerDto | null;
 
+  @ApiProperty({
+    type: () => ReplyToDto,
+    nullable: true,
+    description: 'Set when this message replies to another; null otherwise (§C2).',
+  })
+  replyTo!: ReplyToDto | null;
+
   @ApiProperty({ type: String, format: 'date-time' })
   createdAt!: string;
 
@@ -166,6 +259,7 @@ export class MessageDto {
     dto.attachment =
       message.attachment === null ? null : AttachmentDto.fromDomain(message.attachment, apiBase);
     dto.sticker = message.sticker === null ? null : MessageStickerDto.fromDomain(message.sticker);
+    dto.replyTo = message.replyTo === null ? null : ReplyToDto.fromDomain(message.replyTo);
     dto.createdAt = message.createdAt.toISOString();
     return dto;
   }

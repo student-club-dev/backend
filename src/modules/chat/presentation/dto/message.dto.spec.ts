@@ -14,6 +14,7 @@ const message: Message = {
   albumId: null,
   attachment: null,
   sticker: null,
+  replyTo: null,
   createdAt: new Date('2026-07-28T09:14:22.531Z'),
 };
 

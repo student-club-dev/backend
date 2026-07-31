@@ -39,6 +39,16 @@ export interface SendMessageInput {
   sticker?: ExternalStickerRef | null;
   albumId?: string | null;
   clientMsgId?: string | null;
+  /** The message being replied to — must be in the same conversation (§C1). */
+  replyToMessageId?: string | null;
+  quote?: QuoteRef | null;
+}
+
+/** The fragment of the target the sender highlighted, verified against its body at send time. */
+export interface QuoteRef {
+  text: string;
+  /** Start of the selection, in UTF-16 code units. */
+  offset: number;
 }
 
 /** A provider GIF the client picked from search. */

@@ -25,8 +25,15 @@ import { Message } from '../domain/entities/message.entity';
 import { PROFILE_PHOTOS_INCLUDE } from '../../connections/infrastructure/connection.mapper';
 import { ChatMapper, ChatSummaryRow } from './chat.mapper';
 
-/** A message is never useful without its attachment — load it everywhere, in one query. */
-const MESSAGE_INCLUDE = { attachment: true, sticker: true } as const;
+/**
+ * A message is never useful without its attachment — load it everywhere, in one query. `replyTo`
+ * fetches only `deletedAt`; the snapshot's text lives on the replying row.
+ */
+const MESSAGE_INCLUDE = {
+  attachment: true,
+  sticker: true,
+  replyTo: { select: { deletedAt: true } },
+} as const;
 
 const SUMMARY_SELECT = {
   id: true,
@@ -72,12 +79,8 @@ const MISSING_MEMBER: ConversationListItem['other'] = {
 };
 
 /**
- * The `WHERE` every history read shares (§A4.3): rows below this member's clear watermark, and rows
- * they hid for themselves.
- *
- * It is one function rather than a clause spelled out per query because the failure mode of
- * forgetting it in a single place is silent — a hidden message reappears in `lastMessage` while the
- * history keeps hiding it, and the two views of one conversation quietly disagree.
+ * The `WHERE` every history read shares (§A4.3). One function rather than a per-query clause:
+ * forgetting it in one place fails silently.
  */
 function visibleTo(conversationId: string, viewer: MessageViewer): Prisma.MessageWhereInput {
   return {
@@ -87,18 +90,14 @@ function visibleTo(conversationId: string, viewer: MessageViewer): Prisma.Messag
   };
 }
 
-/**
- * Deterministic newest-first ordering (§A4.2). `seq` is unique per conversation, so it is already a
- * total order — `createdAt`/`id` are insurance: if that invariant is ever violated, two identical
- * queries must still agree, or rows swap places between pages in the client's cache.
- */
+/** Deterministic newest-first ordering (§A4.2). */
 const NEWEST_FIRST = [
   { seq: 'desc' },
   { createdAt: 'desc' },
   { id: 'desc' },
 ] satisfies Prisma.MessageOrderByWithRelationInput[];
 
-/** The same order, oldest-first — catch-up and `?around=` page forwards. */
+/** The same order, oldest-first. */
 const OLDEST_FIRST = [
   { seq: 'asc' },
   { createdAt: 'asc' },
@@ -187,7 +186,21 @@ export class ChatPrismaRepository implements ChatRepository {
             stickerWidth: input.externalSticker?.width ?? null,
             stickerHeight: input.externalSticker?.height ?? null,
             albumId: input.albumId,
+            replyToMessageId: input.reply?.replyToMessageId ?? null,
+            replyToSenderId: input.reply?.replyToSenderId ?? null,
+            replyToSenderName: input.reply?.replyToSenderName ?? null,
+            replyToSeq: input.reply?.replyToSeq ?? null,
+            replyToType: input.reply === null ? null : PrismaMessageType[input.reply.replyToType],
+            replyToPreview: input.reply?.replyToPreview ?? null,
+            quoteText: input.reply?.quoteText ?? null,
+            quoteOffset: input.reply?.quoteOffset ?? null,
           },
+        });
+        // A new message un-hides the conversation for anyone who deleted it (§B2), in the same
+        // transaction as the insert.
+        await tx.conversationMember.updateMany({
+          where: { conversationId, hidden: true },
+          data: { hidden: false },
         });
         if (mediaId !== null) {
           // Claim the attachment inside the same transaction: two concurrent sends must not both
@@ -243,8 +256,7 @@ export class ChatPrismaRepository implements ChatRepository {
     const rows = await this.prisma.message.findMany({
       where: {
         ...visibleTo(conversationId, viewer),
-        // Rebuilt rather than merged: a second `seq` key would overwrite the watermark bound from
-        // `visibleTo`, quietly handing back everything the member cleared.
+        // Rebuilt, not merged: a second `seq` key would overwrite the watermark bound.
         seq: { gt: viewer.clearedBeforeSeq, ...(beforeSeq === null ? {} : { lt: beforeSeq }) },
       },
       orderBy: NEWEST_FIRST,
@@ -252,6 +264,43 @@ export class ChatPrismaRepository implements ChatRepository {
       include: MESSAGE_INCLUDE,
     });
     return rows.map(ChatMapper.toMessage);
+  }
+
+  /**
+   * Two reads, not one: hidden and cleared rows must not eat the window's slots, which a single
+   * `WHERE seq BETWEEN` cannot avoid.
+   */
+  async listAround(
+    conversationId: string,
+    viewer: MessageViewer,
+    seq: number,
+    size: number,
+  ): Promise<{ items: Message[]; hasMore: boolean }> {
+    const half = Math.floor(size / 2);
+    const [older, newer] = await Promise.all([
+      this.prisma.message.findMany({
+        where: {
+          ...visibleTo(conversationId, viewer),
+          seq: { gt: viewer.clearedBeforeSeq, lt: seq },
+        },
+        orderBy: NEWEST_FIRST,
+        take: half + 1, // one past the half — its existence is `hasMore`
+        include: MESSAGE_INCLUDE,
+      }),
+      this.prisma.message.findMany({
+        where: {
+          ...visibleTo(conversationId, viewer),
+          seq: { gte: Math.max(seq, viewer.clearedBeforeSeq + 1) },
+        },
+        orderBy: OLDEST_FIRST,
+        take: size - half,
+        include: MESSAGE_INCLUDE,
+      }),
+    ]);
+    return {
+      items: [...older.slice(0, half).reverse(), ...newer].map(ChatMapper.toMessage),
+      hasMore: older.length > half,
+    };
   }
 
   async listSince(
@@ -279,7 +328,7 @@ export class ChatPrismaRepository implements ChatRepository {
   ): Promise<ConversationPage> {
     const [memberships, total] = await this.prisma.$transaction([
       this.prisma.conversationMember.findMany({
-        where: { studentId },
+        where: { studentId, hidden: false },
         include: {
           conversation: {
             include: {
@@ -302,7 +351,7 @@ export class ChatPrismaRepository implements ChatRepository {
         skip: (page - 1) * size,
         take: size,
       }),
-      this.prisma.conversationMember.count({ where: { studentId } }),
+      this.prisma.conversationMember.count({ where: { studentId, hidden: false } }),
     ]);
 
     const items = await Promise.all(
@@ -409,11 +458,7 @@ export class ChatPrismaRepository implements ChatRepository {
     });
   }
 
-  /**
-   * One transaction for the whole batch (§A4.4): apply, then recount. Nothing here loops per message
-   * — 100 ids cost the same four statements as one, and the counters are derived from the post-delete
-   * state rather than adjusted by hand, which is what keeps them from drifting under concurrency.
-   */
+  /** One transaction for the whole batch (§A4.4): apply, then recount from the post-delete state. */
   async deleteMessages(
     conversationId: string,
     viewer: MessageViewer,
@@ -422,12 +467,8 @@ export class ChatPrismaRepository implements ChatRepository {
   ): Promise<{ unreadCount: number; lastMessage: Message | null }> {
     return this.prisma.$transaction(async (tx) => {
       if (scope === DeleteScope.EVERYONE) {
-        // `deletedAt: null` in the filter is what makes a retry idempotent: without it a second call
-        // slides the timestamp forward, and the client sees the message "deleted again".
-        //
-        // `senderId` repeats a check the service already made. That is deliberate: this is the
-        // statement that actually blanks other people's messages, so the rule that you may only do
-        // it to your own is enforced here rather than trusted from the caller.
+        // `deletedAt: null` keeps a retry idempotent. `senderId` repeats the service's check on
+        // purpose: this is the statement that blanks messages, so it enforces the rule itself.
         await tx.message.updateMany({
           where: {
             id: { in: ids },
@@ -435,14 +476,12 @@ export class ChatPrismaRepository implements ChatRepository {
             senderId: viewer.studentId,
             deletedAt: null,
           },
-          // The body really goes — a delete that only hid the text would be a lie to the sender.
-          // Evidence for moderation is captured in `reports.content_snapshot` at report time.
+          // The body really goes; moderation evidence lives in `reports.content_snapshot`.
           data: { deletedAt: new Date(), body: null },
         });
       } else {
         await tx.messageHidden.createMany({
           data: ids.map((messageId) => ({ studentId: viewer.studentId, messageId })),
-          // Re-hiding an already-hidden message is a no-op, not a unique-constraint failure.
           skipDuplicates: true,
         });
       }
@@ -484,37 +523,42 @@ export class ChatPrismaRepository implements ChatRepository {
       const watermark = newest?.seq ?? 0;
       await tx.conversationMember.updateMany({
         where: { conversationId, ...(scope === DeleteScope.EVERYONE ? {} : { studentId }) },
-        // `lastReadSeq` moves with the watermark: everything below it is invisible, and an invisible
-        // message can never be read, so a cursor left behind would keep the badge lit forever.
+        // `lastReadSeq` moves with it, or the badge stays lit on messages nobody can ever read.
         data: { clearedBeforeSeq: watermark, lastReadSeq: watermark },
       });
       return watermark;
     });
   }
 
+  /** Clear plus hide (§B2). The membership row is kept so the cursors and the id survive. */
+  async deleteConversation(
+    conversationId: string,
+    studentId: string,
+    scope: DeleteScope,
+  ): Promise<number> {
+    const watermark = await this.clearHistory(conversationId, studentId, scope);
+    await this.prisma.conversationMember.updateMany({
+      where: { conversationId, ...(scope === DeleteScope.EVERYONE ? {} : { studentId }) },
+      data: { hidden: true },
+    });
+    return watermark;
+  }
+
   /**
    * Finds the conversations worth purging first, then deletes each one's rows on its own.
    *
-   * The obvious single statement — `DELETE FROM messages USING (SELECT MIN(cleared_before_seq) …
-   * GROUP BY conversation_id)` — makes the planner sequentially scan `messages` to find its victims,
-   * because the watermark is not known until the aggregate has run. Measured at 100k rows: 3079
-   * buffers read to delete 4000, with 96000 rows discarded by the join filter. That cost scales with
-   * the whole table rather than with the work, every week, forever.
+   * A single `DELETE … USING (SELECT MIN(cleared_before_seq) …)` makes the planner scan all of
+   * `messages` — measured at 100k rows, 3079 buffers to delete 4000. Per-conversation deletes are
+   * index range scans on `(conversation_id, seq)`: 10 buffers for the same rows.
    *
-   * Looking the conversations up first turns each delete into an index range scan on
-   * `(conversation_id, seq)` — 10 buffers for the same 400 rows — and gives every conversation its
-   * own statement, so a large purge never holds one lock across all of them.
-   *
-   * `message_hidden` rows cascade away with their messages. Attachments and reports are only
-   * detached (`ON DELETE SET NULL`): the uploads become orphans that `OrphanMediaCron` already
-   * sweeps nightly, and reports keep the `content_snapshot` taken at report time.
+   * `message_hidden` cascades away; attachments and reports are only detached (SET NULL), and
+   * `OrphanMediaCron` sweeps the resulting orphan uploads.
    */
   async purgeClearedMessages(): Promise<number> {
     const targets = await this.prisma.conversationMember.groupBy({
       by: ['conversationId'],
       _min: { clearedBeforeSeq: true },
-      // `> 0` is what keeps this proportional to the work: without it every conversation that was
-      // never cleared still gets a delete issued against it.
+      // Keeps the work proportional: without it, never-cleared conversations get a delete too.
       having: { clearedBeforeSeq: { _min: { gt: 0 } } },
     });
 
@@ -564,9 +608,8 @@ export class ChatPrismaRepository implements ChatRepository {
     return {
       conversation: ChatMapper.toConversation(conversation),
       other: otherRow === undefined ? MISSING_MEMBER : ChatMapper.toSummary(otherRow),
-      // Shown even when deleted — the client draws the tombstone. Hidden and cleared rows are gone
-      // from `visibleTo` entirely, so the two members of one conversation can legitimately see
-      // different last messages. That is `scope = ME` working, not a bug (§A4.5).
+      // Shown even when deleted — the client draws the tombstone. The two members can legitimately
+      // see different last messages once one of them has hidden something (§A4.5).
       lastMessage: lastRow === null ? null : ChatMapper.toMessage(lastRow),
       unreadCount,
       myReadSeq: membership.lastReadSeq,
@@ -598,6 +641,18 @@ export class ChatPrismaRepository implements ChatRepository {
     const now = new Date();
     await this.prisma.student.update({ where: { id: studentId }, data: { lastSeenAt: now } });
     return now;
+  }
+
+  /** Full name, else username, else null — frozen into a reply snapshot (§C2). */
+  async displayNameOf(studentId: string): Promise<string | null> {
+    const row = await this.prisma.student.findUnique({
+      where: { id: studentId },
+      select: { firstName: true, lastName: true, username: true },
+    });
+    if (row === null) {
+      return null;
+    }
+    return [row.firstName, row.lastName].filter(Boolean).join(' ') || row.username;
   }
 
   async lastSeenVisibilityOf(studentId: string): Promise<LastSeenVisibility> {

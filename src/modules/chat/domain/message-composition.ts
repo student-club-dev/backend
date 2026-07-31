@@ -65,3 +65,27 @@ export function normalizeBody(type: MessageType, raw: string | null | undefined)
   }
   return text;
 }
+
+/** §C1 caps a quote at 300 characters — a longer selection is the whole message, not a quote. */
+export const MAX_QUOTE_LENGTH = 300;
+
+/** The reply preview stored on the replying message (§C2) — enough to recognise, not to re-read. */
+export const MAX_REPLY_PREVIEW = 120;
+
+/**
+ * Checks that a quote really is the slice of the target it claims to be (§C1). Offsets are UTF-16
+ * code units, which is what the client counts too.
+ */
+export function assertQuoteMatches(body: string | null, text: string, offset: number): void {
+  if (text.length > MAX_QUOTE_LENGTH) {
+    throw new AppException(
+      ERROR_CODE.QUOTE_TOO_LONG,
+      422,
+      `Sitata ${MAX_QUOTE_LENGTH} belgidan oshmasligi kerak`,
+    );
+  }
+  // A negative offset would make `slice` count from the end and pass a check it should not.
+  if (body === null || offset < 0 || body.slice(offset, offset + text.length) !== text) {
+    throw new AppException(ERROR_CODE.QUOTE_NOT_FOUND, 422, 'Sitata asl xabarda topilmadi');
+  }
+}

@@ -69,11 +69,8 @@ export class MessagesController {
   }
 
   /**
-   * The pre-batch route, kept verbatim for clients already in the wild (§A2).
-   *
-   * `scope` is additive: omitting it runs exactly the code this route always ran, down to the 403 on
-   * someone else's message and the `MessageDto` response. `ME` is the only new branch — and it
-   * returns the message unchanged, because hiding it for one member mutates no row.
+   * The pre-batch route, kept for clients already in the wild (§A2). `scope` is additive: omitting
+   * it runs exactly the code this route always ran.
    */
   @Delete(':id')
   @HttpCode(200)

@@ -20,7 +20,7 @@ import {
   PHONE_VISIBILITY_TO_DOMAIN,
 } from '../../profiles/infrastructure/profile-enums.mapper';
 import { Conversation, ConversationMember } from '../domain/entities/conversation.entity';
-import { Message } from '../domain/entities/message.entity';
+import { Message, ReplySnapshot } from '../domain/entities/message.entity';
 import { ConversationType } from '../domain/enums/conversation-type.enum';
 import { MessageType } from '../domain/enums/message-type.enum';
 import { MessageSticker } from '../domain/sticker-directory.repository';
@@ -58,6 +58,7 @@ export class ChatMapper {
     row: PrismaMessage & {
       attachment?: PrismaMediaAsset | null;
       sticker?: PrismaSticker | null;
+      replyTo?: { deletedAt: Date | null } | null;
     },
   ): Message {
     return {
@@ -75,7 +76,36 @@ export class ChatMapper {
           ? null
           : ChatMapper.toAttachment(row.attachment),
       sticker: ChatMapper.toSticker(row),
+      replyTo: ChatMapper.toReplySnapshot(row),
       createdAt: row.createdAt,
+    };
+  }
+
+  /**
+   * Rebuilds the frozen reply snapshot from its columns (§C2). Only `originalDeleted` is live — it
+   * drives whether "jump to original" is offered.
+   */
+  private static toReplySnapshot(
+    row: PrismaMessage & { replyTo?: { deletedAt: Date | null } | null },
+  ): ReplySnapshot | null {
+    // The snapshot columns are written together, so any one of them answers "is this a reply".
+    if (row.replyToSeq === null || row.replyToSenderId === null || row.replyToType === null) {
+      return null;
+    }
+    return {
+      id: row.replyToMessageId,
+      seq: row.replyToSeq,
+      senderId: row.replyToSenderId,
+      senderName: row.replyToSenderName,
+      type: MessageType[row.replyToType],
+      preview: row.replyToPreview,
+      quote:
+        row.quoteText === null || row.quoteOffset === null
+          ? null
+          : { text: row.quoteText, offset: row.quoteOffset },
+      originalDeleted:
+        row.replyToMessageId === null ||
+        (row.replyTo !== undefined && row.replyTo !== null && row.replyTo.deletedAt !== null),
     };
   }
 
@@ -150,6 +180,7 @@ export class ChatMapper {
       lastReadSeq: row.lastReadSeq,
       lastDeliveredSeq: row.lastDeliveredSeq,
       clearedBeforeSeq: row.clearedBeforeSeq,
+      hidden: row.hidden,
     };
   }
 

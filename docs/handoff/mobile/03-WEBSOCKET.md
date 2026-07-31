@@ -18,7 +18,7 @@ Token yaroqsiz yoki talaba hisobi bo'lmasa — socket darhol uziladi.
 
 | Hodisa | Payload | Ack |
 |---|---|---|
-| `message:send` | `{ conversationId, clientMsgId?, type?, body?, mediaId?, gif?, stickerId?, albumId? }` | `{ clientMsgId, id, seq, createdAt, status: "sent" }` |
+| `message:send` | `{ conversationId, clientMsgId?, type?, body?, mediaId?, gif?, stickerId?, albumId?, replyToMessageId?, quote? }` | `{ clientMsgId, id, seq, createdAt, status: "sent" }` |
 | `message:read` | `{ conversationId, seq }` | `{ conversationId, seq, status: "ok" }` |
 | `message:delivered` | `{ conversationId, seq }` | `{ conversationId, seq, status: "ok" }` |
 | `typing:start` / `typing:stop` | `{ conversationId }` | — (ataylab yo'q) |
@@ -58,6 +58,7 @@ Socket **uzilmaydi**. Tokenni yangilab, yangi `auth.token` bilan qayta ulaning.
 | `message:new` | `{ conversationId, message }` — `message` to'liq `MessageDto` |
 | `message:deleted` | `{ conversationId, ids, seqs, scope, deletedBy, messageId, seq }` — auditoriya `scope` ga bog'liq, pastga qarang |
 | `history:cleared` | `{ conversationId, clearedBeforeSeq, scope, by }` — auditoriya `scope` ga bog'liq |
+| `conversation:deleted` | `{ conversationId, scope, by }` — suhbat ro'yxatdan olib tashlandi |
 | `media:ready` | `{ mediaId, conversationId, messageId, attachment }` — transkodlash tugadi |
 | `message:delivered` | `{ conversationId, seq, byStudentId }` |
 | `message:read` | `{ conversationId, seq, byStudentId }` |
@@ -98,6 +99,28 @@ tarqatilgan klientlar hodisani o'zgarishsiz tushunishda davom etadi. Yangi kod `
 odamning boshqa qurilmalariga esa boradi: aynan shu narsa "faqat menda o'chirish" ni qayta
 o'rnatishdan va ikkinchi telefondan omon qoladigan qiladi.
 
+### `message:send` — sitata bilan javob
+
+`message:send` payload'iga ikkita ixtiyoriy maydon qo'shildi, REST'dagi bilan **bir xil**:
+
+```json
+{
+  "conversationId": "clx…",
+  "clientMsgId": "…",
+  "body": "ha, kelaman",
+  "replyToMessageId": "clx…A",
+  "quote": { "text": "ertaga soat 10 da", "offset": 14 }
+}
+```
+
+Validatsiya ikkala yo'lda bir xil — WS orqali yuborish tekshiruvni chetlab o'tish yo'li emas.
+Rad etilganda odatdagi `{ status: 'error', error: { code, message } }` qaytadi; kodlar:
+`REPLY_TARGET_NOT_FOUND`, `REPLY_TARGET_DELETED`, `QUOTE_NOT_FOUND`, `QUOTE_TOO_LONG`,
+`QUOTE_WITHOUT_REPLY`.
+
+Javob `message:new` da `message.replyTo` bilan keladi — REST'dagi `MessageDto` bilan aynan bir xil
+shakl, ya'ni alohida ishlov kerak emas.
+
 ### `history:cleared` — tarix tozalandi
 
 ```json
@@ -115,6 +138,19 @@ ikkala a'zoga.
 > `DELETE /v1/conversations/{id}/history` da `scope` ni tushirib qoldirsangiz **`ME`** bo'ladi —
 > xabar o'chirishdagidan farqli. Sabab: bu endpoint suhbatdoshning butun tarixini ham o'chira oladi,
 > shuning uchun parametrsiz chaqiruv hech qachon buzuvchi variantga tushmasligi kerak.
+
+### `conversation:deleted` — suhbat ro'yxatdan olindi
+
+```json
+{ "conversationId": "clx…", "scope": "ME", "by": "clx…user" }
+```
+
+Suhbatni ro'yxatdan olib tashlang. **Bazadan o'chirmang** — keyinroq o'sha `conversationId` bilan
+`message:new` kelsa, suhbat qaytadi va faqat o'chirgandan keyingi xabarlarni olib yuradi.
+`POST /v1/conversations` ham o'sha id ni qaytaradi, yangisini yaratmaydi.
+
+Auditoriya `scope` ga bog'liq, `message:deleted` dagidek. `DELETE /v1/conversations/{id}` da
+`scope` tushirilsa — **`ME`**.
 
 ### ⚠️ `message:new` va `clientMsgId` — eng muhim o'zgarish
 

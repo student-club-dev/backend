@@ -441,14 +441,17 @@ describe('Connections + Chat — e2e', () => {
     expect(tombstone.deletedAt).not.toBeNull();
   });
 
-  // §A4.6 — the acceptance criteria for multi-select delete. Each runs against its own conversation
-  // with an exact, known message set: the shared one is rewritten by the tests above, and every
-  // assertion here is about a precise count or a precise `seq` position.
+  // §A4.6 acceptance criteria. Each runs against its own conversation with an exact message set.
   describe('multi-select delete (§A2, §A4.6)', () => {
     let seed = 0;
+    const seeded: string[] = [];
 
-    /** A conversation between A and B with `count` messages, seq 1..count, written straight to the
-     *  database. The writes are not what is under test — the reads are. */
+    // Left behind, these push the shared list past page 1 — where the §17.7 test looks.
+    afterAll(async () => {
+      await prisma.conversation.deleteMany({ where: { id: { in: seeded } } });
+    });
+
+    /** A conversation between A and B with `count` messages, seq 1..count. */
     async function seedConversation(count: number, senderOf: (index: number) => string) {
       seed += 1;
       const convo = await prisma.conversation.create({
@@ -459,6 +462,7 @@ describe('Connections + Chat — e2e', () => {
           members: { create: [{ studentId: aId }, { studentId: bId }] },
         },
       });
+      seeded.push(convo.id);
       if (count > 0) {
         await prisma.message.createMany({
           data: Array.from({ length: count }, (_, index) => ({
@@ -482,8 +486,7 @@ describe('Connections + Chat — e2e', () => {
       return rows.map((row) => row.id);
     }
 
-    /** Walks the whole history with `?before=`, exactly the way the client scrolls up. Criterion 3
-     *  is about this loop: a filter applied after `LIMIT` shows up here as a short page. */
+    /** Walks the whole history with `?before=`, the way the client scrolls up. */
     async function fullHistory(
       token: string,
       convId: string,
@@ -554,7 +557,6 @@ describe('Connections + Chat — e2e', () => {
       const theirs = await fullHistory(bToken, convId);
       expect(mine).toHaveLength(40);
       expect(theirs).toHaveLength(50);
-      // The rows both still see must stay in the same order, at the same seqs.
       expect(mine.map((item) => item.seq)).toEqual(
         theirs.map((item) => item.seq).filter((seq) => seq < 21 || seq > 30),
       );
@@ -574,7 +576,7 @@ describe('Connections + Chat — e2e', () => {
       const convId = await seedConversation(50, () => aId);
       await deleteMessages(aToken, await idsOfSeqs(convId, 10, 12), 'ME').expect(200);
 
-      // A page size that divides neither 50 nor 47, so a short page would be unmistakable.
+      // A page size that divides neither 50 nor 47.
       const seen = await fullHistory(aToken, convId, 7);
       const seqs = seen.map((item) => item.seq);
 
@@ -593,7 +595,6 @@ describe('Connections + Chat — e2e', () => {
       expect(first.body.result.unreadCount).toBe(2);
       expect(await unreadIn(aToken, convId)).toBe(2);
 
-      // Replaying the same call must not move the number again.
       const second = await deleteMessages(aToken, ids, 'ME').expect(200);
       expect(second.body.result.unreadCount).toBe(2);
       expect(await unreadIn(aToken, convId)).toBe(2);
@@ -655,7 +656,7 @@ describe('Connections + Chat — e2e', () => {
       expect(await fullHistory(aToken, convId)).toHaveLength(0);
       expect(await unreadIn(aToken, convId)).toBe(0);
 
-      // A message sent after the clear is visible again — `seq` keeps climbing past the watermark.
+      // Sent after the clear, so visible again — `seq` climbs past the watermark.
       await request(app.getHttpServer())
         .post(`/v1/conversations/${convId}/messages`)
         .set('Authorization', auth(bToken))
@@ -695,7 +696,7 @@ describe('Connections + Chat — e2e', () => {
         list.body.result.items as { conversation: { id: string }; lastMessage: unknown }[]
       ).find((item) => item.conversation.id === convId);
 
-      expect(row).toBeDefined(); // Telegram keeps the row; only the history goes.
+      expect(row).toBeDefined(); // the row stays; only the history goes
       expect(row!.lastMessage).toBeNull();
     });
 
@@ -717,8 +718,7 @@ describe('Connections + Chat — e2e', () => {
       expect(outsider.body.error.code).toBe('CONVERSATION_NOT_FOUND');
     });
 
-    // The purge is raw SQL, so nothing but a real database proves it. The unit test only asserts the
-    // cron swallows failures — it mocks exactly the statement that could be wrong.
+    // The unit test mocks the statement that could be wrong, so this one runs it for real.
     it('purges only messages BOTH members have cleared past (§B1)', async () => {
       const bothCleared = await seedConversation(5, () => aId);
       const oneCleared = await seedConversation(5, () => aId);
@@ -736,9 +736,225 @@ describe('Connections + Chat — e2e', () => {
 
       expect(removed).toBeGreaterThanOrEqual(5);
       expect(await prisma.message.count({ where: { conversationId: bothCleared } })).toBe(0);
-      // B never cleared this one, so their history must survive untouched.
+      // B never cleared this one, so their history survives untouched.
       expect(await prisma.message.count({ where: { conversationId: oneCleared } })).toBe(5);
       expect(await fullHistory(bToken, oneCleared)).toHaveLength(5);
+    });
+
+    it('quotes a fragment and keeps the snapshot after the original is deleted (§C1/§C2)', async () => {
+      const convId = await seedConversation(0, () => aId);
+
+      const target = await request(app.getHttpServer())
+        .post(`/v1/conversations/${convId}/messages`)
+        .set('Authorization', auth(bToken))
+        .send({ body: 'ertaga soat 10 da uchrashamizmi' })
+        .expect(201);
+      const targetId = target.body.result.id as string;
+
+      const reply = await request(app.getHttpServer())
+        .post(`/v1/conversations/${convId}/messages`)
+        .set('Authorization', auth(aToken))
+        .send({
+          body: 'ha, kelaman',
+          replyToMessageId: targetId,
+          quote: { text: 'soat 10 da', offset: 7 },
+        })
+        .expect(201);
+
+      expect(reply.body.result.replyTo).toMatchObject({
+        id: targetId,
+        seq: 1,
+        quote: { text: 'soat 10 da', offset: 7 },
+        preview: 'ertaga soat 10 da uchrashamizmi',
+        originalDeleted: false,
+      });
+
+      // The quote is a snapshot and must survive the original being deleted.
+      await request(app.getHttpServer())
+        .delete(`/v1/messages/${targetId}`)
+        .set('Authorization', auth(bToken))
+        .expect(200);
+
+      const history = await fullHistory(aToken, convId);
+      const stored = history.find((item) => item.id === reply.body.result.id) as unknown as {
+        replyTo: { quote: { text: string }; preview: string; originalDeleted: boolean };
+      };
+      expect(stored.replyTo.quote.text).toBe('soat 10 da');
+      expect(stored.replyTo.preview).toBe('ertaga soat 10 da uchrashamizmi');
+      expect(stored.replyTo.originalDeleted).toBe(true);
+    });
+
+    it('refuses a reply target from another conversation (422)', async () => {
+      const mine = await seedConversation(2, () => aId);
+      const other = await seedConversation(2, () => aId);
+      const [foreignId] = await idsOfSeqs(other, 1, 1);
+
+      const res = await request(app.getHttpServer())
+        .post(`/v1/conversations/${mine}/messages`)
+        .set('Authorization', auth(aToken))
+        .send({ body: 'javob', replyToMessageId: foreignId })
+        .expect(422);
+      expect(res.body.error.code).toBe('REPLY_TARGET_NOT_FOUND');
+    });
+
+    it('refuses a quote that is not really in the target (422)', async () => {
+      const convId = await seedConversation(0, () => aId);
+      const target = await request(app.getHttpServer())
+        .post(`/v1/conversations/${convId}/messages`)
+        .set('Authorization', auth(aToken))
+        .send({ body: 'ertaga soat 10 da' })
+        .expect(201);
+
+      const res = await request(app.getHttpServer())
+        .post(`/v1/conversations/${convId}/messages`)
+        .set('Authorization', auth(aToken))
+        .send({
+          body: 'javob',
+          replyToMessageId: target.body.result.id,
+          quote: { text: 'soat 10 da', offset: 0 },
+        })
+        .expect(422);
+      expect(res.body.error.code).toBe('QUOTE_NOT_FOUND');
+    });
+
+    it('refuses an oversized quote with QUOTE_TOO_LONG, not VALIDATION_ERROR (422)', async () => {
+      const convId = await seedConversation(0, () => aId);
+      const long = 'a'.repeat(400);
+      const target = await request(app.getHttpServer())
+        .post(`/v1/conversations/${convId}/messages`)
+        .set('Authorization', auth(aToken))
+        .send({ body: long })
+        .expect(201);
+
+      const res = await request(app.getHttpServer())
+        .post(`/v1/conversations/${convId}/messages`)
+        .set('Authorization', auth(aToken))
+        .send({
+          body: 'javob',
+          replyToMessageId: target.body.result.id,
+          quote: { text: long.slice(0, 301), offset: 0 },
+        })
+        .expect(422);
+      expect(res.body.error.code).toBe('QUOTE_TOO_LONG');
+    });
+
+    it('refuses a quote sent without a reply target (422)', async () => {
+      const convId = await seedConversation(1, () => aId);
+      const res = await request(app.getHttpServer())
+        .post(`/v1/conversations/${convId}/messages`)
+        .set('Authorization', auth(aToken))
+        .send({ body: 'javob', quote: { text: 'x', offset: 0 } })
+        .expect(422);
+      expect(res.body.error.code).toBe('QUOTE_WITHOUT_REPLY');
+    });
+
+    it('?around= returns a window centred on the seq, skipping hidden rows (§C3)', async () => {
+      const convId = await seedConversation(60, () => aId);
+      await deleteMessages(aToken, await idsOfSeqs(convId, 30, 30), 'ME').expect(200);
+
+      const res = await request(app.getHttpServer())
+        .get(`/v1/conversations/${convId}/messages?around=30&size=10`)
+        .set('Authorization', auth(aToken))
+        .expect(200);
+
+      const seqs = (res.body.result.items as { seq: number }[]).map((item) => item.seq);
+      // seq 30 is hidden, so the window fills around it rather than coming back short.
+      expect(seqs).toHaveLength(10);
+      expect(seqs).not.toContain(30);
+      expect(seqs).toEqual([...seqs].sort((x, y) => x - y));
+      expect(seqs[0]).toBeGreaterThanOrEqual(25);
+      expect(seqs[seqs.length - 1]).toBeLessThanOrEqual(36);
+    });
+
+    it('refuses ?around= combined with ?before= (422)', async () => {
+      const convId = await seedConversation(5, () => aId);
+      const res = await request(app.getHttpServer())
+        .get(`/v1/conversations/${convId}/messages?around=3&before=4`)
+        .set('Authorization', auth(aToken))
+        .expect(422);
+      expect(res.body.error.code).toBe('VALIDATION_ERROR');
+    });
+
+    it('removes a conversation from your list and brings it back on a new message (§B2)', async () => {
+      const convId = await seedConversation(6, () => bId);
+      const inList = async (token: string) => {
+        const res = await request(app.getHttpServer())
+          .get('/v1/conversations?page=1&size=100')
+          .set('Authorization', auth(token))
+          .expect(200);
+        return (res.body.result.items as { conversation: { id: string } }[]).some(
+          (item) => item.conversation.id === convId,
+        );
+      };
+
+      await request(app.getHttpServer())
+        .delete(`/v1/conversations/${convId}?scope=ME`)
+        .set('Authorization', auth(aToken))
+        .expect(200);
+
+      expect(await inList(aToken)).toBe(false);
+      expect(await inList(bToken)).toBe(true); // the peer is untouched
+
+      await request(app.getHttpServer())
+        .post(`/v1/conversations/${convId}/messages`)
+        .set('Authorization', auth(bToken))
+        .send({ body: "o'chirgandan keyin" })
+        .expect(201);
+
+      // Back under the SAME id — a second conversation would fork the history.
+      expect(await inList(aToken)).toBe(true);
+      const mine = await fullHistory(aToken, convId);
+      expect(mine).toHaveLength(1);
+      expect(mine[0]!.seq).toBe(7);
+      expect(await fullHistory(bToken, convId)).toHaveLength(7);
+    });
+
+    it('keeps POST /v1/conversations idempotent after a delete (§B2)', async () => {
+      const first = await request(app.getHttpServer())
+        .post('/v1/conversations')
+        .set('Authorization', auth(aToken))
+        .send({ studentId: bId })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .delete(`/v1/conversations/${first.body.result.id}?scope=ME`)
+        .set('Authorization', auth(aToken))
+        .expect(200);
+
+      const again = await request(app.getHttpServer())
+        .post('/v1/conversations')
+        .set('Authorization', auth(aToken))
+        .send({ studentId: bId })
+        .expect(201);
+
+      expect(again.body.result.id).toBe(first.body.result.id);
+    });
+
+    it('deletes for both members under EVERYONE, and 404s for a non-member', async () => {
+      const convId = await seedConversation(3, () => aId);
+
+      await request(app.getHttpServer())
+        .delete(`/v1/conversations/${convId}?scope=EVERYONE`)
+        .set('Authorization', auth(aToken))
+        .expect(200);
+
+      for (const token of [aToken, bToken]) {
+        const res = await request(app.getHttpServer())
+          .get('/v1/conversations?page=1&size=100')
+          .set('Authorization', auth(token))
+          .expect(200);
+        expect(
+          (res.body.result.items as { conversation: { id: string } }[]).some(
+            (item) => item.conversation.id === convId,
+          ),
+        ).toBe(false);
+      }
+
+      const outsider = await request(app.getHttpServer())
+        .delete(`/v1/conversations/${convId}`)
+        .set('Authorization', auth(cToken))
+        .expect(404);
+      expect(outsider.body.error.code).toBe('CONVERSATION_NOT_FOUND');
     });
 
     it('hides a message from the conversation list’s lastMessage for the hider only (§A4.5)', async () => {
