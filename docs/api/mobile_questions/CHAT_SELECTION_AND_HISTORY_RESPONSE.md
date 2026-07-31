@@ -380,9 +380,13 @@ Jami: **927 unit + 140 e2e test**, hammasi yashil.
 Kimdir sizning xabaringizdan sitata olgan bo'lsa, siz o'chirganingizdan keyin ham o'sha sitata va
 `preview` javob xabarida qoladi (`originalDeleted: true` bo'ladi, matn esa turaveradi).
 
-Bu §C2 ning ataylab talabi va Telegram ham shunday ishlaydi. Lekin foydalanuvchi «o'chirdim» deb
-o'ylashi, matn esa boshqa joyda turishi mumkin. Mahsulot qarori sifatida bilib turing — kerak
-bo'lsa, o'chirishda unga bog'langan sitatalarni ham tozalaydigan qilib o'zgartirsak bo'ladi.
+Bu §C2 ning ataylab talabi va Telegram ham shunday ishlaydi. **Qaror qilindi: shundayligicha
+qoladi.** Ya'ni klientda alohida ishlov kerak emas — `originalDeleted: true` bo'lganda sitatani
+ko'rsatishda davom eting, faqat sakrash tugmasini olib tashlang.
+
+Bilib turishingiz uchun aytamiz: foydalanuvchi «o'chirdim» deb o'ylashi, matn esa javob pufagida
+turishi mumkin. Agar kelajakda mahsulot bo'yicha fikr o'zgarsa, o'chirishda bog'langan sitatalarni
+ham tozalaydigan qilish mumkin — lekin u holda kontrakt o'zgaradi va sizga aytamiz.
 
 ---
 

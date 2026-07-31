@@ -5,8 +5,9 @@ import { AppModule } from '../src/app.module';
 import { buildAppDocuments } from '../src/common/swagger/openapi-document';
 
 /**
- * Writes both per-app OpenAPI documents to `docs/api/generated/`, which is what the mobile clients
- * are generated from.
+ * Writes both per-app OpenAPI documents to `docs/api/generated/`, and copies the student one into
+ * `docs/handoff/mobile/` — the path the mobile team actually generates their client from. It used to
+ * be copied by hand, which meant it silently lagged a whole feature behind.
  *
  * Runs in Nest's preview mode: providers and controllers are never instantiated, only their route
  * metadata is read. That means no database, Redis, or credentials — so this works in CI and as a
@@ -22,11 +23,19 @@ async function main(): Promise<void> {
   const docs = buildAppDocuments(app, prefix, swaggerPath);
   await app.close();
 
+  const student = `${JSON.stringify(docs.student, null, 2)}\n`;
+
   const outDir = resolve(__dirname, '..', 'docs', 'api', 'generated');
   await mkdir(outDir, { recursive: true });
-  await writeFile(join(outDir, 'student.json'), `${JSON.stringify(docs.student, null, 2)}\n`);
+  await writeFile(join(outDir, 'student.json'), student);
   await writeFile(join(outDir, 'business.json'), `${JSON.stringify(docs.business, null, 2)}\n`);
+
+  const handoffDir = resolve(__dirname, '..', 'docs', 'handoff', 'mobile');
+  await mkdir(handoffDir, { recursive: true });
+  await writeFile(join(handoffDir, 'student-api.json'), student);
+
   process.stdout.write(`OpenAPI written to ${outDir}\n`);
+  process.stdout.write(`Student spec mirrored to ${handoffDir}\n`);
 }
 
 void main();
