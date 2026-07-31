@@ -144,28 +144,54 @@ Rad etiladi: `static.klipy.com.evil.example`, `https://static.klipy.com@evil.exa
 
 | Mezon | Holat |
 |---|---|
-| `GET /v1/stickers/search?q=cat&limit=5` → 5 ta, `provider: "KLIPY"`, WebP | ⚠️ **kod tayyor, jonli kalit bilan tekshirilmagan** — pastga qarang |
-| `q` siz → trending; `pos` bilan 2-sahifa boshqa elementlar | ⚠️ o'sha sabab |
+| `GET /v1/stickers/search?q=cat&limit=5` → `provider: "KLIPY"`, WebP | ✅ **jonli kalit bilan tasdiqlandi** |
+| `q` siz → trending; `pos` bilan 2-sahifa boshqa elementlar | ✅ adapter yo'li tasdiqlandi (`/stickers/trending`) |
 | `sticker.url` = lookalike domen → `422 STICKER_URL_NOT_ALLOWED` | ✅ unit test |
 | `stickerId` + `sticker` birga → `422 STICKER_SOURCE_AMBIGUOUS` | ✅ unit test |
 | `KLIPY_API_KEY` o'chirilganda → `503`, boshqa hech narsa buzilmaydi | ✅ unit test |
 | Eski klient `stickerId` bilan avvalgidek ishlaydi | ✅ unit test |
 
-### ⚠️ Ochiq qolgan narsa — curl natijalari
+### Jonli tasdiq (2026-07-31)
 
-Siz so'ragan **jonli curl natijalarini bera olmadim**: bu muhitda `KLIPY_API_KEY` sozlanmagan,
-shuning uchun `/v1/stickers/search` hozir `503` qaytaradi. Adapter to'liq unit testlar bilan
-qamralgan (KLIPY javob shakli mock qilingan: WebP tanlash, MP4 ni tashlash, 429 → 429, 500 → 502,
-kalit logga chiqmasligi, kursor), lekin bu **haqiqiy provayder javobi emas**.
+`npm run stickers:probe` — yangi qo'shilgan skript, KLIPY'ning **haqiqiy** javobini adapter
+mappingiga solishtiradi va kalitni hech qachon chop etmaydi:
 
-Kalit qo'yilgandan keyin tekshirish uchun:
+```
+--- first item, media keys ---
+files keys: hd, md, sm, xs
+  hd.webp: 115x115, 2 KB
+  md.webp: 115x115, 2 KB
+  xs.webp: 90x90, 2 KB
 
-```bash
-curl -s -H "Authorization: Bearer $TOKEN" \
-  "https://api.studentclub.uz/v1/stickers/search?q=cat&limit=5" | jq '.result.items[].url'
+--- adapter output ---
+mapped 8 of 8 results
+sample: 115x115
+  url:   https://static.klipy.com/ii/…/BSYq5azEMz0rDsS.webp
+  thumb: https://static.klipy.com/ii/…/uHXEfhW88mzculk.webp
+
+Mapping looks correct (alpha-preserving format).
 ```
 
-Barcha `url` lar `.webp` bilan tugashi va `static.klipy.com` da bo'lishi kerak.
+**8 tadan 8 tasi map qilindi**, `url` lar `.webp` va `static.klipy.com` da — ya'ni sticker API
+akkauntda ochiq, format kalitlari to'g'ri taxmin qilingan, va MP4 qaytmaydi.
+
+### ⚠️ O'lchamlar 512×512 emas
+
+Bu hujjatning oldingi versiyasida `512×512` deb yozilgandi — bu **bizning katalogimizning**
+o'lchami, KLIPY'niki emas. Jonli o'lchash:
+
+| So'rov | O'lcham | Hajm |
+|---|---|---|
+| `dog` | 96×96 | 2 KB |
+| `happy` | 120×120 | 2 KB |
+| `party` | 126×128 | 11 KB |
+| `love` | 498×498 | 48 KB |
+
+Klient **javobdagi `width`/`height` ni ishlatishi shart** — batafsil
+`docs/handoff/mobile/06-STICKER-SEARCH.md` §1.
+
+> Nega `md`, `hd` emas: ikkalasi **piksel jihatdan bir xil**, `hd` faqat kamroq siqilgan
+> (`love`: hd 72 KB vs md 48 KB, o'sha 498×498). `hd` hech narsa qo'shmaydi.
 
 **Prod kalit haqidagi eslatmangiz qabul qilindi** — so'raladigan videoda ikkala panel (GIF va
 stiker) ko'rsatiladi, ikkinchi ariza berilmaydi.

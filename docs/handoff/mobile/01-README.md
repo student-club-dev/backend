@@ -15,9 +15,13 @@ Branch: `main` (`f56071f`). Baza: `api.studentclub.uz`.
 > yo'q. Tasdiqlangan: `/v1/stories/feed` va `/v1/stickers/search` `401` qaytaradi (ya'ni marshrut
 > bor va guard ishlayapti), `/v1/health` — `200`.
 >
-> ⚠️ Bitta istisno: **stiker qidiruvi `503` qaytarishi mumkin**, agar production'da
-> `KLIPY_API_KEY` hali sozlanmagan bo'lsa. Bu boshqa hech narsani buzmaydi —
-> `GET /v1/stickers/packs` va butun chat ishlayveradi. Batafsil: `06-STICKER-SEARCH.md` §5.
+> **Stiker qidiruvi ham tasdiqlandi.** `KLIPY_API_KEY` sozlangan va sticker API akkauntda ochiq:
+> `npm run stickers:probe` haqiqiy javobni oldi va 8 tadan 8 tasini map qildi, hammasi WebP
+> (`06-STICKER-SEARCH.md` §1 dagi jadval).
+>
+> ⚠️ Kalit **test tarifida** — soatiga 100 ta so'rov, va GIF bilan stiker uni **bo'lishadi**.
+> Panelda debounce qo'ying va `429` ni jimgina yutib yuboring. Production kalit uchun ariza
+> berilyapti.
 
 ## Nima o'qish kerak
 
