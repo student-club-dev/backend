@@ -1,21 +1,28 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { PushNotification, PushProvider } from './push-provider';
+import {
+  PushNotification,
+  PushOutcome,
+  PushProvider,
+  PushTarget,
+  emptyPushOutcome,
+} from './push-provider';
 
 /**
  * Development push provider — logs instead of hitting FCM/APNs, so the whole offline-push path works
- * end-to-end without credentials. The real FCM/APNs provider swaps in behind the same port + config.
+ * end-to-end without credentials. The real FCM/APNs providers swap in behind the same port + config.
  */
 @Injectable()
 export class DevPushProvider implements PushProvider {
   private readonly logger = new Logger(DevPushProvider.name);
 
-  async send(tokens: string[], notification: PushNotification): Promise<string[]> {
-    if (tokens.length > 0) {
+  async send(targets: PushTarget[], notification: PushNotification): Promise<PushOutcome> {
+    if (targets.length > 0) {
+      const platforms = targets.map((target) => target.platform).join(',');
       this.logger.log(
-        `[dev-push] → ${tokens.length} device(s): "${notification.title}" — ${notification.body}`,
+        `[dev-push] → ${targets.length} device(s) [${platforms}]: "${notification.title}" — ${notification.body}`,
       );
     }
-    // Nothing was really sent, so nothing can be known to be dead.
-    return [];
+    // Nothing was really sent, so nothing can be known to be dead — or delivered.
+    return emptyPushOutcome();
   }
 }

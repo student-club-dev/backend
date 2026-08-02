@@ -25,9 +25,21 @@ export class DevicesController {
 
   @Post()
   @HttpCode(200)
-  @ApiOperation({ summary: "Register this device's push token" })
+  @ApiOperation({
+    summary: "Register this device's push token",
+    description:
+      'The token is routed by `platform`: `ANDROID`/`WEB` are delivered through FCM, `IOS` ' +
+      'directly through APNs. An iOS device must therefore send its **APNs** token (64 hex ' +
+      'characters), not an FCM one.',
+  })
   @ApiOkEnvelope(undefined, 'Registered; `result` is null.')
-  @ApiValidationEnvelope()
+  // One 422 response per operation, so both codes are described on it: `VALIDATION_ERROR` for an
+  // empty token or an unknown platform, `INVALID_DEVICE_TOKEN` for the iOS format check.
+  @ApiValidationEnvelope(
+    'Validation failed — see `error.fields`. `error.code` is `VALIDATION_ERROR` for a missing ' +
+      'token or an unknown `platform`, and `INVALID_DEVICE_TOKEN` when `platform=IOS` was sent ' +
+      'with a token that is not 64 hex characters (typically an FCM token from an iOS build).',
+  )
   async register(
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: RegisterDeviceDto,

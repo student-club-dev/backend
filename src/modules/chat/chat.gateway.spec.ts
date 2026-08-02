@@ -39,6 +39,7 @@ interface ChatMocks {
   sendMessage?: jest.Mock;
   markRead?: jest.Mock;
   markDelivered?: jest.Mock;
+  unreadTotalFor?: jest.Mock;
 }
 
 function makeGateway(chat: ChatMocks): {
@@ -49,7 +50,8 @@ function makeGateway(chat: ChatMocks): {
 } {
   const push = jest.fn();
   const gateway = new ChatGateway(
-    chat as unknown as ChatService,
+    // The badge count is asked for on every offline push; tests that care override it.
+    { unreadTotalFor: jest.fn().mockResolvedValue(0), ...chat } as unknown as ChatService,
     { pushToStudent: push } as unknown as NotificationsService,
     {} as JwtService,
     { get: () => 'v1' } as unknown as ConfigService<never, true>,
@@ -146,6 +148,40 @@ describe('ChatGateway — the offline push for a CALL message', () => {
     ['canceled', CallStatus.CANCELED, CallEndReason.CANCELED],
   ])('does not call a %s call missed', async (_name, status, endReason) => {
     expect(await pushBodyFor({ status, durationMs: 0, endReason })).toBe('📞 Qo‘ng‘iroq');
+  });
+});
+
+/**
+ * The number on the iOS app icon comes from the server and nowhere else — the app does not count
+ * the notifications it received, so a push without it leaves the badge stale.
+ */
+describe('ChatGateway — the badge on an offline push', () => {
+  it('sends the recipient’s total unread count', async () => {
+    const unreadTotalFor = jest.fn().mockResolvedValue(7);
+    const { gateway, push } = makeGateway({
+      otherMemberId: jest.fn().mockResolvedValue(OTHER),
+      isOnline: jest.fn().mockResolvedValue(false),
+      unreadTotalFor,
+    });
+
+    await gateway.broadcastMessage(message);
+
+    expect(unreadTotalFor).toHaveBeenCalledWith(OTHER);
+    expect((push.mock.calls[0][1] as { badge: number }).badge).toBe(7);
+  });
+
+  it('asks for no badge when the recipient is online and gets no push at all', async () => {
+    const unreadTotalFor = jest.fn();
+    const { gateway, push } = makeGateway({
+      otherMemberId: jest.fn().mockResolvedValue(OTHER),
+      isOnline: jest.fn().mockResolvedValue(true),
+      unreadTotalFor,
+    });
+
+    await gateway.broadcastMessage(message);
+
+    expect(push).not.toHaveBeenCalled();
+    expect(unreadTotalFor).not.toHaveBeenCalled();
   });
 });
 

@@ -52,13 +52,25 @@ export const envSchema = z
     YANDEX_GEOCODER_API_KEY: z.string().optional(),
     YANDEX_GEOCODER_BASE_URL: z.string().url().default('https://geocode-maps.yandex.ru/1.x'),
 
-    // Push delivery. `dev` only writes a log line, so it refuses to boot in production — otherwise
-    // every offline notification would be dropped silently. FCM covers Android and iOS alike
-    // (Firebase forwards to APNs); VoIP pushes for calls will need a direct APNs client later.
+    // Push delivery. `dev` only writes a log line, so it is reported at ERROR level in production —
+    // otherwise every offline notification would be dropped silently. `fcm` selects the real pair:
+    // FCM for Android/web, APNs directly for iOS.
     PUSH_PROVIDER: z.enum(['dev', 'fcm']).default('dev'),
     FCM_PROJECT_ID: z.string().optional(),
     FCM_CLIENT_EMAIL: z.string().optional(),
     FCM_PRIVATE_KEY: z.string().optional(),
+
+    // Apple Push Notification service — iOS only, no Firebase in the path. The iOS app carries no
+    // Firebase SDK and registers its raw APNs token, which FCM cannot address; that mismatch is why
+    // iPhones received nothing while Android worked.
+    // APNS_TOPIC is the iOS **bundle id** and differs from the Android applicationId — a wrong one
+    // answers `400 BadTopic`. APNS_ENV picks Apple's host: a token from a Xcode debug build only
+    // works against `sandbox`, a TestFlight/App Store one only against `production`.
+    APNS_KEY_P8: z.string().optional(),
+    APNS_KEY_ID: z.string().optional(),
+    APNS_TEAM_ID: z.string().optional(),
+    APNS_TOPIC: z.string().optional(),
+    APNS_ENV: z.enum(['production', 'sandbox']).default('production'),
 
     UPLOADS_DIR: z.string().min(1).default('./uploads'),
     PUBLIC_MEDIA_BASE_URL: z.string().url().default('http://localhost:3000/uploads'),

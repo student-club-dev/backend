@@ -689,6 +689,16 @@ export class ChatService {
     return this.presence.isOnline(studentId);
   }
 
+  /**
+   * Total unread messages for a student — the number an iOS push puts on the app icon. Same figure
+   * as `GET /v1/conversations/unread-count`; iOS never counts it itself, so whatever the server
+   * sends is what the user sees.
+   */
+  async unreadTotalFor(studentId: string): Promise<number> {
+    const { total } = await this.chat.unreadSummary(studentId);
+    return total;
+  }
+
   private async assertMember(
     conversationId: string,
     studentId: string,

@@ -2,7 +2,13 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JWT } from 'google-auth-library';
 import type { Env } from '../../config/env';
-import { PushNotification, PushProvider } from './push-provider';
+import {
+  PushNotification,
+  PushOutcome,
+  PushProvider,
+  PushTarget,
+  emptyPushOutcome,
+} from './push-provider';
 
 /** FCM answers a rejected token with one of these; both mean "stop sending here". */
 const DEAD_TOKEN_ERRORS = new Set(['UNREGISTERED', 'INVALID_ARGUMENT', 'SENDER_ID_MISMATCH']);
@@ -19,15 +25,11 @@ const SCOPE = 'https://www.googleapis.com/auth/firebase.messaging';
 const REQUEST_TIMEOUT_MS = 10_000;
 
 /**
- * Firebase Cloud Messaging (HTTP v1) push provider.
+ * Firebase Cloud Messaging (HTTP v1) push provider — **Android and web only**.
  *
- * FCM delivers to Android **and** iOS — Firebase forwards to APNs itself once the APNs key is
- * uploaded to the Firebase project. That is one integration instead of two, and it is why there is
- * no separate APNs adapter here.
- *
- * The exception is VoIP: an incoming-call push must reach a locked iPhone through PushKit, which
- * FCM cannot send. That needs a direct APNs client with `apns-push-type: voip`, and it lands with
- * the calls feature rather than here.
+ * iOS is delivered by `ApnsPushProvider` instead: the iOS app has no Firebase SDK and registers its
+ * raw APNs token, which FCM cannot address. `PlatformRoutingPushProvider` decides which of the two
+ * a device goes to; nothing about the Android path changed.
  *
  * Credentials come from a Firebase **service account**. `google-auth-library` (already a dependency,
  * for verifying Google sign-in) mints and refreshes the OAuth token; nothing here caches secrets.
@@ -52,9 +54,9 @@ export class FcmPushProvider implements PushProvider {
    * Sends to every token in parallel. FCM v1 has no multicast endpoint — one request per token is
    * the API, and a student has a handful of devices, so the fan-out is small and bounded.
    */
-  async send(tokens: string[], notification: PushNotification): Promise<string[]> {
-    if (tokens.length === 0) {
-      return [];
+  async send(targets: PushTarget[], notification: PushNotification): Promise<PushOutcome> {
+    if (targets.length === 0) {
+      return emptyPushOutcome();
     }
     let accessToken: string;
     try {
@@ -63,21 +65,31 @@ export class FcmPushProvider implements PushProvider {
       // No credentials, or Google refused them. Never throws to the caller — a push that cannot be
       // sent must not fail the message that triggered it.
       this.logger.error(`FCM authorisation failed: ${(error as Error).message}`);
-      return [];
+      return emptyPushOutcome();
     }
 
+    const outcome = emptyPushOutcome();
     const results = await Promise.all(
-      tokens.map((token) => this.sendOne(accessToken, token, notification)),
+      targets.map((target) => this.sendOne(accessToken, target, notification)),
     );
-    return results.filter((token): token is string => token !== null);
+    for (const [index, verdict] of results.entries()) {
+      const token = targets[index].token;
+      if (verdict === 'DEAD') {
+        outcome.dead.push(token);
+      } else if (verdict === 'DELIVERED') {
+        // FCM has no environments, so there is nothing to learn beyond "this token still works".
+        outcome.delivered.push({ token, apnsEnv: null });
+      }
+    }
+    return outcome;
   }
 
-  /** Returns the token when the provider says it is permanently dead, `null` otherwise. */
+  /** What FCM's answer means for this token: it arrived, the token is gone, or neither is known. */
   private async sendOne(
     accessToken: string,
-    token: string,
+    target: PushTarget,
     notification: PushNotification,
-  ): Promise<string | null> {
+  ): Promise<'DELIVERED' | 'DEAD' | 'KEPT'> {
     let response: globalThis.Response;
     try {
       response = await fetch(
@@ -88,18 +100,18 @@ export class FcmPushProvider implements PushProvider {
             Authorization: `Bearer ${accessToken}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ message: buildMessage(token, notification) }),
+          body: JSON.stringify({ message: buildMessage(target.token, notification) }),
           signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
         },
       );
     } catch (error) {
       // A network blip is transient — keep the token, it is probably still good.
       this.logger.warn(`FCM request failed: ${(error as Error).message}`);
-      return null;
+      return 'KEPT';
     }
 
     if (response.ok) {
-      return null;
+      return 'DELIVERED';
     }
 
     const body = (await response.json().catch(() => ({}))) as FcmErrorResponse;
@@ -109,11 +121,11 @@ export class FcmPushProvider implements PushProvider {
 
     if (code !== undefined && DEAD_TOKEN_ERRORS.has(code)) {
       // The app was uninstalled or the token was reissued. Report it so the caller can delete it.
-      return token;
+      return 'DEAD';
     }
     // Never log the token itself — it addresses a specific person's device.
     this.logger.warn(`FCM rejected a send: ${response.status} ${code ?? 'unknown'}`);
-    return null;
+    return 'KEPT';
   }
 
   private async authorize(): Promise<string> {
@@ -131,8 +143,9 @@ export class FcmPushProvider implements PushProvider {
  * `data` values must be strings — FCM rejects anything else, and a number silently stringified
  * elsewhere would be a difference between platforms.
  *
- * Android gets `priority: high` so the app is woken rather than batched into a maintenance window;
- * iOS gets `sound: default` so a chat message actually makes a noise.
+ * Android gets `priority: high` so the app is woken rather than batched into a maintenance window.
+ * There is no `apns` block: iPhones no longer travel this path at all, and leaving one here would
+ * suggest they still do. `badge` is dropped for the same reason — it is an iOS concept.
  */
 function buildMessage(token: string, notification: PushNotification): Record<string, unknown> {
   return {
@@ -140,9 +153,5 @@ function buildMessage(token: string, notification: PushNotification): Record<str
     notification: { title: notification.title, body: notification.body },
     data: notification.data ?? {},
     android: { priority: 'high', notification: { sound: 'default' } },
-    apns: {
-      headers: { 'apns-priority': '10' },
-      payload: { aps: { sound: 'default' } },
-    },
   };
 }

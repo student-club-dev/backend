@@ -1,7 +1,18 @@
 import { ConfigService } from '@nestjs/config';
 import { FcmPushProvider } from './fcm-push.provider';
+import { PushOutcome, PushTarget } from './push-provider';
 
 const NOTIFICATION = { title: 'Yangi xabar', body: 'salom', data: { conversationId: 'cnv_1' } };
+
+/** An Android device row, the only kind this provider is routed. */
+function android(token: string): PushTarget {
+  return { id: `dev_${token}`, token, platform: 'ANDROID', apnsEnv: null };
+}
+
+/** The delivered half of an outcome, for the tokens expected to have arrived. */
+function delivered(...tokens: string[]): PushOutcome['delivered'] {
+  return tokens.map((token) => ({ token, apnsEnv: null }));
+}
 
 function makeProvider(): FcmPushProvider {
   const config = {
@@ -42,13 +53,18 @@ describe('FcmPushProvider', () => {
 
   it('sends nothing and reports nothing for an empty token list', async () => {
     global.fetch = jest.fn();
-    await expect(makeProvider().send([], NOTIFICATION)).resolves.toEqual([]);
+    await expect(makeProvider().send([], NOTIFICATION)).resolves.toEqual({
+      dead: [],
+      delivered: [],
+    });
     expect(global.fetch).not.toHaveBeenCalled();
   });
 
   it('sends one request per token', async () => {
     global.fetch = jest.fn().mockResolvedValue(ACCEPTED);
-    await expect(makeProvider().send(['a', 'b', 'c'], NOTIFICATION)).resolves.toEqual([]);
+    await expect(
+      makeProvider().send([android('a'), android('b'), android('c')], NOTIFICATION),
+    ).resolves.toEqual({ dead: [], delivered: delivered('a', 'b', 'c') });
     expect(global.fetch).toHaveBeenCalledTimes(3);
   });
 
@@ -56,7 +72,7 @@ describe('FcmPushProvider', () => {
     const fetchMock = jest.fn().mockResolvedValue(ACCEPTED);
     global.fetch = fetchMock;
 
-    await makeProvider().send(['tok'], NOTIFICATION);
+    await makeProvider().send([android('tok')], NOTIFICATION);
 
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe('https://fcm.googleapis.com/v1/projects/studentclub/messages:send');
@@ -79,19 +95,29 @@ describe('FcmPushProvider', () => {
     'reports a token back as dead on %s',
     async (errorCode) => {
       global.fetch = jest.fn().mockResolvedValue(fcmError(errorCode));
-      await expect(makeProvider().send(['dead-tok'], NOTIFICATION)).resolves.toEqual(['dead-tok']);
+      await expect(makeProvider().send([android('dead-tok')], NOTIFICATION)).resolves.toEqual({
+        dead: ['dead-tok'],
+        delivered: [],
+      });
     },
   );
 
   it('keeps a token when the failure is transient, not the token’s fault', async () => {
     // A 500 from Google says nothing about this device — deleting the token would lose a real user.
     global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 500, json: async () => ({}) });
-    await expect(makeProvider().send(['tok'], NOTIFICATION)).resolves.toEqual([]);
+    // Neither dead nor delivered: a 500 proves nothing, so `lastSuccessAt` must not move either.
+    await expect(makeProvider().send([android('tok')], NOTIFICATION)).resolves.toEqual({
+      dead: [],
+      delivered: [],
+    });
   });
 
   it('keeps a token when the network fails', async () => {
     global.fetch = jest.fn().mockRejectedValue(new Error('ECONNRESET'));
-    await expect(makeProvider().send(['tok'], NOTIFICATION)).resolves.toEqual([]);
+    await expect(makeProvider().send([android('tok')], NOTIFICATION)).resolves.toEqual({
+      dead: [],
+      delivered: [],
+    });
   });
 
   it('separates the dead tokens from the live ones in a mixed batch', async () => {
@@ -101,9 +127,9 @@ describe('FcmPushProvider', () => {
       .mockResolvedValueOnce(fcmError('UNREGISTERED'))
       .mockResolvedValueOnce(ACCEPTED);
 
-    await expect(makeProvider().send(['live1', 'dead', 'live2'], NOTIFICATION)).resolves.toEqual([
-      'dead',
-    ]);
+    await expect(
+      makeProvider().send([android('live1'), android('dead'), android('live2')], NOTIFICATION),
+    ).resolves.toEqual({ dead: ['dead'], delivered: delivered('live1', 'live2') });
   });
 
   it('never throws when authorisation fails — a push must not fail the message', async () => {
@@ -113,7 +139,10 @@ describe('FcmPushProvider', () => {
     };
     global.fetch = jest.fn();
 
-    await expect(provider.send(['tok'], NOTIFICATION)).resolves.toEqual([]);
+    await expect(provider.send([android('tok')], NOTIFICATION)).resolves.toEqual({
+      dead: [],
+      delivered: [],
+    });
     expect(global.fetch).not.toHaveBeenCalled();
   });
 });

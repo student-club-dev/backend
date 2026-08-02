@@ -234,6 +234,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
         await this.notifications.pushToStudent(otherId, {
           title: 'Yangi xabar',
           body: pushTextFor(message),
+          // iOS shows exactly this number on the app icon — it does not derive one from the
+          // notifications it received (§3.1). Android ignores it.
+          badge: await this.chat.unreadTotalFor(otherId),
           data: {
             conversationId: message.conversationId,
             messageType: message.type,

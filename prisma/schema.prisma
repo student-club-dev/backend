@@ -1435,14 +1435,27 @@ enum DevicePlatform {
   WEB
 }
 
-/// A student's push token for one device. Provider-agnostic (FCM/APNs plug in later).
+/// Which APNs host a device token belongs to. A sandbox token rejected by the production host (and
+/// the reverse) answers `400 BadDeviceToken`, so the two never mix.
+enum ApnsEnvironment {
+  PRODUCTION
+  SANDBOX
+}
+
+/// A student's push token for one device. Routed by `platform`: ANDROID/WEB to FCM, IOS to APNs.
 model DeviceToken {
-  id        String         @id @default(cuid())
-  studentId String         @map("student_id")
-  token     String         @unique
-  platform  DevicePlatform
-  createdAt DateTime       @default(now()) @map("created_at")
-  updatedAt DateTime       @updatedAt @map("updated_at")
+  id            String           @id @default(cuid())
+  studentId     String           @map("student_id")
+  token         String           @unique
+  platform      DevicePlatform
+  /// Which APNs host accepted this token; iOS only, and null until the first successful send
+  /// learns it. Unknown means "try the configured host, then the other one once".
+  apnsEnv       ApnsEnvironment? @map("apns_env")
+  /// Last delivery Apple/FCM accepted. Diagnostic: a token that has never succeeded is the
+  /// signature of a misconfigured push setup, which is otherwise invisible.
+  lastSuccessAt DateTime?        @map("last_success_at")
+  createdAt     DateTime         @default(now()) @map("created_at")
+  updatedAt     DateTime         @updatedAt @map("updated_at")
 
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
 

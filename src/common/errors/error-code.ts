@@ -145,6 +145,10 @@ export const ERROR_CODE = {
   GIF_URL_NOT_ALLOWED: 'GIF_URL_NOT_ALLOWED',
   GIF_PROVIDER_ERROR: 'GIF_PROVIDER_ERROR',
   GIF_PROVIDER_RATE_LIMITED: 'GIF_PROVIDER_RATE_LIMITED',
+  // push devices — a token in the wrong format is worth its own code: it is what an iOS build
+  // sending an FCM token instead of an APNs one looks like, and a generic VALIDATION_ERROR would
+  // leave the client guessing.
+  INVALID_DEVICE_TOKEN: 'INVALID_DEVICE_TOKEN',
   // calls
   CALL_NOT_FOUND: 'CALL_NOT_FOUND',
   CALL_BUSY: 'CALL_BUSY',

@@ -10954,6 +10954,7 @@
       "post": {
         "operationId": "DevicesController_register",
         "summary": "Register this device's push token",
+        "description": "The token is routed by `platform`: `ANDROID`/`WEB` are delivered through FCM, `IOS` directly through APNs. An iOS device must therefore send its **APNs** token (64 hex characters), not an FCM one.",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -11085,7 +11086,7 @@
             }
           },
           "422": {
-            "description": "Validation failed — see `error.fields`.",
+            "description": "Validation failed — see `error.fields`. `error.code` is `VALIDATION_ERROR` for a missing token or an unknown `platform`, and `INVALID_DEVICE_TOKEN` when `platform=IOS` was sent with a token that is not 64 hex characters (typically an FCM token from an iOS build).",
             "content": {
               "application/json": {
                 "schema": {
@@ -22155,7 +22156,8 @@
         "properties": {
           "token": {
             "type": "string",
-            "description": "The device push token (FCM/APNs)"
+            "description": "The device push token. `ANDROID`/`WEB`: the FCM registration token. `IOS`: the raw APNs device token — 64 lowercase hex characters; anything else is rejected with 422 `INVALID_DEVICE_TOKEN`.",
+            "example": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
           },
           "platform": {
             "$ref": "#/components/schemas/DevicePlatformDto"

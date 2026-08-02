@@ -25,7 +25,8 @@ Tekshirish: yuklab olgan fayldagi `project_id` ni ko'zingiz bilan solishtiring.
 
 ## 2. Nima qilish kerak — qat'iy ro'yxat
 
-Hozir Firebase loyihasida **bitta ham ilova ro'yxatdan o'tmagan**. Uchala qadam ham majburiy.
+Firebase **faqat Android (va web) uchun** kerak. iOS Apple'ning APNs xizmatiga to'g'ridan-to'g'ri
+boradi — §2.2 ga qarang.
 
 ### 2.1 Android
 
@@ -37,21 +38,34 @@ Hozir Firebase loyihasida **bitta ham ilova ro'yxatdan o'tmagan**. Uchala qadam 
 5. Android 13+ da **`POST_NOTIFICATIONS` ruxsati ish vaqtida so'raladi** — busiz bildirishnoma
    ko'rsatilmaydi, garchi token olinsa ham
 
-### 2.2 iOS
+### 2.2 iOS — **Firebase orqali emas** (2026-08-02 da o'zgardi)
 
-1. Firebase Console → **Add app → iOS**
-2. **Bundle ID** — Xcode'dagi bundle identifikatori bilan aynan bir xil
-3. `GoogleService-Info.plist` ni yuklab olib Xcode loyihasiga qo'shing
-4. **APNs Auth Key** (`.p8`) — Apple Developer → *Certificates, Identifiers & Profiles → Keys* →
-   yangi kalit, **Apple Push Notifications service (APNs)** belgilangan holda
-5. O'sha `.p8` ni **Firebase'ga** yuklang: *Project settings → Cloud Messaging → APNs Authentication
-   Key* (Key ID va Team ID bilan birga)
-6. Xcode → *Signing & Capabilities* → **Push Notifications** va **Background Modes → Remote
-   notifications** yoqilsin
+⚠️ Bu bo'lim to'liq qayta yozildi. Ilgari bu yerda Firebase'ga iOS ilovasini qo'shish va `.p8` ni
+Firebase konsoliga yuklash yozilgan edi — **endi bunday qilinmaydi**. Backend iPhone'larga
+Apple'ning APNs xizmatiga **to'g'ridan-to'g'ri** yuboradi. Sabab va batafsil spetsifikatsiya:
+`docs/api/mobile_questions/PUSH_APNS_BACKEND.md` va uning javobi `PUSH_APNS_RESPONSE.md`.
 
-⛔ **4–5-qadamlarsiz iOS'ga push umuman yetib bormaydi.** FCM iPhone'ga to'g'ridan-to'g'ri yubora
-olmaydi — u Apple'ning APNs xizmati orqali o'tadi, buning uchun esa Firebase'da sizning APNs
-kalitingiz bo'lishi kerak. Android ishlab, iOS jim qolsa — sabab deyarli har doim shu.
+Ilova tomonida:
+
+1. Xcode loyihasida **Firebase kerak emas** — `FirebaseAuth` / `FirebaseFirestore` bog'liqliklari
+   (eski auth'dan qolgan) olib tashlanishi mumkin
+2. Xcode → *Signing & Capabilities* → **Push Notifications** va **Background Modes → Remote
+   notifications** yoqilgan bo'lsin
+3. `didRegisterForRemoteNotificationsWithDeviceToken` bergan **xom APNs tokenini** hex qatorga
+   aylantirib `POST /v1/devices` ga `platform: "IOS"` bilan yuboring — ilova buni allaqachon
+   shunday qiladi (`iOSApp.swift`)
+
+⛔ Token **64 ta kichik hex belgi** bo'lishi shart. Boshqa formatda backend **422
+`INVALID_DEVICE_TOKEN`** qaytaradi — bu iOS build'i xato token (masalan FCM tokeni) yuborayotganini
+darhol ko'rsatadi.
+
+Kalit (`.p8`) **serverda** turadi, Firebase'da emas. Uni backendga uzatish — DevOps ishi
+(`APNS_KEY_P8`, `APNS_KEY_ID`, `APNS_TEAM_ID`, `APNS_TOPIC`, `APNS_ENV`).
+
+⚠️ **Muhit muhim:** Xcode'dan o'rnatilgan debug build **sandbox** tokenini oladi, TestFlight/App
+Store build'i esa **production** tokenini. Ikkalasi aralashmaydi. Backend birinchi yuborishda
+ikkala xostni sinab ko'radi va qaysi biri ishlaganini eslab qoladi, shuning uchun ikkala build ham
+ishlaydi — lekin test qilayotganda qaysi build'ni ishlatayotganingizni bilib turing.
 
 `.p8` faylini **bir marta** yuklab olish mumkin. Yo'qotsangiz yangisini yasaysiz.
 
@@ -128,13 +142,43 @@ Ya'ni siz eski tokenlarni qo'lda tozalashingiz shart emas.
     "messageType": "TEXT",       // TEXT | IMAGE | GIF | VIDEO | VOICE | FILE | STICKER | SYSTEM
     "albumId": "clx…"            // faqat albom bo'lsa
   },
-  "android": { "priority": "high", "notification": { "sound": "default" } },
-  "apns": { "headers": { "apns-priority": "10" }, "payload": { "aps": { "sound": "default" } } }
+  "android": { "priority": "high", "notification": { "sound": "default" } }
 }
 ```
 
 `data` qiymatlari **doim `string`** — FCM boshqa turni qabul qilmaydi. `conversationId` ni deep
 link uchun ishlating: bosilganda to'g'ridan-to'g'ri o'sha suhbat ochilsin.
+
+### iOS — o'sha ma'no, APNs formatida
+
+iPhone FCM'dan emas, Apple'dan oladi, shuning uchun tuzilishi boshqacha. `data` bo'limi yo'q —
+maxsus maydonlar **ildizda**, `aps` yonida turadi:
+
+```jsonc
+{
+  "aps": {
+    "alert": { "title": "Yangi xabar", "body": "<xabar turiga qarab matn>" },
+    "sound": "default",
+    "badge": 3,                      // o'qilmagan xabarlarning umumiy soni
+    "thread-id": "clx…",             // = conversationId, bildirishnomalarni guruhlaydi
+    "mutable-content": 1
+  },
+  "conversationId": "clx…",
+  "messageType": "TEXT",
+  "albumId": "clx…"                  // faqat albom bo'lsa
+}
+```
+
+| FCM | APNs |
+|---|---|
+| `notification.title` | `aps.alert.title` |
+| `notification.body` | `aps.alert.body` (§4 dagi **o'sha** matnlar jadvali) |
+| `data.conversationId` | ildizdagi `conversationId` (`userInfo["conversationId"]`) |
+| `data.messageType` | ildizdagi `messageType` |
+| `data.albumId` | ildizdagi `albumId` |
+
+`aps.badge` — ilova belgisidagi raqam. iOS uni o'zi hisoblamaydi, faqat server aytadi; qiymat
+`GET /v1/conversations/unread-count` bergan son bilan bir xil.
 
 ### `body` matnlari — xabar turiga qarab
 
@@ -174,8 +218,10 @@ Kelmasa, tartib bo'yicha tekshiring:
 | Belgi | Sabab |
 |---|---|
 | `POST /v1/devices` 401 | Access token eskirgan — avval `refresh` |
-| Android ishlaydi, iOS yo'q | APNs `.p8` Firebase'ga yuklanmagan (§2.2, 4–5-qadam) |
+| Android ishlaydi, iOS yo'q | Serverda `APNS_*` sozlanmagan, yoki `APNS_TOPIC` bundle id'ga mos emas (§2.2) |
 | Ikkalasi ham yo'q | `project_id` mos emas, yoki token ro'yxatdan o'tmagan |
+| iOS: `POST /v1/devices` 422 `INVALID_DEVICE_TOKEN` | Ilova APNs tokenini emas, boshqa narsa yuboryapti (§2.2) |
+| iOS simulyatorda hech nima | Simulyatorda APNs tokeni umuman berilmaydi — haqiqiy qurilma kerak |
 | Ilova ochiq — push yo'q | **Bu to'g'ri xatti-harakat** (§5) |
 | Bildirishnoma ko'rinmaydi, lekin token bor (Android 13+) | `POST_NOTIFICATIONS` ruxsati so'ralmagan |
 
