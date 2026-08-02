@@ -24,6 +24,9 @@ services:
     image: redis:7-alpine
     container_name: elonuz-redis
     restart: unless-stopped
+    # Without AOF an ungraceful restart loses up to a minute of writes — including the delayed
+    # BullMQ jobs that close ringing calls.
+    command: redis-server --appendonly yes
     # Loopback ONLY — same rule as `db` above. Needed so the e2e suites, which run on the host
     # against REDIS_URL=localhost:6379, can reach it. Never bind to '0.0.0.0'.
     ports:

@@ -11,10 +11,18 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import type { Server, Socket } from 'socket.io';
-import { ERROR_CODE } from '../../common/errors/error-code';
 import { AppException } from '../../common/exceptions/app.exception';
-import type { AuthenticatedUser } from '../../common/types/authenticated-user';
+import {
+  assertTokenFresh,
+  personalRoom,
+  toWsError,
+  userOf,
+  wsUnauthorized,
+} from '../../common/websocket/ws-helpers';
+import { VerifiedSocket, verifyStudentSocket } from '../../common/websocket/ws-jwt';
 import type { Env } from '../../config/env';
+import { CallEndedBus } from '../calls/application/call-ended.bus';
+import { CallStatus } from '../calls/domain/enums/call-status.enum';
 import { MediaReadyBus } from '../media/application/media-ready.bus';
 import { MediaAsset } from '../media/domain/entities/media-asset.entity';
 import { AttachmentDto } from '../media/presentation/dto/attachment.dto';
@@ -29,17 +37,10 @@ import {
   TypingPayload,
 } from './application/chat-events';
 import { ChatService } from './application/chat.service';
-import { Message } from './domain/entities/message.entity';
+import { CallSnapshot, Message } from './domain/entities/message.entity';
 import { DeleteScope } from './domain/enums/delete-scope.enum';
 import { MessageType } from './domain/enums/message-type.enum';
-import { VerifiedSocket, verifyStudentSocket } from './infrastructure/ws-jwt';
 import { MessageDto } from './presentation/dto/message.dto';
-
-/** All of a student's devices share this room — 1:1 delivery targets a member's personal room. */
-const personalRoom = (studentId: string): string => `user:${studentId}`;
-
-const userOf = (client: Socket): AuthenticatedUser | undefined =>
-  client.data.user as AuthenticatedUser | undefined;
 
 /**
  * Socket.IO gateway for real-time chat (`/chat`, C2/C6). JWT verified on the handshake (students
@@ -59,6 +60,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     private readonly jwt: JwtService,
     private readonly config: ConfigService<Env, true>,
     private readonly mediaReady: MediaReadyBus,
+    private readonly callEnded: CallEndedBus,
   ) {}
 
   /**
@@ -71,6 +73,12 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
         return; // never attached to a message — nobody to tell
       }
       await this.broadcastMediaReady(asset);
+    });
+    // A call record appears in chat when the call ends. The bus keeps the dependency one-way:
+    // chat imports calls, never the reverse.
+    this.callEnded.subscribe(async (call) => {
+      const message = await this.chat.appendCallMessage(call);
+      await this.broadcastMessage(message);
     });
   }
 
@@ -108,7 +116,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
   ): Promise<Record<string, unknown>> {
     const user = userOf(client);
     if (user === undefined) {
-      return { clientMsgId: payload?.clientMsgId, status: 'error', error: unauthorized() };
+      return { clientMsgId: payload?.clientMsgId, status: 'error', error: wsUnauthorized() };
     }
     try {
       assertTokenFresh(client);
@@ -132,7 +140,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
         status: 'sent',
       };
     } catch (error) {
-      return { clientMsgId: payload.clientMsgId, status: 'error', error: toError(error) };
+      return { clientMsgId: payload.clientMsgId, status: 'error', error: toWsError(error) };
     }
   }
 
@@ -148,7 +156,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
   ): Promise<Record<string, unknown>> {
     const user = userOf(client);
     if (user === undefined) {
-      return { status: 'error', error: unauthorized() };
+      return { status: 'error', error: wsUnauthorized() };
     }
     try {
       assertTokenFresh(client);
@@ -156,7 +164,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
       await this.broadcastRead(payload.conversationId, user.id, payload.seq);
       return { conversationId: payload.conversationId, seq: payload.seq, status: 'ok' };
     } catch (error) {
-      return { status: 'error', error: toError(error) };
+      return { status: 'error', error: toWsError(error) };
     }
   }
 
@@ -167,7 +175,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
   ): Promise<Record<string, unknown>> {
     const user = userOf(client);
     if (user === undefined) {
-      return { status: 'error', error: unauthorized() };
+      return { status: 'error', error: wsUnauthorized() };
     }
     try {
       assertTokenFresh(client);
@@ -175,7 +183,7 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
       await this.broadcastDelivered(payload.conversationId, user.id, payload.seq);
       return { conversationId: payload.conversationId, seq: payload.seq, status: 'ok' };
     } catch (error) {
-      return { status: 'error', error: toError(error) };
+      return { status: 'error', error: toWsError(error) };
     }
   }
 
@@ -418,13 +426,6 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
   }
 }
 
-function toError(error: unknown): { code: string; message: string } {
-  if (error instanceof AppException) {
-    return { code: error.code, message: error.message };
-  }
-  return { code: ERROR_CODE.INTERNAL_ERROR, message: 'Xatolik yuz berdi' };
-}
-
 /** Wire value → enum, rejecting anything unknown so a typo does not silently become TEXT. */
 function toMessageType(value: string | undefined): MessageType | undefined {
   if (value === undefined) {
@@ -459,22 +460,49 @@ function pushTextFor(message: Message): string {
       return `${message.sticker?.emoji ?? ''} Stiker`.trim();
     case MessageType.SYSTEM:
       return 'Xabar';
+    case MessageType.CALL:
+      return callPushText(message.call);
+    default: {
+      // Keeps the exhaustiveness check that TS2366 used to provide: a new MessageType fails to
+      // compile here. The runtime fallback is for an older pod whose client predates the member.
+      const unhandled: never = message.type;
+      void unhandled;
+      return 'Xabar';
+    }
   }
-}
-
-function unauthorized(): { code: string; message: string } {
-  return { code: ERROR_CODE.UNAUTHORIZED, message: 'Avtorizatsiyadan o‘tilmagan' };
 }
 
 /**
- * The handshake token is verified once, at connect, but a socket can stay open long past that
- * token's lifetime — so every client→server event re-checks the stored `exp`. Failing with the same
- * code REST uses lets the client run its existing refresh path and reconnect with a fresh
- * `auth.token`, instead of showing "Xabar yuborilmadi" forever (§17.3).
+ * ⚠️ Every CALL message used to push "Javobsiz qo‘ng‘iroq". The push goes out whenever the
+ * recipient's CHAT socket is closed — routine while they are on the `/calls` socket or the app is
+ * backgrounded — so an answered ten-minute call, a decline, a cancel and a glare-preemption loser
+ * all told the callee they had missed a call. The status snapshot on the row is what tells them
+ * apart; a missing snapshot can only be an older row, for which "missed" stays the safe default.
  */
-function assertTokenFresh(client: Socket): void {
-  const exp = client.data.tokenExp as number | undefined;
-  if (exp === undefined || exp * 1000 <= Date.now()) {
-    throw new AppException(ERROR_CODE.TOKEN_EXPIRED, 401, 'Sessiya muddati tugadi');
+function callPushText(call: CallSnapshot | null): string {
+  if (call === null || call.status === CallStatus.MISSED) {
+    return '📞 Javobsiz qo‘ng‘iroq';
   }
+  // Declined, canceled, or never answered at all — a call that never reached `answeredAt` has a
+  // `durationMs` of 0, which is nothing to show on a lock screen.
+  if (
+    call.status === CallStatus.DECLINED ||
+    call.status === CallStatus.CANCELED ||
+    call.durationMs <= 0
+  ) {
+    return '📞 Qo‘ng‘iroq';
+  }
+  return `📞 Qo‘ng‘iroq · ${callDurationText(call.durationMs)}`;
+}
+
+/** `m:ss`, or `h:mm:ss` once past an hour — the same shape the call bubble renders. */
+function callDurationText(durationMs: number): string {
+  const totalSeconds = Math.floor(durationMs / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor(totalSeconds / 60) % 60;
+  const seconds = totalSeconds % 60;
+  const paddedSeconds = String(seconds).padStart(2, '0');
+  return hours === 0
+    ? `${minutes}:${paddedSeconds}`
+    : `${hours}:${String(minutes).padStart(2, '0')}:${paddedSeconds}`;
 }

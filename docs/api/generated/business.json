@@ -17067,6 +17067,196 @@
           "reason"
         ]
       },
+      "IceServerDto": {
+        "type": "object",
+        "properties": {
+          "urls": {
+            "example": [
+              "turn:turn.elonuz.uz:3478?transport=udp"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "username": {
+            "type": "string",
+            "description": "`<expiryUnixSeconds>:<studentId>` — absent on the STUN entry, which needs no auth."
+          },
+          "credential": {
+            "type": "string",
+            "description": "base64(HMAC-SHA1(TURN_STATIC_SECRET, username))."
+          }
+        },
+        "required": [
+          "urls"
+        ]
+      },
+      "IceServersDto": {
+        "type": "object",
+        "properties": {
+          "iceServers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IceServerDto"
+            }
+          },
+          "ttlSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "description": "How long the credential stays valid. Fetch a new one before placing a call once it has expired — the credential is not tied to a call and is not refreshed by one."
+          }
+        },
+        "required": [
+          "iceServers",
+          "ttlSeconds"
+        ]
+      },
+      "CallDirectionDto": {
+        "type": "string",
+        "description": "Relative to the authenticated student, not to the row.",
+        "enum": [
+          "INCOMING",
+          "OUTGOING"
+        ]
+      },
+      "CallMediaDto": {
+        "type": "string",
+        "enum": [
+          "AUDIO",
+          "VIDEO"
+        ]
+      },
+      "CallStatusDto": {
+        "type": "string",
+        "enum": [
+          "RINGING",
+          "CONNECTING",
+          "ACTIVE",
+          "ENDED",
+          "MISSED",
+          "DECLINED",
+          "FAILED",
+          "CANCELED"
+        ]
+      },
+      "CallEndReasonDto": {
+        "type": "string",
+        "enum": [
+          "HANGUP",
+          "TIMEOUT",
+          "DECLINED",
+          "BUSY",
+          "FAILED",
+          "CANCELED",
+          "UNAUTHORIZED"
+        ]
+      },
+      "CallPartyDto": {
+        "type": "string",
+        "enum": [
+          "CALLER",
+          "CALLEE"
+        ]
+      },
+      "CallDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "conversationId": {
+            "type": "string"
+          },
+          "peerId": {
+            "type": "string",
+            "description": "The other party — never the reader."
+          },
+          "direction": {
+            "$ref": "#/components/schemas/CallDirectionDto"
+          },
+          "media": {
+            "$ref": "#/components/schemas/CallMediaDto"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CallStatusDto"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "answeredAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "endedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "durationMs": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Milliseconds of actual conversation; 0 when the call was never answered."
+          },
+          "endReason": {
+            "nullable": true,
+            "$ref": "#/components/schemas/CallEndReasonDto"
+          },
+          "endedBy": {
+            "nullable": true,
+            "$ref": "#/components/schemas/CallPartyDto"
+          }
+        },
+        "required": [
+          "id",
+          "conversationId",
+          "peerId",
+          "direction",
+          "media",
+          "status",
+          "startedAt",
+          "answeredAt",
+          "endedAt",
+          "durationMs",
+          "endReason",
+          "endedBy"
+        ]
+      },
+      "CallListDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CallDto"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "hasNext": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "size",
+          "total",
+          "hasNext"
+        ]
+      },
       "ConversationTypeDto": {
         "type": "string",
         "enum": [
@@ -17116,7 +17306,8 @@
           "FILE",
           "VOICE",
           "STICKER",
-          "SYSTEM"
+          "SYSTEM",
+          "CALL"
         ]
       },
       "MessageStickerDto": {
@@ -17242,6 +17433,36 @@
           "originalDeleted"
         ]
       },
+      "MessageCallDto": {
+        "type": "object",
+        "properties": {
+          "callId": {
+            "type": "string"
+          },
+          "media": {
+            "$ref": "#/components/schemas/CallMediaDto"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CallStatusDto"
+          },
+          "durationMs": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Milliseconds of actual conversation; 0 when the call was never answered."
+          },
+          "endReason": {
+            "nullable": true,
+            "$ref": "#/components/schemas/CallEndReasonDto"
+          }
+        },
+        "required": [
+          "callId",
+          "media",
+          "status",
+          "durationMs",
+          "endReason"
+        ]
+      },
       "MessageDto": {
         "type": "object",
         "properties": {
@@ -17309,6 +17530,15 @@
               }
             ]
           },
+          "call": {
+            "nullable": true,
+            "description": "Set for `CALL` messages; null otherwise.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MessageCallDto"
+              }
+            ]
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -17327,6 +17557,7 @@
           "attachment",
           "sticker",
           "replyTo",
+          "call",
           "createdAt"
         ]
       },

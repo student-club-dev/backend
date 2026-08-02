@@ -46,7 +46,7 @@ Har biri mobil jamoaga aytilishi shart.
 
 | # | Qaror | Spec nima degan | Nima uchun boshqacha |
 |---|---|---|---|
-| 1 | `Call.id` — **cuid** | ULID (`cal_01J...`) | Butun kodbaza cuid'da. Glare uchun faqat aniqlangan to'liq tartib kerak; cuid vaqt bo'yicha tartiblangan, bu yetarli |
+| 1 | `Call.id` — **uuid v4** (`randomUUID()`) | ULID (`cal_01J...`) | `callId` Redis'ga yozish uchun **oldindan** kerak, ya'ni Prisma'ning `@default(cuid())` i ishlamaydi, loyihada esa hech qanday id generatori o'rnatilmagan. `node:crypto` yangi dependency talab qilmaydi va **kriptografik tasodifiy** — Prisma'ning cuid v1 i `Math.random()` ga tayanadi va taxmin qilinishi mumkin. Glare uchun faqat *aniqlangan to'liq tartib* kerak (§5.3 dagi juftlik va `RINGING` shartlari vaqt tartibiga umuman tayanmaydi) |
 | 2 | Chatdagi qo'ng'iroq yozuvi — **`Message` ustunlarida snapshot** | belgilanmagan | §7. `Call` ga JOIN emas: (a) chat↔calls modul sikli oldi olinadi, (b) ishtirokchi o'chsa xabar baribir ko'rinadi — `replyTo*` va `sticker*` bilan bir xil naqsh |
 | 3 | Telemetriya — **alohida `CallStat` jadvali** | belgilanmagan | Ikki ishtirokchining metrikasi har xil (biri `relay`, biri `srflx`). Bitta qatorga sig'maydi — 1-tahrirdagi «ustunlar yetarli» qarori xato edi |
 | 4 | `tokenType` taxmini — **ikkala platformada ham `FCM`** | `IOS → APNS` (§13.1) | Bazadagi mavjud iOS tokenlar **haqiqatan ham FCM registration token**. Ularni `APNS` deb belgilash iOS push'ini butunlay o'ldiradi. `APNS`/`APNS_VOIP` faqat klient **aniq yuborganda** yoziladi |
@@ -228,11 +228,21 @@ model CallStat {
 | Kalit | Tur | Mazmun | TTL |
 |---|---|---|---|
 | `call:{callId}` | hash | `status, callerId, calleeId, conversationId, media, startedAt, answeredAt` | 4 soat 15 daqiqa |
-| `busy:{studentId}` | string | joriy `callId` | `RINGING` da **60 s**, `ACTIVE` ga o'tganda 4 soat 15 daqiqaga uzaytiriladi |
+| `busy:{studentId}` | string | joriy `callId` | **90 s** (= 45 jiringlash + 30 ulanish + 15 zapas), `CONNECTING` va `ACTIVE` ga o'tishda uzaytiriladi; `ACTIVE` da 4 soat 15 daqiqa |
 | `call:{callId}:present:{studentId}` | string | ishtirokchining ochiq socket'i bor | 60 s, har `ping` da yangilanadi |
 
 `busy:` TTL qisqa boshlanadi: nusxa `RINGING` va «tozalash» orasida o'lsa, foydalanuvchi 4 soat emas,
-60 soniya band bo'lib qoladi.
+90 soniya band bo'lib qoladi.
+
+⚠️ **TTL taymerlardan kelib chiqib o'lchanadi, dumaloq son sifatida tanlanmaydi.** 1-tahrirda u 60
+soniya edi — lekin jiringlash 45 s va ulanish 30 s, ya'ni qo'ng'iroq `ACTIVE` ga yetgunicha qonuniy
+ravishda **75 soniya** o'tishi mumkin. Natijada uzoq jiringlagan qo'ng'iroq markerlarini yo'qotib,
+so'ng «uzaytirish» allaqachon yo'q kalitga tushardi: **jonli qo'ng'iroq 4 soat davomida markersiz
+qolardi** va ikkala ishtirokchini istalgan odam band qila olardi.
+
+TTL uzaytirish **`CAS_SCRIPT` ichida**, egalik tekshiruvi bilan bajariladi — kalit hali *shu*
+qo'ng'iroqniki bo'lsagina. Aks holda eski qo'ng'iroqning `ACTIVE` ga o'tishi allaqachon boshqa
+qo'ng'iroqqa tegishli markerni 4 soatga uzaytirib yuborardi.
 
 `call:{id}:present:{studentId}` — `disconnect-grace` taymerining o'qiydigan yagona belgisi. **`/calls`
 gateway `PresenceRepository` ga umuman tegmaydi** — aks holda `/chat` ning refcount'i ikki marta
@@ -278,9 +288,10 @@ call:invite ──► RINGING ── call:accept ──► CONNECTING ── cal
 
 1. `canTransition(from, to)` — terminal holatlardan chiqish yo'q; takroriy `call:end` jim
    e'tiborsiz qoldiriladi (klient qayta yuborishi normal).
-2. `isValidOutcome(status, endReason)` — qonuniy juftliklar matritsasi. Ikkala enumda `DECLINED`,
-   `FAILED`, `CANCELED`, `TIMEOUT` nomlari takrorlanadi va hech narsa `(ENDED, DECLINED)` kabi
-   qarama-qarshi juftlikni to'xtatmaydi. Bir yillik ifloslangan analitikani tiklab bo'lmaydi.
+2. `isValidOutcome(status, endReason)` — qonuniy juftliklar matritsasi. Ikkala enumda **uchta** nom
+   takrorlanadi (`DECLINED`, `FAILED`, `CANCELED` — `TIMEOUT` faqat `CallEndReason` da bor) va hech
+   narsa `(ENDED, DECLINED)` kabi qarama-qarshi juftlikni to'xtatmaydi. Bir yillik ifloslangan
+   analitikani tiklab bo'lmaydi.
 
 ### 5.1 `CONNECTING` — nima uchun kerak (chetlashish #5)
 
@@ -318,7 +329,18 @@ ko'radi, chunki ular **ikki xil kalitni** tekshiradi. Yechim — bitta Redis **L
 ishtirokchining `busy:` kalitini atomar band qiladi.
 
 Qaror mantig'i `domain/glare.ts` dagi **sof funksiyada** yoziladi
-(`resolveGlare(incoming, holder) → 'CLAIM' | 'PREEMPT' | 'BUSY'`), Lua faqat uning transkripsiyasi.
+(`resolveGlare(incoming, callerHolder, calleeHolder) → 'CLAIM' | 'PREEMPT' | 'BUSY'`), Lua faqat
+uning transkripsiyasi.
+
+⚠️ **Ikkita holder — bitta emas.** `busy:caller` va `busy:callee` **alohida** o'qiladi va
+**ikkalasi bir xil qo'ng'iroqni ko'rsatishi shart**. Aynan shu shart begona uchinchi shaxsni
+to'sadi: hujumchi C qurbon A ga qo'ng'iroq qilganda `busy:C` (bo'sh yoki o'ziniki) va `busy:A`
+(A↔B qo'ng'irog'i) ikki xil qiymat beradi → `BUSY`, va `callId` ni qanchalik kichik tanlashidan
+qat'i nazar id solishtiruvigacha yetib bormaydi.
+
+Xavfsizlik ko'rigi buni 3.1 mln kirish kombinatsiyasida tekshirib chiqdi: mirror sharti emas,
+**aynan shu «ikkala kalit bitta qo'ng'iroqniki» sharti** asosiy himoya. Lua'ni bitta holder bilan
+yozish uni yo'q qiladi.
 Aks holda §12 dagi «unit test, DB yo'q» bajarib bo'lmaydi — Lua Redis ichida ishlaydi, mock qilinmaydi.
 
 Qoida:
@@ -413,10 +435,20 @@ Har hodisa uchun class-validator DTO klassi, gateway'da aniq validatsiya
 | `candidate` | `@MaxLength(512)` |
 | `sdpMid` | `@MaxLength(32)` |
 | `sdpMLineIndex` | `@IsInt() @Min(0) @Max(64)` |
-| `callId`, `calleeId` | `@IsString() @Length(20, 32)` |
+| `callId` | `@IsUUID('4')` — 36 belgi (`randomUUID()`), cuid emas |
+| `calleeId` | `@IsString() @Length(20, 32)` — talaba id'lari cuid |
 
-Server tomonida sanagichlar: har ishtirokchidan **≤150 ICE nomzod**, har qo'ng'iroqda **≤10
-`renegotiate`**, har socket uchun hodisa tezligi chegarasi. Socket.IO `maxHttpBufferSize` aniq
+Server tomonida sanagichlar: har ishtirokchidan **≤500 ICE nomzod**, **har ishtirokchidan** ≤10
+`renegotiate`, har socket uchun hodisa tezligi chegarasi (30 ta zaxira, sekundiga 15 ta; tugatuvchi
+uchta hodisa uchun alohida 5/1).
+
+> ⚠️ Ikkala son ham implementatsiya davomida tuzatilgan. ICE 150 dan **500** ga ko'tarildi: 10 ta
+> `renegotiate`, har biri 20–40 nomzod qayta yig'adi — 150 bilan uzoq qo'ng'iroq o'z tiklanish
+> yo'lini yo'qotardi. `renegotiate` esa qo'ng'iroq bo'yicha emas, **ishtirokchi bo'yicha** sanaladi:
+> umumiy bo'lsa, bir tomon 10 tasini yeb, ikkinchisini Wi-Fi→LTE almashuvidan keyingi ICE restart'dan
+> mahrum qila olardi.
+
+Socket.IO `maxHttpBufferSize` aniq
 qo'yiladi — hozir standart 1 MB, va har uzatilgan hodisa **Redis adapteri orqali barcha nusxalarga**
 tarqaydi, ya'ni 1 MB nusxalar soniga ko'payadi.
 
@@ -532,9 +564,19 @@ faqat **`MISSED`** qo'ng'iroq o'qilmagan bo'lishini so'ragan, lekin §7 barcha `
 `senderId = callerId` qo'yadi — ya'ni javob berilgan, tugagan 3 daqiqalik suhbat ham chaqirilganning
 badge'ini ko'taradi.
 
-Qoida: `MISSED` bo'lmagan `CALL` xabarlar chaqirilgan uchun insert paytida o'qilgan deb belgilanadi.
+⚠️ **Qoida 1-tahrirda xato yozilgan edi** — «`MISSED` bo'lmagan `CALL` xabarlar insert paytida
+o'qilgan deb belgilanadi» deyilgan. Bu **kursorni surish** demakdir, `CALL` qatori esa suhbatdagi
+eng katta `seq` ga ega — ya'ni chaqirilganning **o'qilmagan barcha eski xabarlari** ham o'qilgan
+bo'lib qolardi. Amalda: A uchta xabar yozadi, B ochmaydi, A qo'ng'iroq qiladi, B javob beradi —
+badge nolga tushadi va uchala xabar B ularni ko'rmasdan o'qilgan bo'ladi.
 
-`MISSED` uchun oddiy push: «📞 Javobsiz qo'ng'iroq». `pushTextFor` (`chat.gateway.ts:443`) — to'liq
+**To'g'ri qoida:** kursorga umuman tegilmaydi. `MISSED` bo'lmagan `CALL` qatorlari o'qilmaganlar
+predikatidan **chiqarib tashlanadi** — `chat.prisma.repository.ts` dagi **uchala** joyda: ikkita
+Prisma sanog'i va `unreadSummary` ning raw SQL'i. Uchinchisini unutish tab badge'ini suhbat
+badge'iga zid qilib qo'yadi.
+
+Push matni ham `call.status` ga qarab tanlanadi: `MISSED` → «📞 Javobsiz qo'ng'iroq», qolganlari →
+«📞 Qo'ng'iroq» (davomiyligi bilan). `pushTextFor` (`chat.gateway.ts:443`) — to'liq
 `switch`, ya'ni `CALL` qo'shilishi kompilyatsiya xatosi beradi va e'tibordan chetda qolmaydi. Xuddi
 shu ikkinchi bepul darvoza: `REQUIRED_KIND` (`chat/domain/message-composition.ts:14`). Eski nusxada
 `undefined` qaytmasligi uchun `default: return 'Xabar';` qo'shiladi.
@@ -624,8 +666,13 @@ si unga yetib boradi**. IP → provayder + shahar. Talabalar ko'pincha bir-birin
 
 ✅ **Qaror qabul qilindi: `relayOnly` maydoni qo'shiladi va yangi juftlik uchun TURN majburiy.**
 
-- `ice-servers` javobiga va `call:incoming` / `call:accepted` ga `relayOnly: boolean` maydoni —
+- `relayOnly: boolean` maydoni `call:invite` ack'ida va `call:incoming` / `call:accepted` da —
   **1-bosqichda**, chunki bu protokol maydoni va keyin qo'shish klient uchun buzuvchi o'zgarish.
+
+  ⚠️ **`ice-servers` javobida emas.** 1-tahrirda shunday yozilgan edi, bu xato: `relayOnly`
+  juftlikka bog'liq (bu ikkalasi avval gaplashganmi?), `GET /v1/calls/ice-servers` esa qo'ng'iroqdan
+  **oldin**, peer kim ekani hali ma'lum bo'lmaganda chaqiriladi. U yerda hisoblab bo'lmaydi.
+  Endpoint faqat server ro'yxatini qaytaradi; siyosatni qo'ng'iroq hodisalari olib keladi.
 - Server qoidasi: juftlik orasida **avval tugallangan qo'ng'iroq bo'lmagan** bo'lsa `relayOnly: true`.
   Bir marta muvaffaqiyatli gaplashgandan keyin P2P ga ruxsat beriladi (ular bir-birini biladi).
 - Foydalanuvchi sozlamasi («IP manzilimni yashirish», sukut bo'yicha yoqilgan) — **3-bosqichda**,
@@ -849,6 +896,7 @@ yetkaziladi va klient regeneratsiyasini talab qiladi:
 | O'zgarish | Nima uchun |
 |---|---|
 | **16-hodisa `call:connected`** | Klient ICE ulanishi `connected` bo'lganda yuboradi. `CONNECTING → ACTIVE` o'tishi va §12.4 dagi «accept'dan keyin 30 s» taymeri shunga tayanadi (§5.1) |
+| **17-hodisa `call:auth { token }`** | Socket'ni uzmasdan `tokenExp` ni yangilaydi. Usiz: qo'ng'iroq 4 soatgacha davom etadi, token esa 15 daqiqada tugaydi — ya'ni chaqirilgan odam **javob bera olmay qoladi** va qo'ng'iroqlar jimgina `MISSED` bo'ladi (§6.4) |
 | **`relayOnly: boolean`** — `ice-servers` javobida va `call:incoming`/`call:accepted` da | `true` bo'lsa klient `iceTransportPolicy: "relay"` bilan ishlaydi va host/srflx nomzodlarini chiqarmaydi. Yangi juftlik uchun server `true` qaytaradi — IP manzil ochilmaydi (§9.2) |
 
 Qolgan chetlashishlar §2.2 jadvalida.

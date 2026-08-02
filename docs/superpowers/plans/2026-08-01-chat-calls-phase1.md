@@ -152,7 +152,13 @@ enum MessageType {
 /// yoziladi. Terminal yozuvlar doimo shartli (`WHERE status IN (...)`) — 44.9-soniyadagi
 /// `accept` va 45-soniyadagi ring-timeout poygasida holat buzilmasin (dizayn §11).
 model Call {
-  id             String         @id @default(cuid())
+  // ⚠️ uuid, not cuid — unlike every other model here. The id must exist BEFORE the row does: it
+  // is written to Redis to claim both participants' busy keys, and only then persisted. Prisma's
+  // `cuid()` runs at insert time, so it cannot supply it, and no id generator is installed.
+  // `node:crypto.randomUUID()` needs no dependency and is cryptographically random — Prisma's
+  // cuid v1 derives part of its value from `Math.random()`, which is predictable. Glare needs only
+  // a deterministic total order (see `glare.ts`), which any id format gives.
+  id             String         @id @default(uuid())
   conversationId String         @map("conversation_id")
   callerId       String         @map("caller_id")
   calleeId       String         @map("callee_id")
@@ -169,7 +175,8 @@ model Call {
   caller       Student      @relation("CallCaller", fields: [callerId], references: [id], onDelete: Cascade)
   callee       Student      @relation("CallCallee", fields: [calleeId], references: [id], onDelete: Cascade)
   stats        CallStat[]
-  reports      Report[]     @relation("ReportCall")
+  // NOTE: no `reports Report[]` back-relation. `Report.callId` is phase 3 work, and Prisma will
+  // not compile a relation whose other side does not exist yet.
 
   @@index([callerId, startedAt])
   @@index([calleeId, startedAt])
@@ -262,19 +269,75 @@ SET lock_timeout = '3s';
 Run: `npx prisma migrate dev && npx prisma generate`
 Expected: migratsiya qo'llanadi, `@prisma/client` da `Call`, `CallStat` va yangi enumlar paydo bo'ladi.
 
-- [ ] **Step 7: Kompilyatsiya sinovi — kutilgan xatolar**
+- [ ] **Step 6b: Domen enumiga ham `CALL` qo'shish**
 
-Run: `npx tsc --noEmit`
-Expected: **ikkita** xato — `MessageType.CALL` qo'shilgani uchun:
-1. `src/modules/chat/chat.gateway.ts` `pushTextFor` — TS2366 (barcha yo'llar qiymat qaytarmaydi)
-2. `src/modules/chat/domain/message-composition.ts` `REQUIRED_KIND` — `Record<MessageType, ...>` to'liq emas
+⚠️ Chat modulida **ikkita** `MessageType` bor: Prisma generatsiya qiladigani va qo'lda yuritiladigan
+domen enumi `src/modules/chat/domain/enums/message-type.enum.ts` (izohi: «Wire values match the
+Prisma `MessageType`»). Faqat Prisma tomonini o'zgartirish ikkisini bir-biriga zid qilib qo'yadi va
+`chat.mapper.ts:69,100` da `MessageType[row.type]` indeksatsiyasi `TS7053` beradi.
 
-Bu **kutilgan va foydali** — ular 17-vazifada tuzatiladi. Hozircha shu ikki xato qolishi normal.
+Domen enumiga oxirgi qiymat sifatida qo'shing:
 
-- [ ] **Step 8: Commit**
+```ts
+  CALL = 'CALL',
+```
+
+- [ ] **Step 7: Ikki toliqmagan `MessageType` ishlatuvchisini yopish**
+
+`CALL` qo'shilgach ikkita joy kompilyatsiya qilmaydi — bu **atayin**, enum o'zgarishi e'tibordan
+chetda qolmasin uchun. Ikkalasini ham shu yerda yopamiz.
+
+⚠️ **Nima uchun 17-vazifada emas.** Bu repoda `ts-jest` to'liq type-check qiladi
+(`isolatedModules` yoqilmagan), ya'ni type xatosi bo'lgan zanjirdagi **har bir test suite ishga
+tushmaydi** — o'lchandi: 5 suite yiqiladi, 927 dan 818 test qoladi. Ularni 16 vazifa davomida ochiq
+qoldirish butun suite'ni qizil qilib, keyingi har bir vazifaning tekshiruvini ma'nosiz qiladi.
+
+`src/modules/chat/chat.gateway.ts` dagi `pushTextFor` `switch` iga:
+
+```ts
+    case MessageType.CALL:
+      return '📞 Javobsiz qo‘ng‘iroq';
+```
+
+va `switch` oxiriga:
+
+```ts
+    default:
+      return 'Xabar';
+```
+
+> `default` — eski nusxa uchun. Generatsiya qilingan klienti `CALL` dan oldingi pod `CALL` xabarni
+> ko'rsa, `switch` hech nima qaytarmay `undefined` ni `string` sifatida uzatardi.
+
+`src/modules/chat/domain/message-composition.ts` dagi `REQUIRED_KIND` ga:
+
+```ts
+  [MessageType.CALL]: null,
+```
+
+> `CALL` xabarni server o'zi yozadi va unda `MediaAsset` bo'lmaydi — `null`, `SYSTEM` kabi.
+
+- [ ] **Step 7b: Kompilyatsiya va testlar toza bo'lishi**
+
+Run: `npx tsc --noEmit && npx jest --silent`
+Expected: tsc **xatosiz**; jest **927/927** (baseline bilan bir xil). Bu vazifa hech qanday
+xatti-harakatni o'zgartirmaydi — faqat sxema va ikkita enum ishlatuvchisi kengaydi.
+
+- [ ] **Step 8: Commit** *(inson hamkor bajaradi — `Bash(git commit:*)` repoda qattiq taqiqlangan)*
+
+⚠️ Ro'yxat sxema va migratsiya bilan cheklanmaydi. Bu vazifa `CALL` enum qiymatini qo'shadi, uning
+**barcha** ishlatuvchilarini yopadi va klient uni yubora olmasligini kafolatlaydi — ularsiz commit
+kompilyatsiya qilmaydi va 5 test suite ishga tushmaydi.
 
 ```bash
-git add prisma/schema.prisma prisma/migrations
+git add prisma/schema.prisma prisma/migrations \
+        src/modules/chat/domain/enums/message-type.enum.ts \
+        src/modules/chat/chat.gateway.ts \
+        src/modules/chat/domain/message-composition.ts \
+        src/modules/chat/application/chat.service.ts \
+        src/modules/chat/application/chat.service.spec.ts \
+        src/modules/chat/presentation/dto/requests.dto.ts \
+        docs/handoff/RUNBOOK.md
 git commit -m "feat(calls): add Call and CallStat models with call message snapshot columns"
 ```
 
@@ -285,7 +348,10 @@ git commit -m "feat(calls): add Call and CallStat models with call message snaps
 **Files:**
 - Create: `src/common/websocket/ws-jwt.ts`, `src/common/websocket/ws-helpers.ts`, `src/common/chat/direct-key.ts`
 - Delete: `src/modules/chat/infrastructure/ws-jwt.ts`
-- Modify: `src/modules/chat/chat.gateway.ts`, `src/modules/chat/chat.gateway.spec.ts`, `src/modules/chat/application/chat.service.ts`
+- Modify: `src/modules/chat/chat.gateway.ts`, `src/modules/chat/application/chat.service.ts`, `src/modules/chat/application/chat.io.ts`
+
+⚠️ Juftlik kaliti `chat.service.ts` da emas — u `chat.io.ts` da `directKeyOf` deb yashaydi va
+servisga import qilinadi. Ko'chirishda o'sha faylga ham tegiladi.
 
 **Interfaces:**
 - Produces:
@@ -879,7 +945,18 @@ git commit -m "feat(calls): add pure glare resolver with mirror-pair and ringing
 
 **Files:**
 - Create: `src/modules/calls/domain/call.repository.ts`, `call-state.repository.ts`, `call-timers.repository.ts`, `conversation-directory.repository.ts`, `student-directory.repository.ts`
-- Modify: `src/common/errors/error-code.ts`, `src/modules/chat/domain/connection-check.repository.ts`, `src/modules/chat/infrastructure/connection-check.prisma.repository.ts`
+- Create: `src/infrastructure/social-graph/connection-check.repository.ts`, `connection-check.prisma.repository.ts`, `social-graph.module.ts`
+- Delete: `src/modules/chat/domain/connection-check.repository.ts`, `src/modules/chat/infrastructure/connection-check.prisma.repository.ts`
+- Modify: `src/common/errors/error-code.ts`, `src/modules/chat/chat.module.ts`, `src/modules/chat/application/chat.service.ts` (import yo'li)
+
+**⚠️ Nima uchun ko'chirish.** `CONNECTION_CHECK` hozir `ChatModule` ichida private — eksport
+qilinmagan, ya'ni `CallsModule` uni import bilan ola olmaydi. Uni `ChatModule` dan eksport qilish
+esa 17-vazifada `ChatModule → CallsModule` importi bilan **aylanma bog'liqlik** yasaydi
+(`forwardRef` — kasallikni yashirish, davolash emas).
+
+Kodbazada tayyor naqsh bor: `PresenceModule` (`src/infrastructure/presence/`) — aynan shu shakldagi,
+`chat` va `connections` bo'lishadigan port, o'z modulida. `connection-check` ni shunga qo'shni
+qilib qo'yamiz.
 
 **Interfaces:**
 - Consumes: `Call`, `CallState`, `CallMedia`, `CallStatus`, `CallEndReason`, `CallParty` (Task 3); `GlareDecision` (Task 5)
@@ -898,9 +975,40 @@ git commit -m "feat(calls): add pure glare resolver with mirror-pair and ringing
 
 ⚠️ `BLOCKED` **qo'shilmaydi** — mavjud `USER_BLOCKED` ishlatiladi. Bitta ma'no ikki kod bo'lmasin; spec §12.3.1 dagi nom bilan farqi mobil jamoaga aytiladi.
 
-- [ ] **Step 2: `ConnectionCheckRepository` ni kengaytirish**
+- [ ] **Step 2: `connection-check` ni `src/infrastructure/social-graph/` ga ko'chirish**
 
-`src/modules/chat/domain/connection-check.repository.ts` ga qo'shing:
+Ikkala faylni (`chat/domain/connection-check.repository.ts` va
+`chat/infrastructure/connection-check.prisma.repository.ts`) `src/infrastructure/social-graph/` ga
+ko'chiring, import yo'llarini to'g'rilang, eskilarini o'chiring. `PresenceModule` naqshida modul
+yarating:
+
+```ts
+// src/infrastructure/social-graph/social-graph.module.ts
+import { Module } from '@nestjs/common';
+import { PrismaModule } from '../database/prisma.module';
+import { CONNECTION_CHECK } from './connection-check.repository';
+import { ConnectionCheckPrismaRepository } from './connection-check.prisma.repository';
+
+/**
+ * Read-only view of the social graph (accepted connections + blocks), shared by `chat` (gates a
+ * conversation) and `calls` (gates an invite). Its own module rather than a `ChatModule` export:
+ * chat subscribes to the calls module's CallEndedBus, so chat→calls is already taken and exporting
+ * from chat would close the loop.
+ */
+@Module({
+  imports: [PrismaModule],
+  providers: [{ provide: CONNECTION_CHECK, useClass: ConnectionCheckPrismaRepository }],
+  exports: [CONNECTION_CHECK],
+})
+export class SocialGraphModule {}
+```
+
+`ChatModule` dan `CONNECTION_CHECK` provayderini olib tashlang va `imports` ga `SocialGraphModule`
+qo'shing. `chat.service.ts` dagi import yo'lini yangilang.
+
+- [ ] **Step 2b: `ConnectionCheckRepository` ni kengaytirish**
+
+Ko'chirilgan `src/infrastructure/social-graph/connection-check.repository.ts` ga qo'shing:
 
 ```ts
 /** Why a pair may not talk — `areConnected` folds these into one boolean, calls need them apart. */
@@ -919,7 +1027,7 @@ va interfeysga metod:
 
 - [ ] **Step 3: Implementatsiyani qo'shish**
 
-`src/modules/chat/infrastructure/connection-check.prisma.repository.ts` ga `connectionState` ni qo'shing. Mavjud `areConnected` ni o'qing va **o'sha ikki so'rovni** qayta ishlating — blok tekshiruvini alohida ajrating:
+`src/infrastructure/social-graph/connection-check.prisma.repository.ts` ga `connectionState` ni qo'shing. Mavjud `areConnected` ni o'qing va **o'sha ikki so'rovni** qayta ishlating — blok tekshiruvini alohida ajrating:
 
 ```ts
   async connectionState(a: string, b: string): Promise<ConnectionState> {
@@ -1235,6 +1343,40 @@ describeIfRedis('CallStateRedisRepository', () => {
     expect(await repo.claim(state('c2', 'C', 'B'))).toEqual({ kind: 'CLAIM' });
   });
 
+  // ⚠️ Self-healing. An instance dying between the terminal write and the busy-key delete would
+  // otherwise leave both parties uncallable until the TTL — up to 4h15m once a call went ACTIVE.
+  describe('stale busy markers read as free', () => {
+    it('when the call hash is gone but the busy key survives', async () => {
+      await repo.claim(state('c1', 'A', 'B'));
+      await redis.del('call:c1'); // simulate the hash expiring, or a half-finished release
+      expect(await repo.claim(state('c2', 'C', 'B'))).toEqual({ kind: 'CLAIM' });
+    });
+
+    it.each([CallStatus.ENDED, CallStatus.MISSED, CallStatus.FAILED])(
+      'when the holder reached %s',
+      async (status) => {
+        await repo.claim(state('c1', 'A', 'B'));
+        await repo.compareAndSetStatus('c1', [CallStatus.RINGING], status);
+        expect(await repo.claim(state('c2', 'C', 'B'))).toEqual({ kind: 'CLAIM' });
+      },
+    );
+
+    // The other half of the rule: a LIVE holder must still block, or the guard is worthless.
+    it.each([CallStatus.RINGING, CallStatus.CONNECTING, CallStatus.ACTIVE])(
+      'but a holder still in %s blocks',
+      async (status) => {
+        await repo.claim(state('c1', 'A', 'B'));
+        if (status !== CallStatus.RINGING) {
+          await repo.compareAndSetStatus('c1', [CallStatus.RINGING], CallStatus.CONNECTING);
+        }
+        if (status === CallStatus.ACTIVE) {
+          await repo.compareAndSetStatus('c1', [CallStatus.CONNECTING], CallStatus.ACTIVE);
+        }
+        expect(await repo.claim(state('c2', 'C', 'B'))).toEqual({ kind: 'BUSY' });
+      },
+    );
+  });
+
   it('tracks participant presence', async () => {
     await repo.markPresent('c1', 'A');
     expect(await repo.isPresent('c1', 'A')).toBe(true);
@@ -1286,9 +1428,8 @@ const presenceKey = (callId: string, studentId: string): string => `call:${callI
  * Returns: {"CLAIM"} | {"PREEMPT", loserCallId} | {"BUSY"}
  */
 const CLAIM_SCRIPT = `
-local callerHolderId = redis.call('GET', KEYS[1])
-local calleeHolderId = redis.call('GET', KEYS[2])
 local incomingId = ARGV[1]
+local LIVE = { RINGING = true, CONNECTING = true, ACTIVE = true }
 
 local function write()
   redis.call('HSET', KEYS[3],
@@ -1301,24 +1442,41 @@ local function write()
   redis.call('SET', KEYS[2], incomingId, 'EX', ARGV[8])
 end
 
-if callerHolderId == false and calleeHolderId == false then
+-- Resolve a busy marker to a LIVE call, or to nil.
+-- A marker pointing at a call whose hash is gone, or whose status is terminal, is stale by
+-- definition and must read as free. Without this an instance dying between the terminal write and
+-- the busy-key delete would leave both parties uncallable until the key's TTL — up to 4h15m once a
+-- call has reached ACTIVE. Staleness belongs here, in the store, and NOT in \`resolveGlare\`: that
+-- function's branch structure is the security property and is mutation-tested as it stands.
+local function liveHolder(holderId)
+  if holderId == false then return nil end
+  local h = redis.call('HMGET', 'call:' .. holderId, 'callerId', 'calleeId', 'status')
+  if h[1] == false or not LIVE[h[3]] then return nil end
+  return { id = holderId, callerId = h[1], calleeId = h[2], status = h[3] }
+end
+
+local callerHolder = liveHolder(redis.call('GET', KEYS[1]))
+local calleeHolder = liveHolder(redis.call('GET', KEYS[2]))
+
+if callerHolder == nil and calleeHolder == nil then
   write()
   return {'CLAIM'}
 end
 
--- A true mirror call occupies BOTH keys: its caller is our callee and vice versa.
-if callerHolderId == false or calleeHolderId == false or callerHolderId ~= calleeHolderId then
+-- A true mirror call occupies BOTH keys: its caller is our callee and vice versa. This clause —
+-- not the mirror check below — is what confines preemption to calls the invoker is part of.
+if callerHolder == nil or calleeHolder == nil or callerHolder.id ~= calleeHolder.id then
   return {'BUSY'}
 end
 
-local holder = redis.call('HMGET', 'call:' .. callerHolderId, 'callerId', 'calleeId', 'status')
-local isMirror = holder[1] == ARGV[3] and holder[2] == ARGV[2]
-if not isMirror or holder[3] ~= 'RINGING' or callerHolderId <= incomingId then
+local holder = callerHolder
+local isMirror = holder.callerId == ARGV[3] and holder.calleeId == ARGV[2]
+if not isMirror or holder.status ~= 'RINGING' or holder.id <= incomingId then
   return {'BUSY'}
 end
 
 write()
-return {'PREEMPT', callerHolderId}
+return {'PREEMPT', holder.id}
 `;
 
 /** CAS on status. KEYS: call:{id}; ARGV: to, answeredAt, then the allowed `from` values. */
@@ -1640,21 +1798,28 @@ export class CallPrismaRepository implements CallRepository {
   }
 }
 
-/** `$queryRaw` returns the physical column names; the mapper expects the Prisma field names. */
-function fromSnakeCase(row: Record<string, unknown>): never {
+/**
+ * `$queryRaw` returns the physical column names; the mapper expects the Prisma field names.
+ *
+ * Returns `PrismaCall` and casts per field — NOT `never` with a blanket `as never`. A blanket cast
+ * would switch the type checker off on the one path that most needs it: a missing field then
+ * reaches the domain as `undefined` and fails much later, somewhere unrelated.
+ */
+function fromSnakeCase(row: Record<string, unknown>): PrismaCall {
   return {
-    id: row.id,
-    conversationId: row.conversation_id,
-    callerId: row.caller_id,
-    calleeId: row.callee_id,
-    media: row.media,
-    status: row.status,
-    startedAt: row.started_at,
-    answeredAt: row.answered_at,
-    endedAt: row.ended_at,
-    endReason: row.end_reason,
-    endedBy: row.ended_by,
-  } as never;
+    id: row.id as string,
+    conversationId: row.conversation_id as string,
+    callerId: row.caller_id as string,
+    calleeId: row.callee_id as string,
+    media: row.media as PrismaCall['media'],
+    status: row.status as PrismaCall['status'],
+    startedAt: row.started_at as Date,
+    answeredAt: row.answered_at as Date | null,
+    endedAt: row.ended_at as Date | null,
+    endReason: row.end_reason as PrismaCall['endReason'],
+    endedBy: row.ended_by as PrismaCall['endedBy'],
+    updatedAt: row.updated_at as Date,
+  };
 }
 ```
 
@@ -1830,12 +1995,11 @@ export class CallTimersQueue implements CallTimersRepository, OnModuleInit, OnMo
    * adapter.
    */
   async cancelAll(callId: string): Promise<void> {
-    const state = await this.queue?.getJob(jobIdFor('ring', callId));
-    void state;
     for (const kind of ['ring', 'connect', 'max'] as const) {
       await this.cancelById(jobIdFor(kind, callId));
     }
-    // Grace ids carry a studentId; they are removed by the caller, which knows both participants.
+    // `grace` ids carry a studentId, so they cannot be derived from callId alone. `CallsService`
+    // cancels those separately — it knows both participants.
   }
 
   private async cancelById(jobId: string): Promise<void> {
@@ -2362,14 +2526,14 @@ Expected: FAIL — `Cannot find module './calls.service'`
 `src/modules/calls/application/calls.service.ts`:
 
 ```ts
+import { randomUUID } from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
-import { createId } from '@paralleldrive/cuid2';
 import { ERROR_CODE } from '../../../common/errors/error-code';
 import { AppException } from '../../../common/exceptions/app.exception';
 import {
   CONNECTION_CHECK,
   ConnectionCheckRepository,
-} from '../../chat/domain/connection-check.repository';
+} from '../../../infrastructure/social-graph/connection-check.repository';
 import { CALL_REPOSITORY, CallRepository } from '../domain/call.repository';
 import { CALL_STATE_REPOSITORY, CallStateRepository } from '../domain/call-state.repository';
 import { CALL_TIMERS, CallTimersRepository } from '../domain/call-timers.repository';
@@ -2433,7 +2597,8 @@ export class CallsService {
     // Resolved from the pair — a client-supplied conversationId would let a caller inject the CALL
     // message into a conversation they are not a member of (design §6.1.2).
     const conversationId = await this.conversations.findOrCreateDirect(callerId, input.calleeId);
-    const callId = createId();
+    // Generated here, not by Prisma: the id claims both busy keys in Redis before the row exists.
+    const callId = randomUUID();
     const startedAt = new Date();
 
     const decision = await this.state.claim({
@@ -2518,7 +2683,9 @@ export class CallsService {
 
 ⚠️ `AppException.forbidden` `USER_BLOCKED` emas, `FORBIDDEN` kodini beradi. Test `USER_BLOCKED` kutadi — shuning uchun bloklangan holat uchun `new AppException(ERROR_CODE.USER_BLOCKED, 403, '...')` yozing.
 
-⚠️ `createId` importi: loyihada cuid qanday generatsiya qilinishini tekshiring. Prisma `@default(cuid())` DB tomonda ishlaydi, lekin bu yerda id **oldindan** kerak (Redis'ga yozamiz). Agar `@paralleldrive/cuid2` o'rnatilmagan bo'lsa, `node:crypto` `randomUUID()` ishlating va sxemadagi `@default(cuid())` ni saqlab qoling (biz aniq id beramiz, default ishlamaydi).
+⚠️ `randomUUID()` — `node:crypto` dan, yangi dependency **qo'shilmaydi**. Loyihada hech qanday id
+generatori o'rnatilmagan va Prisma'ning `cuid()` i insert paytida ishlaydi, ya'ni bu yerda kech.
+1-vazifada sxema `@default(uuid())` bilan yozilgan, shuning uchun format mos keladi.
 
 - [ ] **Step 5: Testni ishga tushirish**
 
@@ -3137,6 +3304,9 @@ import { AppException } from '../../../../common/exceptions/app.exception';
 import { IceDto, InviteDto, validateWsPayload } from './call-ws.dto';
 
 describe('validateWsPayload', () => {
+  // A real uuid v4 — `callId` is validated with `@IsUUID('4')`, so a filler string is rejected for
+  // the wrong reason and would make these tests pass without proving anything.
+  const CALL_ID = '3f2504e0-4f89-41d3-9a0c-0305e82c3301';
   const validInvite = { calleeId: 'c'.repeat(25), media: CallMedia.AUDIO, sdp: 'v=0\r\n' };
 
   it('accepts a well-formed invite', async () => {
@@ -3175,7 +3345,7 @@ describe('validateWsPayload', () => {
   it('rejects an oversized ICE candidate', async () => {
     await expect(
       validateWsPayload(IceDto, {
-        callId: 'c'.repeat(25),
+        callId: CALL_ID,
         candidate: { candidate: 'x'.repeat(513), sdpMid: '0', sdpMLineIndex: 0 },
       }),
     ).rejects.toBeInstanceOf(AppException);
@@ -3184,7 +3354,7 @@ describe('validateWsPayload', () => {
   it('rejects an out-of-range sdpMLineIndex', async () => {
     await expect(
       validateWsPayload(IceDto, {
-        callId: 'c'.repeat(25),
+        callId: CALL_ID,
         candidate: { candidate: 'a', sdpMid: '0', sdpMLineIndex: 999 },
       }),
     ).rejects.toBeInstanceOf(AppException);
@@ -3220,20 +3390,24 @@ import {
 import { AppException } from '../../../../common/exceptions/app.exception';
 import { CallMedia } from '../../domain/enums/call-media.enum';
 
-const ID = { min: 20, max: 32 } as const;
+/** Student ids are cuids. ⚠️ `callId` is NOT — it is a uuid v4 (36 chars), see `@IsUUID` below. */
+const STUDENT_ID = { min: 20, max: 32 } as const;
 /** An SDP offer with many codecs is a few KB; 64 KB is generous and still bounded. */
 const SDP_MAX = 65_536;
 const CANDIDATE_MAX = 512;
 
 export class CallIdDto {
-  @IsString()
-  @Length(ID.min, ID.max)
+  // ⚠️ uuid, not cuid. `Call.id` is generated with `node:crypto.randomUUID()` because the id must
+  // exist before the row does (it claims the Redis busy keys first). A `@Length(20, 32)` check —
+  // correct for student ids — would reject all 36 characters of every callId the client echoes
+  // back, breaking every event after `call:invite`.
+  @IsUUID('4')
   callId!: string;
 }
 
 export class InviteDto {
   @IsString()
-  @Length(ID.min, ID.max)
+  @Length(STUDENT_ID.min, STUDENT_ID.max)
   calleeId!: string;
 
   @IsEnum(CallMedia)
@@ -3389,6 +3563,9 @@ describe('CallsGateway', () => {
   };
   let gateway: CallsGateway;
   const server = { to: jest.fn().mockReturnThis(), emit: jest.fn() };
+  // The gateway validates payloads with `@IsUUID('4')` on callId — a filler string would be
+  // rejected by validation rather than reaching the code the test is about.
+  const CALL_ID = '3f2504e0-4f89-41d3-9a0c-0305e82c3301';
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -3425,7 +3602,7 @@ describe('CallsGateway', () => {
   // ⚠️ A 4-hour call outlives a 15-minute access token. Refusing `call:end` would leave the
   // microphone and camera streaming until the duration cap fires (design §6.4).
   it('accepts call:end on an expired token', async () => {
-    const ack = await gateway.onEnd(socket('A', -60), { callId: 'c'.repeat(25) });
+    const ack = await gateway.onEnd(socket('A', -60), { callId: CALL_ID });
     expect(ack).toMatchObject({ status: 'ok' });
   });
 
@@ -3846,16 +4023,10 @@ export class MessageCallDto {
 
 `MessageDto` ga `@ApiProperty({ type: MessageCallDto, nullable: true }) call!: MessageCallDto | null;` va `fromDomain` da snapshot ustunlaridan yig'ing.
 
-`chat.gateway.ts` dagi `pushTextFor` ga (1-vazifadagi kompilyatsiya xatosi shu yerda):
-
-```ts
-    case MessageType.CALL:
-      return '📞 Javobsiz qo‘ng‘iroq';
-```
-
-va `switch` oxiriga `default: return 'Xabar';` — eski nusxada (generatsiya qilingan klienti `CALL` dan oldingi) `undefined` qaytmasin.
-
-`message-composition.ts` dagi `REQUIRED_KIND` ga `[MessageType.CALL]: null` qo'shing (ikkinchi kompilyatsiya xatosi).
+⚠️ `pushTextFor` va `REQUIRED_KIND` **1-vazifada allaqachon yopilgan** (u yerdagi Step 7) — `ts-jest`
+type-check qilgani uchun ularni ochiq qoldirish butun test suite'ni yiqitardi. Bu yerda faqat
+tekshiring: `pushTextFor` da `CALL` tarmog'i va `default` bor, `REQUIRED_KIND` da `[MessageType.CALL]:
+null` bor. Yo'q bo'lsa qo'shing; bor bo'lsa tegmang.
 
 - [ ] **Step 6: `CallEndedBus` ga obuna bo'lish**
 
@@ -4032,7 +4203,9 @@ export class ConversationDirectoryPrismaRepository implements ConversationDirect
 
 ```ts
 @Module({
-  imports: [ChatModule /* CONNECTION_CHECK uchun */],
+  // SocialGraphModule (6-vazifada yaratilgan), ChatModule EMAS — chat calls'ga obuna bo'ladi,
+  // shuning uchun teskari import aylanma bog'liqlik yasardi.
+  imports: [PrismaModule, SocialGraphModule, JwtModule.register({})],
   controllers: [CallsController],
   providers: [
     CallsGateway,
@@ -4051,7 +4224,9 @@ export class ConversationDirectoryPrismaRepository implements ConversationDirect
 export class CallsModule {}
 ```
 
-⚠️ **Sikl xavfi.** 17-vazifada `ChatModule` `CallsModule` ni import qiladi, bu yerda `CallsModule` `ChatModule` ni. Buni `forwardRef` bilan **yopmang** — o'rniga `CONNECTION_CHECK` provayderini `ChatModule` dan chiqarib, alohida `SocialGraphModule` ga (yoki `connections` moduliga) ko'chiring va ikkala modul o'shani import qilsin. Bu chalkashlikni butunlay yo'q qiladi.
+✅ **Sikl yo'q.** Bog'liqlik bir tomonlama: `ChatModule → CallsModule → SocialGraphModule`, va
+`ChatModule → SocialGraphModule`. 6-vazifadagi ko'chirish aynan shuning uchun qilingan.
+`forwardRef` **ishlatilmaydi** — agar kerak bo'lib qolsa, demak nimadir noto'g'ri ulangan.
 
 `CallTimersQueue.register(...)` ni `CallsService` `OnModuleInit` da chaqiring:
 
@@ -4273,9 +4448,16 @@ git commit -m "docs(calls): add coturn config, calls protocol doc and regenerate
 
 **Bo'shliqlar (ongli).** 1-bosqichda `POST /v1/calls/{id}/stats`, `Report.callId` va «IP manzilimni yashirish» profil sozlamasi **yo'q** — ular 3-bosqichda. `CallStat` jadvali 1-vazifada yaratiladi (bir migratsiya bo'lsin), lekin unga hech narsa yozilmaydi.
 
-**Ikki joyda ehtiyot bo'lish kerak** (rejada belgilangan, lekin ta'kidlayman):
-1. **18-vazifadagi modul sikli** — `ChatModule ↔ CallsModule`. `forwardRef` bilan yopish o'rniga `CONNECTION_CHECK` ni umumiy modulga chiqarish kerak. Bu implementatsiya paytida qaror talab qiladi.
-2. **12-vazifadagi cuid generatsiyasi** — id Redis'ga yozish uchun oldindan kerak, ya'ni Prisma `@default(cuid())` ishlamaydi. Loyihada allaqachon o'rnatilgan generatorni tekshiring.
+**Ishga tushirishdan oldin hal qilingan ikki ziddiyat** (pre-flight skanida topilgan):
+
+1. **Modul sikli.** `CONNECTION_CHECK` `ChatModule` ichida private edi, ya'ni `CallsModule` uni ola
+   olmasdi; eksport qilish esa 17-vazifadagi `ChatModule → CallsModule` bilan aylana yasardi.
+   **Yechim:** `connection-check` `src/infrastructure/social-graph/` ga ko'chiriladi
+   (`PresenceModule` naqshi) — 6-vazifa. `forwardRef` ishlatilmaydi.
+2. **Id generatsiyasi.** `callId` Redis'ga yozish uchun oldindan kerak, Prisma'ning `cuid()` i esa
+   insert paytida ishlaydi; loyihada hech qanday id generatori o'rnatilmagan.
+   **Yechim:** `node:crypto.randomUUID()` + sxemada `@default(uuid())` — yangi dependency yo'q, va
+   xavfsizlik ko'rigining «id taxmin qilinmasin» talabini ham qondiradi. Spec §2.2 #1 yangilandi.
 
 **Tip muvofiqligi.** `closeCall` 12-vazifada `Promise<void>`, 13-vazifada `Promise<CallOutcome | null>` — 13-vazifa uni ochiq yangilaydi. `CallStateRepository.compareAndSetStatus` ning to'rtinchi argumenti hamma joyda `answeredAt?: string`. `CallTimerKind` — `'ring' | 'connect' | 'max' | 'grace'`, job id'lari `jobIdFor` orqali.
 

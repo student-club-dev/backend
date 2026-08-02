@@ -1,3 +1,6 @@
+import { CallEndReason } from '../../calls/domain/enums/call-end-reason.enum';
+import { CallMedia } from '../../calls/domain/enums/call-media.enum';
+import { CallStatus } from '../../calls/domain/enums/call-status.enum';
 import { MediaProvider } from '../../media/domain/enums/media-kind.enum';
 import { LastSeenVisibility } from '../../profiles/domain/enums/last-seen-visibility.enum';
 import { DeleteScope } from './enums/delete-scope.enum';
@@ -67,6 +70,12 @@ export interface AppendMessageInput {
   albumId: string | null;
   /** The frozen reply snapshot, or null when this message is not a reply (§C1). */
   reply: ReplyColumns | null;
+  /** The call snapshot columns, set only when writing a `CALL` message (`appendCallMessage`). */
+  callId?: string;
+  callMedia?: CallMedia;
+  callStatus?: CallStatus;
+  callDuration?: number;
+  callEndReason?: CallEndReason;
 }
 
 /** The reply/quote columns written on a new message (§C1). */

@@ -230,6 +230,29 @@ docker compose cp ./uploads-backup/. backend:/app/uploads
 > `.env` o'zgargan bo'lsa 5-qadam `docker compose up -d --force-recreate backend` bo'lsin —
 > oddiy `up -d` (va ayniqsa `restart`) muhit o'zgaruvchilarini qayta o'qimasligi mumkin.
 
+> ⚠️ **Ba'zi migratsiyalarda `SET lock_timeout = '3s'` bor — muddat o'tsa, `migrate` avtomatik
+> tiklanmaydi.** Masalan, `20260801112528_calls` migratsiyasida: `calls`/`call_stats`ga FK
+> qo'shish `conversations` va `students`ga SHARE ROW EXCLUSIVE qulf qo'yadi (faqat yozishni
+> to'sadi), `messages`ga ustun qo'shish esa ACCESS EXCLUSIVE qulf qo'yadi (hatto o'qishni ham
+> to'sadi) — shuning uchun u fayl OXIRIGA qoldirilgan. Shu qulflardan biri trafik ostida 3
+> soniyada olinmasa, migratsiya **muvaffaqiyatsiz** deb belgilanadi (butun migratsiya bitta tranzaksiyada
+> ishlagani uchun hech narsa yarim-yo'lda qolmaydi — yoki hammasi, yoki hech narsasi). Shundan
+> keyin **har qanday** keyingi `migrate deploy` (shu jumladan Compose'dagi `migrate` xizmati) darhol
+> shu xato bilan to'xtaydi va boshqa hech narsa qilmaydi:
+> ```
+> Error: P3009
+> migrate found failed migrations in the target database, new migrations will not be applied.
+> ```
+> `backend` xizmati `migrate`ning muvaffaqiyatli tugashiga bog'liq
+> (`condition: service_completed_successfully`), shuning uchun ilova **umuman ko'tarilmaydi** —
+> bu holatdan avtomatik chiqish yo'q, inson qo'lda tiklashi kerak:
+> ```bash
+> # Avval bazani tekshiring (§Tekshirish dagi so'rov) — migratsiya haqiqatan qo'llanmaganini
+> # tasdiqlang, keyingina "rolled back" deb belgilang:
+> docker compose run --rm migrate npx prisma migrate resolve --rolled-back 20260801112528_calls
+> docker compose run --rm migrate    # endi qaytadan urinib ko'radi
+> ```
+
 ## Tekshirish
 
 ```bash
@@ -376,6 +399,107 @@ Tayyor bo'lgach:
 # prisma/seed-data/stickers.json dagi url larni yangilang, keyin:
 npm run prisma:seed-stickers
 ```
+
+## C4. Qo'ng'iroqlar (calls) — TURN va rekonsiliatsiya
+
+Protokolning to'liq tavsifi: `docs/architecture/calls.md`. coturn o'rnatish va sertifikatlar:
+`deploy/coturn/README.md`.
+
+### Ikkita bayroq, ikki xil vaqt: `CALLS_ENABLED` va `CALLS_ENFORCE_TOKEN_EXPIRY`
+
+Ikkalasi ham sukut bo'yicha `false`, lekin turli sabab bilan va turli vaqtda yoqiladi — birini
+ikkinchisi bilan aralashtirmang:
+
+1. **`CALLS_ENABLED`** — qo'ng'iroqlar xususiyatining bosh kaliti, birinchi bo'lib yoqiladi.
+   `false` bo'lsa TURN sozlamalari (`TURN_HOST`/`TURN_STATIC_SECRET`) hech qanday muhitda, shu
+   jumladan productionda ham, boot uchun **shart emas** — `GET /v1/calls/ice-servers` shunchaki
+   mavjud `503` javobini beradi. Bu ataylab: qo'ng'iroq kodi coturn serveridan **va** uchta
+   mobil-klient talabidan oldinroq deploy qilingan, shu oraliqda backend productionda TURN'siz
+   ko'tarilishi kerak. Faqat coturn ko'tarilib, `TURN_HOST`/`TURN_STATIC_SECRET` to'ldirilgandan
+   **keyin** `true` qiling — shundan keyingina productionda TURN majburiy bo'ladi (pastdagi
+   jadval).
+2. **`CALLS_ENFORCE_TOKEN_EXPIRY`** — 1-bayroqdan **keyin**, alohida bosqichda yoqiladi (quyida
+   batafsil): ikkala mobil klient `call:auth` ni joriy qilgandan keyin, aks holda 16 daqiqadan
+   uzun qo'ng'iroqlar socket bilan birga uziladi.
+
+Qisqasi: `CALLS_ENABLED` — "qo'ng'iroqlar umuman ishlaydimi" degan savolni hal qiladi;
+`CALLS_ENFORCE_TOKEN_EXPIRY` — ishlab turgan qo'ng'iroqlar kirish tokeni muddati tugaganda ham
+uziladimi, degan savolni. Birinchisi coturn tayyor bo'lishi bilanoq yoqiladi; ikkinchisi undan
+ancha keyin, mobil `call:auth`ni joylashtirgandan so'ng.
+
+### TURN env o'zgaruvchilari
+
+| O'zgaruvchi | Nega |
+|---|---|
+| `TURN_HOST` | coturn xosti (masalan `turn.elonuz.uz`). `CALLS_ENABLED=true` bo'lganda productionda **majburiy** — bo'lmasa `GET /v1/calls/ice-servers` `503` qaytaradi va NAT ortidagi qo'ng'iroqlar ulanmaydi |
+| `TURN_STATIC_SECRET` | coturn'ning `static-auth-secret` bilan **bir xil** bo'lishi shart (`deploy/coturn/README.md` uni env'dan render qiladi). Mos kelmasa — coturn HMAC'ni rad etadi, relay orqali qo'ng'iroqlar ulanmaydi |
+| `TURN_TTL_SECONDS` | TURN hisobining amal qilish muddati (sukut 3600). Qo'ng'iroqqa emas — hisobga bog'liq: muddati o'tsa, yangi qo'ng'iroqdan oldin qayta olinadi |
+
+**Ishladi:** `GET /v1/calls/ice-servers` `iceServers` ro'yxatini qaytaradi. Tekshirish:
+
+```bash
+docker compose exec -T backend node -e '
+const { buildIceCredential } = require("./dist/modules/calls/infrastructure/ice-credentials");
+console.log(buildIceCredential(process.env.TURN_STATIC_SECRET, "diag", 3600, Date.now()));'
+turnutils_uclient -T -u <shu chiqqan username> -w <shu chiqqan credential> $TURN_HOST
+```
+
+coturn allokatsiyani muvaffaqiyatli deb qaytarsa — xost tirik, sir mos keladi va `denied-peer-ip`
+ro'yxati diagnostika so'rovini bloklamagan. Batafsil: `deploy/coturn/README.md` §Verifying.
+
+### `CALLS_ENFORCE_TOKEN_EXPIRY` — hozircha `false` qoldiring
+
+Bu bayroq `/calls` socket'ini kirish tokeni muddati tugagach (+ 60s zapas) uzadi — o'g'irlangan
+token abadiy `call:incoming` (chaquvchining SDP'si va IP manzili) qabul qilaverishining oldini olish
+uchun (`docs/architecture/calls.md` §Token freshness).
+
+⚠️ **Buni `true` qilishdan oldin ikkala mobil klient ham `call:auth { token }` hodisasini socket
+uzmasdan yubora olishi shart.** Aks holda: kirish tokeni ~15 daqiqada tugaydi, qo'ng'iroq esa 4
+soatgacha davom etishi mumkin — bayroq yoqilgan holda **~16 daqiqadan uzoq har qanday qo'ng'iroq**
+socket uzilishi bilan yopiladi (`FAILED`), bugungidan **yomonroq** natija. `.env.example`da sukut
+`false` — mobil ikkala tomon `call:auth` ni joylashtirmaguncha shu holicha qoldiring.
+
+### `npm run test:redis` — `src/modules/calls/infrastructure/` o'zgarsa majburiy
+
+`call-state.redis.repository.spec.ts` va `call-timers.queue.spec.ts` **jonli Redis** talab qiladi
+(Lua CLAIM/CAS/RELEASE atomikligi va BullMQ'ning job-id validatsiyasi mock qilib bo'lmaydi), shuning
+uchun `TEST_REDIS_URL` bo'lmasa `describe.skip` bilan o'tkazib yuboriladi — ya'ni oddiy `npm test`
+ularni **umuman ishga tushirmaydi**.
+
+⚠️ **`src/modules/calls/infrastructure/` ostidagi har qanday o'zgarishni merge qilishdan oldin
+`npm run test:redis` ni ishga tushiring** (lokal Redis yoki `docker compose up -d redis`). Aks holda
+butun shoxdagi eng xavfli, eng kam ko'rinadigan kod — Redis'dagi jonli holat va taymer joblari —
+umuman tekshirilmagan holda ketadi.
+
+```bash
+docker compose up -d redis
+npm run test:redis
+```
+
+### Rekonsiliatsiya cron ogohlantirishi nimani anglatadi
+
+`src/cron/call-reconciliation.cron.ts` har 10 daqiqada `RINGING`/`CONNECTING`/`ACTIVE` holatida 4
+soatdan ortiq qolgan qo'ng'iroqlarni `FAILED` qilib yopadi — bu Redis yoki BullMQ jonli holatni
+yo'qotgan qo'ng'iroqlar uchun zaxira mexanizm, oddiy taymer emas. Loglarda quyidagicha yozuv
+ko'rinsa:
+
+```
+WARN [CallReconciliationCron] Reconciliation closed N call(s) left live past the duration cap —
+this means live state or a timer job was lost. Check Redis persistence.
+```
+
+bu **normal ish emas** — Redis yoki uning taymer joblari kutilmaganda yo'qolgan. Tekshirish:
+
+1. `docker compose logs redis | grep -i "restart\|shutdown"` — Redis konteyner qayta ishga
+   tushganmi (BullMQ'ning kechiktirilgan joblari xotirada, `appendonly yes` bo'lsa ham qayta
+   yozishda ~1 soniyagacha yo'qotish mumkin).
+2. `docker compose exec redis redis-cli INFO persistence | grep aof_enabled` — `1` bo'lishi kerak;
+   `docker-compose.yml` buni `redis-server --appendonly yes` bilan yoqadi.
+3. Redis xotirasi tugab, key evikatsiyasi bo'lganmi (`maxmemory-policy`) — `busy:`/`call:` kalitlari
+   ham shu Redis'da, OTP va presence bilan bir joyda.
+
+Bitta-ikkita ogohlantirish tasodifiy restart bilan izohlansa muammo emas; tez-tez qaytarilishi
+Redis'ning ishonchliligi bilan bog'liq tub muammoni ko'rsatadi.
 
 ---
 

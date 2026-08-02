@@ -31,6 +31,7 @@ export const STUDENT_DOC_TAGS = [
   'Discounts (student feed)',
   'Connections',
   'Chat',
+  'Calls',
   'Stories',
   'Notifications',
   'Profiles',
@@ -104,6 +105,7 @@ export function buildAppDocuments(
     .addTag('Discounts (student feed)', 'Student app: the offers feed — search, detail, favourites')
     .addTag('Connections', 'Student app: connections, requests, blocks and reports (chat gate)')
     .addTag('Chat', 'Student app: conversations, messages and real-time chat (`/chat` WS)')
+    .addTag('Calls', 'Student app: call history and TURN credentials (signalling is `/calls` WS)')
     .addTag('Stories', 'Student app: 24-hour stories, visible to connections only')
     .addTag('Notifications', 'Student app: device-token registration for push')
     .addTag('Branches', 'Branches of a business: location, working hours, delivery')

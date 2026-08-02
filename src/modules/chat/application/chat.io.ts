@@ -17,11 +17,6 @@ export interface MessagePage {
   hasMore: boolean;
 }
 
-/** Deterministic key for the DIRECT conversation of a pair — order-independent (C3). */
-export function directKeyOf(a: string, b: string): string {
-  return [a, b].sort().join(':');
-}
-
 /**
  * A send request, already parsed from REST body or WS payload. `type` absent means `TEXT` — the
  * shape an older client sends, which must keep working.

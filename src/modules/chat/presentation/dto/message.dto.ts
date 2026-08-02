@@ -1,8 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
+import { CallEndReason } from '../../../calls/domain/enums/call-end-reason.enum';
+import { CallMedia } from '../../../calls/domain/enums/call-media.enum';
+import { CallStatus } from '../../../calls/domain/enums/call-status.enum';
 import { MediaProvider } from '../../../media/domain/enums/media-kind.enum';
 import { AttachmentDto } from '../../../media/presentation/dto/attachment.dto';
 import { BulkDeleteResult } from '../../domain/chat.repository';
-import { Message, ReplySnapshot } from '../../domain/entities/message.entity';
+import { CallSnapshot, Message, ReplySnapshot } from '../../domain/entities/message.entity';
 import { MessageType } from '../../domain/enums/message-type.enum';
 import { MessageSticker } from '../../domain/sticker-directory.repository';
 
@@ -162,6 +165,38 @@ export class ReplyToDto {
   }
 }
 
+/** A finished call, as it appears on the `CALL` message that records it. */
+export class MessageCallDto {
+  @ApiProperty()
+  callId!: string;
+
+  @ApiProperty({ enum: CallMedia, enumName: 'CallMediaDto' })
+  media!: CallMedia;
+
+  @ApiProperty({ enum: CallStatus, enumName: 'CallStatusDto' })
+  status!: CallStatus;
+
+  @ApiProperty({
+    type: 'integer',
+    format: 'int32',
+    description: 'Milliseconds of actual conversation; 0 when the call was never answered.',
+  })
+  durationMs!: number;
+
+  @ApiProperty({ enum: CallEndReason, enumName: 'CallEndReasonDto', nullable: true })
+  endReason!: CallEndReason | null;
+
+  static fromDomain(snapshot: CallSnapshot): MessageCallDto {
+    const dto = new MessageCallDto();
+    dto.callId = snapshot.callId;
+    dto.media = snapshot.media;
+    dto.status = snapshot.status;
+    dto.durationMs = snapshot.durationMs;
+    dto.endReason = snapshot.endReason;
+    return dto;
+  }
+}
+
 /** A chat message on the wire. */
 export class MessageDto {
   @ApiProperty()
@@ -238,6 +273,13 @@ export class MessageDto {
   })
   replyTo!: ReplyToDto | null;
 
+  @ApiProperty({
+    type: () => MessageCallDto,
+    nullable: true,
+    description: 'Set for `CALL` messages; null otherwise.',
+  })
+  call!: MessageCallDto | null;
+
   @ApiProperty({ type: String, format: 'date-time' })
   createdAt!: string;
 
@@ -260,6 +302,7 @@ export class MessageDto {
       message.attachment === null ? null : AttachmentDto.fromDomain(message.attachment, apiBase);
     dto.sticker = message.sticker === null ? null : MessageStickerDto.fromDomain(message.sticker);
     dto.replyTo = message.replyTo === null ? null : ReplyToDto.fromDomain(message.replyTo);
+    dto.call = message.call === null ? null : MessageCallDto.fromDomain(message.call);
     dto.createdAt = message.createdAt.toISOString();
     return dto;
   }

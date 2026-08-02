@@ -241,6 +241,10 @@ model Student {
   mediaAssets             MediaAsset[]
   deviceTokens            DeviceToken[]
 
+  callsMade     Call[]     @relation("CallCaller")
+  callsReceived Call[]     @relation("CallCallee")
+  callStats     CallStat[]
+
   // Profile & stories
   profilePhotos ProfilePhoto[]
   stories       Story[]
@@ -944,6 +948,47 @@ enum ConversationType {
   GROUP
 }
 
+enum CallMedia {
+  AUDIO
+  VIDEO
+}
+
+/// CONNECTING — `accept` bo'ldi, media hali ulanmadi. Usiz §12.4 dagi 30 soniyalik
+/// "accept'dan keyin ulanish" taymeri hech qachon ishlamaydi (dizayn §5.1).
+enum CallStatus {
+  RINGING
+  CONNECTING
+  ACTIVE
+  ENDED
+  MISSED
+  DECLINED
+  FAILED
+  CANCELED
+}
+
+enum CallEndReason {
+  HANGUP
+  TIMEOUT
+  DECLINED
+  BUSY
+  FAILED
+  CANCELED
+  UNAUTHORIZED
+}
+
+/// Kim tugatdi. Student id emas: qiymat faqat ikkitadan biri, va hisob o'chirilsa
+/// osilib qolgan id qolmaydi.
+enum CallParty {
+  CALLER
+  CALLEE
+}
+
+enum IceCandidateType {
+  HOST
+  SRFLX
+  RELAY
+}
+
 enum MessageType {
   TEXT
   IMAGE
@@ -953,6 +998,7 @@ enum MessageType {
   VOICE
   STICKER
   SYSTEM
+  CALL
 }
 
 /// A conversation. `DIRECT` (2 members, unique per pair via `directKey`) in v1; `GROUP` reserved.
@@ -967,6 +1013,7 @@ model Conversation {
   members  ConversationMember[]
   messages Message[]
   media    MediaAsset[]
+  calls    Call[]
 
   @@index([lastMessageAt])
   @@map("conversations")
@@ -1047,6 +1094,15 @@ model Message {
   quoteText         String?      @map("quote_text") @db.VarChar(300)
   quoteOffset       Int?         @map("quote_offset")
 
+  // Qo'ng'iroq yozuvi — snapshot, `replyTo*` va `sticker*` bilan bir xil naqsh. `Call` ga
+  // JOIN qilinmaydi: ishtirokchi hisobi o'chirilsa Call qatori cascade bilan ketadi, xabar
+  // esa qoladi — JOIN'da klient bo'sh "qo'ng'iroq" pufakchasini ko'rardi.
+  callId        String?        @map("call_id")
+  callMedia     CallMedia?     @map("call_media")
+  callStatus    CallStatus?    @map("call_status")
+  callDuration  Int?           @map("call_duration_ms")
+  callEndReason CallEndReason? @map("call_end_reason")
+
   conversation Conversation    @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   sender       Student         @relation(fields: [senderId], references: [id], onDelete: Cascade)
   sticker      Sticker?        @relation(fields: [stickerId], references: [id], onDelete: SetNull)
@@ -1080,6 +1136,67 @@ model MessageHidden {
   @@id([studentId, messageId])
   @@index([messageId])
   @@map("message_hidden")
+}
+
+// ---- Calls (1:1 audio/video calling) ----
+
+/// 1:1 qo'ng'iroq yozuvi. Jonli holat Redis'da; bu qator boshlanish va terminal o'tishda
+/// yoziladi. Terminal yozuvlar doimo shartli (`WHERE status IN (...)`) — 44.9-soniyadagi
+/// `accept` va 45-soniyadagi ring-timeout poygasida holat buzilmasin (dizayn §11).
+model Call {
+  // ⚠️ uuid, not cuid — unlike every other model here. The id must exist BEFORE the row does: it
+  // is written to Redis to claim both participants' busy keys, and only then persisted. Prisma's
+  // `cuid()` runs at insert time, so it cannot supply it, and no id generator is installed.
+  // `node:crypto.randomUUID()` needs no dependency and is cryptographically random — Prisma's
+  // cuid v1 derives part of its value from `Math.random()`, which is predictable. Glare needs only
+  // a deterministic total order (see `glare.ts`), which any id format gives.
+  id             String         @id @default(uuid())
+  conversationId String         @map("conversation_id")
+  callerId       String         @map("caller_id")
+  calleeId       String         @map("callee_id")
+  media          CallMedia
+  status         CallStatus     @default(RINGING)
+  startedAt      DateTime       @default(now()) @map("started_at")
+  answeredAt     DateTime?      @map("answered_at")
+  endedAt        DateTime?      @map("ended_at")
+  endReason      CallEndReason? @map("end_reason")
+  endedBy        CallParty?     @map("ended_by")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  caller       Student      @relation("CallCaller", fields: [callerId], references: [id], onDelete: Cascade)
+  callee       Student      @relation("CallCallee", fields: [calleeId], references: [id], onDelete: Cascade)
+  stats        CallStat[]
+
+  @@index([callerId, startedAt])
+  @@index([calleeId, startedAt])
+  @@index([conversationId])
+  // Rekonsiliatsiya sweep'i (`status IN ('RINGING','CONNECTING','ACTIVE')`) usiz butun
+  // jadvalni skanerlaydi. Partial indeks to'g'riroq bo'lardi, lekin Prisma uni ifodalay
+  // olmaydi va keyingi `migrate dev` uni drift deb o'chirishga urinadi.
+  @@index([status, startedAt])
+  @@map("calls")
+}
+
+/// Har ishtirokchining o'z telemetriyasi (3-bosqichda to'ldiriladi). Ikki tomonning
+/// metrikasi har xil — biri `RELAY`, ikkinchisi `SRFLX` bo'lishi mumkin — shuning uchun
+/// `calls` ustunlari emas, alohida qator.
+model CallStat {
+  callId          String           @map("call_id")
+  studentId       String           @map("student_id")
+  rttMs           Int?             @map("rtt_ms")
+  packetsLost     Int?             @map("packets_lost")
+  packetsReceived Int?             @map("packets_received")
+  jitterMs        Int?             @map("jitter_ms")
+  candidateType   IceCandidateType @map("candidate_type")
+  createdAt       DateTime         @default(now()) @map("created_at")
+
+  call    Call    @relation(fields: [callId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@id([callId, studentId])
+  @@index([studentId])
+  @@map("call_stats")
 }
 
 // ---- Chat media (uploads + sticker catalogue — chat media spec parts A/§1–§5) ----

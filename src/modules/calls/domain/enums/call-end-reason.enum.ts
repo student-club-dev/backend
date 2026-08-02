@@ -1,0 +1,9 @@
+export enum CallEndReason {
+  HANGUP = 'HANGUP',
+  TIMEOUT = 'TIMEOUT',
+  DECLINED = 'DECLINED',
+  BUSY = 'BUSY',
+  FAILED = 'FAILED',
+  CANCELED = 'CANCELED',
+  UNAUTHORIZED = 'UNAUTHORIZED',
+}

@@ -15,6 +15,8 @@ const REQUIRED_KIND: Record<MessageType, MediaKind | null> = {
   [MessageType.TEXT]: null,
   [MessageType.STICKER]: null,
   [MessageType.SYSTEM]: null,
+  // A CALL row is written by the server and never carries a MediaAsset — null, same as SYSTEM.
+  [MessageType.CALL]: null,
   [MessageType.IMAGE]: MediaKind.IMAGE,
   [MessageType.GIF]: MediaKind.GIF,
   [MessageType.VIDEO]: MediaKind.VIDEO,

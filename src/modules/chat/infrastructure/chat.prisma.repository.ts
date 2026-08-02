@@ -1,5 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import {
+  CallEndReason as PrismaCallEndReason,
+  CallMedia as PrismaCallMedia,
+  CallStatus as PrismaCallStatus,
   Conversation as PrismaConversation,
   MessageType as PrismaMessageType,
   Prisma,
@@ -89,6 +92,19 @@ function visibleTo(conversationId: string, viewer: MessageViewer): Prisma.Messag
     hidden: { none: { studentId: viewer.studentId } },
   };
 }
+
+/**
+ * Only a MISSED call is unread (§14.2) — answering, declining or cancelling a call is not a message
+ * waiting to be read, even though the row's sender is the caller.
+ *
+ * ⚠️ Enforced here, in the unread predicate, and NOT by advancing the callee's read cursor when the
+ * row is written: the cursor is shared by every message in the conversation and a CALL row always
+ * carries the highest `seq`, so moving it marked every text the callee had never opened as read.
+ * `unreadSummary`'s raw SQL carries the same clause by hand — keep the three in step.
+ */
+const NOT_A_SEEN_CALL: Prisma.MessageWhereInput = {
+  NOT: { type: PrismaMessageType.CALL, callStatus: { not: PrismaCallStatus.MISSED } },
+};
 
 /** Deterministic newest-first ordering (§A4.2). */
 const NEWEST_FIRST = [
@@ -194,6 +210,12 @@ export class ChatPrismaRepository implements ChatRepository {
             replyToPreview: input.reply?.replyToPreview ?? null,
             quoteText: input.reply?.quoteText ?? null,
             quoteOffset: input.reply?.quoteOffset ?? null,
+            callId: input.callId ?? null,
+            callMedia: input.callMedia === undefined ? null : PrismaCallMedia[input.callMedia],
+            callStatus: input.callStatus === undefined ? null : PrismaCallStatus[input.callStatus],
+            callDuration: input.callDuration ?? null,
+            callEndReason:
+              input.callEndReason === undefined ? null : PrismaCallEndReason[input.callEndReason],
           },
         });
         // A new message un-hides the conversation for anyone who deleted it (§B2), in the same
@@ -417,6 +439,9 @@ export class ChatPrismaRepository implements ChatRepository {
          AND m.seq > GREATEST(cm.last_read_seq, cm.cleared_before_seq)
          AND m.sender_id <> cm.student_id
          AND m.deleted_at IS NULL
+         -- NOT_A_SEEN_CALL by hand: only a MISSED call is unread (§14.2). A non-CALL row makes the
+         -- left side false, so the NOT holds whatever call_status is.
+         AND NOT (m.type = 'CALL' AND m.call_status <> 'MISSED')
          AND NOT EXISTS (
            SELECT 1 FROM message_hidden h
            WHERE h.message_id = m.id AND h.student_id = cm.student_id
@@ -495,6 +520,7 @@ export class ChatPrismaRepository implements ChatRepository {
         tx.message.count({
           where: {
             ...visibleTo(conversationId, viewer),
+            ...NOT_A_SEEN_CALL,
             seq: { gt: Math.max(viewer.lastReadSeq, viewer.clearedBeforeSeq) },
             senderId: { not: viewer.studentId },
             deletedAt: null,
@@ -597,6 +623,7 @@ export class ChatPrismaRepository implements ChatRepository {
       this.prisma.message.count({
         where: {
           ...visibleTo(conversation.id, viewer),
+          ...NOT_A_SEEN_CALL,
           seq: { gt: Math.max(membership.lastReadSeq, membership.clearedBeforeSeq) },
           senderId: { not: studentId },
           // A deleted message must not keep the badge lit: it is invisible, so it can never be read.

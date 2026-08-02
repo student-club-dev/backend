@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { directKeyFor } from '../../../common/chat/direct-key';
 import { ERROR_CODE } from '../../../common/errors/error-code';
 import { AppException } from '../../../common/exceptions/app.exception';
 import type { AuthenticatedUser } from '../../../common/types/authenticated-user';
@@ -6,6 +7,11 @@ import {
   PRESENCE_REPOSITORY,
   PresenceRepository,
 } from '../../../infrastructure/presence/presence.repository';
+import {
+  CONNECTION_CHECK,
+  ConnectionCheckRepository,
+} from '../../../infrastructure/social-graph/connection-check.repository';
+import { Call, durationMsOf } from '../../calls/domain/entities/call.entity';
 import { applyPresenceVisibility } from '../../connections/domain/presence-visibility';
 import { LastSeenVisibility } from '../../profiles/domain/enums/last-seen-visibility.enum';
 import {
@@ -38,11 +44,10 @@ import {
   normalizeBody,
   requiredKindFor,
 } from '../domain/message-composition';
-import { CONNECTION_CHECK, ConnectionCheckRepository } from '../domain/connection-check.repository';
 import { Conversation, ConversationMember } from '../domain/entities/conversation.entity';
 import { ConversationListItem } from '../domain/entities/conversation-view.entity';
 import { Message } from '../domain/entities/message.entity';
-import { directKeyOf, ExternalGifRef, MessagePage, Page, SendMessageInput } from './chat.io';
+import { ExternalGifRef, MessagePage, Page, SendMessageInput } from './chat.io';
 
 /** §A2 caps one batch at 100 ids. */
 const MAX_DELETE_IDS = 100;
@@ -70,7 +75,7 @@ export class ChatService {
     if (!(await this.connectionCheck.areConnected(user.id, otherId))) {
       throw new AppException(ERROR_CODE.NOT_CONNECTED, 403, "Avval bog'lanish kerak");
     }
-    const directKey = directKeyOf(user.id, otherId);
+    const directKey = directKeyFor(user.id, otherId);
     return (
       (await this.chat.findDirect(directKey)) ??
       (await this.chat.createDirect(directKey, user.id, otherId))
@@ -85,8 +90,10 @@ export class ChatService {
    */
   async sendMessage(user: AuthenticatedUser, input: SendMessageInput): Promise<Message> {
     const type = input.type ?? MessageType.TEXT;
-    if (type === MessageType.SYSTEM) {
-      throw AppException.validation({ type: 'SYSTEM xabarni yuborib bo‘lmaydi' });
+    // Server-authored types. SYSTEM and CALL rows are written by the server itself — accepting one
+    // from a client would let anyone forge a system notice or a call that never happened.
+    if (type === MessageType.SYSTEM || type === MessageType.CALL) {
+      throw AppException.validation({ type: 'Bu turdagi xabarni yuborib bo‘lmaydi' });
     }
 
     const body = normalizeBody(type, input.body);
@@ -113,6 +120,40 @@ export class ChatService {
       stickerId: sticker.stickerId,
       externalSticker: sticker.externalSticker,
       albumId: input.albumId ?? null,
+    });
+  }
+
+  /**
+   * Write the chat record for a finished call. Called from the CallEndedBus subscription, not by a
+   * client — chat owns `seq`, so the row must go through `appendMessage` (which increments
+   * `Conversation.nextSeq` inside a transaction) rather than a fresh insert.
+   *
+   * The call details are snapshotted onto the message rather than joined from `calls`: if either
+   * participant's account is deleted the call row cascades away, and a join would leave the client
+   * rendering an empty bubble. Same reasoning as the `replyTo*` and `sticker*` columns.
+   *
+   * ⚠️ The read cursor is deliberately NOT advanced here. "Only a MISSED call is unread" (§14.2) is
+   * enforced in the repository's unread predicate instead: the cursor is shared by every message in
+   * the conversation, and this row carries the highest `seq`, so moving it to `message.seq` marked
+   * every text the callee had not opened as read as a side effect of answering the phone.
+   */
+  async appendCallMessage(call: Call): Promise<Message> {
+    return this.chat.appendMessage({
+      conversationId: call.conversationId,
+      senderId: call.callerId,
+      type: MessageType.CALL,
+      body: null,
+      clientMsgId: null,
+      mediaId: null,
+      stickerId: null,
+      externalSticker: null,
+      albumId: null,
+      reply: null,
+      callId: call.id,
+      callMedia: call.media,
+      callStatus: call.status,
+      callDuration: durationMsOf(call),
+      callEndReason: call.endReason ?? undefined,
     });
   }
 

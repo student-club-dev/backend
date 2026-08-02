@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
@@ -8,6 +9,11 @@ import { ResponseInterceptor } from '../src/common/interceptors/response.interce
 import { validationExceptionFactory } from '../src/common/validation/validation-exception.factory';
 import type { Env } from '../src/config/env';
 import { PrismaService } from '../src/infrastructure/database/prisma.service';
+import { Call } from '../src/modules/calls/domain/entities/call.entity';
+import { CallEndReason } from '../src/modules/calls/domain/enums/call-end-reason.enum';
+import { CallMedia } from '../src/modules/calls/domain/enums/call-media.enum';
+import { CallParty } from '../src/modules/calls/domain/enums/call-party.enum';
+import { CallStatus } from '../src/modules/calls/domain/enums/call-status.enum';
 import { ChatService } from '../src/modules/chat/application/chat.service';
 
 const A_EMAIL = 'e2e-chat-a@example.com';
@@ -1002,5 +1008,105 @@ describe('Connections + Chat — e2e', () => {
     expect(firstEmpty).toBeGreaterThan(-1);
     // Once the empty ones start they must not be interrupted — Postgres used to put them first.
     expect(stamps.slice(firstEmpty).every((stamp) => stamp === null)).toBe(true);
+  });
+
+  /**
+   * ⚠️ "Only a MISSED call is unread" (§14.2) used to be implemented by advancing the callee's READ
+   * cursor to the CALL row's `seq`. That cursor is shared by the whole conversation and the CALL row
+   * always carries its highest `seq` — so answering the phone silently marked every message the
+   * callee had never opened as read. Run against a real database because the bug was in what the
+   * count query returns, not in what the service intended.
+   */
+  describe('a finished call and the unread badge (§14.2)', () => {
+    let seeded = 0;
+
+    /** A fresh A↔B conversation holding `count` texts from A that B has never opened. */
+    async function conversationWithUnread(count: number): Promise<string> {
+      seeded += 1;
+      const convo = await prisma.conversation.create({
+        data: {
+          directKey: `call-unread-${seeded}:${aId}`,
+          nextSeq: count + 1,
+          lastMessageAt: new Date(),
+          members: { create: [{ studentId: aId }, { studentId: bId }] },
+        },
+      });
+      await prisma.message.createMany({
+        data: Array.from({ length: count }, (_, index) => ({
+          conversationId: convo.id,
+          senderId: aId,
+          seq: index + 1,
+          type: 'TEXT' as const,
+          body: `o'qilmagan ${index + 1}`,
+        })),
+      });
+      return convo.id;
+    }
+
+    async function unreadIn(token: string, convId: string): Promise<number> {
+      const res = await request(app.getHttpServer())
+        .get('/v1/conversations?page=1&size=100')
+        .set('Authorization', auth(token))
+        .expect(200);
+      const row = (
+        res.body.result.items as { conversation: { id: string }; unreadCount: number }[]
+      ).find((item) => item.conversation.id === convId);
+      return row?.unreadCount ?? 0;
+    }
+
+    /** The badge on the chat tab — a different query (raw SQL) than the per-conversation count. */
+    async function unreadTotal(token: string): Promise<number> {
+      const res = await request(app.getHttpServer())
+        .get('/v1/conversations/unread-count')
+        .set('Authorization', auth(token))
+        .expect(200);
+      return res.body.result.total as number;
+    }
+
+    /** A → B, answered and hung up after ~3 minutes unless overridden. */
+    const finishedCall = (conversationId: string, overrides: Partial<Call> = {}): Call => ({
+      id: randomUUID(),
+      conversationId,
+      callerId: aId,
+      calleeId: bId,
+      media: CallMedia.AUDIO,
+      status: CallStatus.ENDED,
+      startedAt: new Date('2026-08-01T10:00:00.000Z'),
+      answeredAt: new Date('2026-08-01T10:00:10.000Z'),
+      endedAt: new Date('2026-08-01T10:03:14.000Z'),
+      endReason: CallEndReason.HANGUP,
+      endedBy: CallParty.CALLEE,
+      ...overrides,
+    });
+
+    it('keeps the texts B never opened unread when B answers A’s call', async () => {
+      const convId = await conversationWithUnread(3);
+      expect(await unreadIn(bToken, convId)).toBe(3);
+      const totalBefore = await unreadTotal(bToken);
+
+      await app.get(ChatService).appendCallMessage(finishedCall(convId));
+
+      // 3, not 0 (the cursor used to jump to the CALL row) and not 4 (an answered call is not unread).
+      expect(await unreadIn(bToken, convId)).toBe(3);
+      expect(await unreadTotal(bToken)).toBe(totalBefore);
+    });
+
+    it('counts a missed call as unread, on top of the texts', async () => {
+      const convId = await conversationWithUnread(2);
+      const totalBefore = await unreadTotal(bToken);
+
+      await app.get(ChatService).appendCallMessage(
+        finishedCall(convId, {
+          status: CallStatus.MISSED,
+          answeredAt: null,
+          endedAt: new Date('2026-08-01T10:00:45.000Z'),
+          endReason: CallEndReason.TIMEOUT,
+          endedBy: null,
+        }),
+      );
+
+      expect(await unreadIn(bToken, convId)).toBe(3);
+      expect(await unreadTotal(bToken)).toBe(totalBefore + 1);
+    });
   });
 });

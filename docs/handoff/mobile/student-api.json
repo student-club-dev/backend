@@ -8179,6 +8179,345 @@
         ]
       }
     },
+    "/v1/calls/ice-servers": {
+      "get": {
+        "operationId": "CallsController_iceServers",
+        "summary": "Vaqtinchalik TURN/STUN hisobi",
+        "description": "A coturn `use-auth-secret` account valid for `ttlSeconds`. Feed `iceServers` straight into `RTCConfiguration`. Not tied to a call: fetch one before dialling and re-fetch once expired.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "$ref": "#/components/schemas/IceServersDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (`UNAUTHORIZED`), or expired (`TOKEN_EXPIRED`) — refresh and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 401
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Avtorizatsiyadan o‘tilmagan"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UNAUTHORIZED",
+                            "message": "Avtorizatsiyadan o‘tilmagan",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not a STUDENT account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 403
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Ruxsat yo‘q"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "FORBIDDEN",
+                            "message": "Ruxsat yo‘q",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "TURN is not configured on this deployment (`TURN_HOST`/`TURN_STATIC_SECRET`). Only possible outside production — the env schema requires both there.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 503
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Qo‘ng‘iroq xizmati sozlanmagan"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "NOT_IMPLEMENTED",
+                            "message": "Qo‘ng‘iroq xizmati sozlanmagan",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Calls"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/calls": {
+      "get": {
+        "operationId": "CallsController_list",
+        "summary": "Qo‘ng‘iroqlar tarixi",
+        "description": "Newest first. Only the caller’s own calls — the `callerId = me OR calleeId = me` filter runs in SQL, so another student’s call is never loaded, let alone paginated over.",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "format": "int32",
+              "default": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "size",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "format": "int32",
+              "default": 20,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "$ref": "#/components/schemas/CallListDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (`UNAUTHORIZED`), or expired (`TOKEN_EXPIRED`) — refresh and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 401
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Avtorizatsiyadan o‘tilmagan"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UNAUTHORIZED",
+                            "message": "Avtorizatsiyadan o‘tilmagan",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not a STUDENT account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 403
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Ruxsat yo‘q"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "FORBIDDEN",
+                            "message": "Ruxsat yo‘q",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Calls"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/v1/conversations": {
       "post": {
         "operationId": "ConversationsController_open",
@@ -13151,6 +13490,10 @@
     {
       "name": "Chat",
       "description": "Student app: conversations, messages and real-time chat (`/chat` WS)"
+    },
+    {
+      "name": "Calls",
+      "description": "Student app: call history and TURN credentials (signalling is `/calls` WS)"
     },
     {
       "name": "Stories",
@@ -20891,6 +21234,196 @@
           "reason"
         ]
       },
+      "IceServerDto": {
+        "type": "object",
+        "properties": {
+          "urls": {
+            "example": [
+              "turn:turn.elonuz.uz:3478?transport=udp"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "username": {
+            "type": "string",
+            "description": "`<expiryUnixSeconds>:<studentId>` — absent on the STUN entry, which needs no auth."
+          },
+          "credential": {
+            "type": "string",
+            "description": "base64(HMAC-SHA1(TURN_STATIC_SECRET, username))."
+          }
+        },
+        "required": [
+          "urls"
+        ]
+      },
+      "IceServersDto": {
+        "type": "object",
+        "properties": {
+          "iceServers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IceServerDto"
+            }
+          },
+          "ttlSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "description": "How long the credential stays valid. Fetch a new one before placing a call once it has expired — the credential is not tied to a call and is not refreshed by one."
+          }
+        },
+        "required": [
+          "iceServers",
+          "ttlSeconds"
+        ]
+      },
+      "CallDirectionDto": {
+        "type": "string",
+        "description": "Relative to the authenticated student, not to the row.",
+        "enum": [
+          "INCOMING",
+          "OUTGOING"
+        ]
+      },
+      "CallMediaDto": {
+        "type": "string",
+        "enum": [
+          "AUDIO",
+          "VIDEO"
+        ]
+      },
+      "CallStatusDto": {
+        "type": "string",
+        "enum": [
+          "RINGING",
+          "CONNECTING",
+          "ACTIVE",
+          "ENDED",
+          "MISSED",
+          "DECLINED",
+          "FAILED",
+          "CANCELED"
+        ]
+      },
+      "CallEndReasonDto": {
+        "type": "string",
+        "enum": [
+          "HANGUP",
+          "TIMEOUT",
+          "DECLINED",
+          "BUSY",
+          "FAILED",
+          "CANCELED",
+          "UNAUTHORIZED"
+        ]
+      },
+      "CallPartyDto": {
+        "type": "string",
+        "enum": [
+          "CALLER",
+          "CALLEE"
+        ]
+      },
+      "CallDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "conversationId": {
+            "type": "string"
+          },
+          "peerId": {
+            "type": "string",
+            "description": "The other party — never the reader."
+          },
+          "direction": {
+            "$ref": "#/components/schemas/CallDirectionDto"
+          },
+          "media": {
+            "$ref": "#/components/schemas/CallMediaDto"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CallStatusDto"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "answeredAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "endedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "durationMs": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Milliseconds of actual conversation; 0 when the call was never answered."
+          },
+          "endReason": {
+            "nullable": true,
+            "$ref": "#/components/schemas/CallEndReasonDto"
+          },
+          "endedBy": {
+            "nullable": true,
+            "$ref": "#/components/schemas/CallPartyDto"
+          }
+        },
+        "required": [
+          "id",
+          "conversationId",
+          "peerId",
+          "direction",
+          "media",
+          "status",
+          "startedAt",
+          "answeredAt",
+          "endedAt",
+          "durationMs",
+          "endReason",
+          "endedBy"
+        ]
+      },
+      "CallListDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CallDto"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "hasNext": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "size",
+          "total",
+          "hasNext"
+        ]
+      },
       "ConversationTypeDto": {
         "type": "string",
         "enum": [
@@ -20940,7 +21473,8 @@
           "FILE",
           "VOICE",
           "STICKER",
-          "SYSTEM"
+          "SYSTEM",
+          "CALL"
         ]
       },
       "MessageStickerDto": {
@@ -21066,6 +21600,36 @@
           "originalDeleted"
         ]
       },
+      "MessageCallDto": {
+        "type": "object",
+        "properties": {
+          "callId": {
+            "type": "string"
+          },
+          "media": {
+            "$ref": "#/components/schemas/CallMediaDto"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CallStatusDto"
+          },
+          "durationMs": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Milliseconds of actual conversation; 0 when the call was never answered."
+          },
+          "endReason": {
+            "nullable": true,
+            "$ref": "#/components/schemas/CallEndReasonDto"
+          }
+        },
+        "required": [
+          "callId",
+          "media",
+          "status",
+          "durationMs",
+          "endReason"
+        ]
+      },
       "MessageDto": {
         "type": "object",
         "properties": {
@@ -21133,6 +21697,15 @@
               }
             ]
           },
+          "call": {
+            "nullable": true,
+            "description": "Set for `CALL` messages; null otherwise.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MessageCallDto"
+              }
+            ]
+          },
           "createdAt": {
             "type": "string",
             "format": "date-time"
@@ -21151,6 +21724,7 @@
           "attachment",
           "sticker",
           "replyTo",
+          "call",
           "createdAt"
         ]
       },
