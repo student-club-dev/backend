@@ -1,11 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { ConnectionStatus } from '@prisma/client';
-import { PrismaService } from '../../../infrastructure/database/prisma.service';
-import { ConnectionCheckRepository } from '../domain/connection-check.repository';
+import { PrismaService } from '../database/prisma.service';
+import { ConnectionCheckRepository, ConnectionState } from './connection-check.repository';
 
 /**
- * Reads the connections/blocks tables to answer "are these two connected?" — the chat gate (C1).
- * Kept in chat/infrastructure so chat depends only on this shape, not the connections module.
+ * Reads the connections/blocks tables to answer "are these two connected?" — the chat gate (C1)
+ * and, via `connectionState`, the calls gate. Its own port so callers depend only on this shape,
+ * not the connections module.
  */
 @Injectable()
 export class ConnectionCheckPrismaRepository implements ConnectionCheckRepository {
@@ -55,5 +56,31 @@ export class ConnectionCheckPrismaRepository implements ConnectionCheckRepositor
       edges.map((row) => (row.requesterId === studentId ? row.addresseeId : row.requesterId)),
     );
     return [...ids].filter((id) => !blocked.has(id));
+  }
+
+  async connectionState(a: string, b: string): Promise<ConnectionState> {
+    const blocked = await this.prisma.block.findFirst({
+      where: {
+        OR: [
+          { blockerId: a, blockedId: b },
+          { blockerId: b, blockedId: a },
+        ],
+      },
+      select: { blockerId: true },
+    });
+    if (blocked !== null) {
+      return 'BLOCKED';
+    }
+    const connection = await this.prisma.connection.findFirst({
+      where: {
+        status: ConnectionStatus.ACCEPTED,
+        OR: [
+          { requesterId: a, addresseeId: b },
+          { requesterId: b, addresseeId: a },
+        ],
+      },
+      select: { id: true },
+    });
+    return connection === null ? 'NOT_CONNECTED' : 'CONNECTED';
   }
 }

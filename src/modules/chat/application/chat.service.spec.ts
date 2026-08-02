@@ -2,6 +2,7 @@ import { AccountType } from '../../../common/enums/account-type.enum';
 import { ERROR_CODE } from '../../../common/errors/error-code';
 import type { AuthenticatedUser } from '../../../common/types/authenticated-user';
 import { PresenceRepository } from '../../../infrastructure/presence/presence.repository';
+import { ConnectionCheckRepository } from '../../../infrastructure/social-graph/connection-check.repository';
 import { LastSeenVisibility } from '../../profiles/domain/enums/last-seen-visibility.enum';
 import { PhoneVisibility } from '../../profiles/domain/enums/phone-visibility.enum';
 import { MediaAsset } from '../../media/domain/entities/media-asset.entity';
@@ -10,7 +11,6 @@ import { MediaKind, MediaProvider, MediaStatus } from '../../media/domain/enums/
 import { AppendMessageInput, ChatRepository, MessageAuthRow } from '../domain/chat.repository';
 import { DeleteScope } from '../domain/enums/delete-scope.enum';
 import { MessageSticker, StickerDirectoryRepository } from '../domain/sticker-directory.repository';
-import { ConnectionCheckRepository } from '../domain/connection-check.repository';
 import { Conversation, ConversationMember } from '../domain/entities/conversation.entity';
 import { ConversationListItem } from '../domain/entities/conversation-view.entity';
 import { Message } from '../domain/entities/message.entity';
@@ -45,6 +45,7 @@ function message(overrides: Partial<Message> = {}): Message {
     attachment: null,
     sticker: null,
     replyTo: null,
+    call: null,
     createdAt: new Date('2026-07-01T00:00:00Z'),
     ...overrides,
   };
@@ -150,6 +151,7 @@ function makeConnectionCheck(
   return {
     areConnected: jest.fn().mockResolvedValue(connected),
     connectedIds: jest.fn().mockResolvedValue(connectedIds),
+    connectionState: jest.fn().mockResolvedValue(connected ? 'CONNECTED' : 'NOT_CONNECTED'),
   };
 }
 
@@ -541,6 +543,12 @@ describe('ChatService', () => {
     it('refuses a client-sent SYSTEM message', async () => {
       await expect(
         makeService().sendMessage(me, { conversationId: 'conv-1', type: MessageType.SYSTEM }),
+      ).rejects.toMatchObject({ code: ERROR_CODE.VALIDATION_ERROR });
+    });
+
+    it('refuses a client-sent CALL message', async () => {
+      await expect(
+        makeService().sendMessage(me, { conversationId: 'conv-1', type: MessageType.CALL }),
       ).rejects.toMatchObject({ code: ERROR_CODE.VALIDATION_ERROR });
     });
   });

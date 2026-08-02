@@ -162,7 +162,7 @@ export class SendMessageDto {
     enumName: 'MessageTypeDto',
     description:
       'Omit for a plain text message — that is what an older client sends, and it keeps working. ' +
-      '`SYSTEM` is server-only and rejected here.',
+      '`SYSTEM` and `CALL` are server-only and rejected here.',
   })
   @IsOptional()
   @IsEnum(MessageType)

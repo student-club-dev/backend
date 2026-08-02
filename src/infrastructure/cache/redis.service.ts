@@ -57,6 +57,11 @@ export class RedisService implements OnModuleDestroy {
     await this.client.expire(key, ttlSeconds);
   }
 
+  /** Seconds until the key expires, `-1` if it has no expiry, `-2` if it does not exist. */
+  ttl(key: string): Promise<number> {
+    return this.client.ttl(key);
+  }
+
   async hset(key: string, values: Record<string, string | number>): Promise<void> {
     await this.client.hset(key, values);
   }
@@ -71,6 +76,17 @@ export class RedisService implements OnModuleDestroy {
 
   async del(key: string): Promise<void> {
     await this.client.del(key);
+  }
+
+  /**
+   * Run a Lua script server-side. The only way to make a multi-key decision atomic — the call
+   * glare rule reads two `busy:` keys and writes three, and a two-command version would let two
+   * simultaneous invites both conclude "the peer is free".
+   *
+   * Kept here rather than exposing the raw client: this file is the single place Redis is spoken to.
+   */
+  eval(script: string, keys: string[], args: string[]): Promise<unknown> {
+    return this.client.eval(script, keys.length, ...keys, ...args);
   }
 
   /**

@@ -4,7 +4,7 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { StudentGuard } from '../../common/guards/student.guard';
 import { PrismaModule } from '../../infrastructure/database/prisma.module';
 import { PresenceModule } from '../../infrastructure/presence/presence.module';
-import { ConnectionCheckPrismaRepository } from '../chat/infrastructure/connection-check.prisma.repository';
+import { ConnectionCheckPrismaRepository } from '../../infrastructure/social-graph/connection-check.prisma.repository';
 import { ConnectionsModule } from '../connections/connections.module';
 import { MediaModule } from '../media/media.module';
 import { StoriesService } from './application/stories.service';

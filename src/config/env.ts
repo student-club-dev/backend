@@ -92,6 +92,27 @@ export const envSchema = z
     ADMIN_PASSWORD_HASH: z.string().optional(),
     MODERATOR_EMAIL: z.string().optional(),
     MODERATOR_PASSWORD_HASH: z.string().optional(),
+
+    // TURN (coturn `use-auth-secret` REST scheme) for 1:1 calls. Left optional here — a missing
+    // value must fail loudly in production when CALLS_ENABLED=true (see superRefine below), not
+    // silently boot with a guessable default the way JWT_ACCESS_SECRET currently does. `.min(1)`
+    // matters as much as `.optional()`: `.env.example` ships these blank, and a blank string is
+    // still "defined".
+    TURN_HOST: z.string().min(1).optional(),
+    TURN_STATIC_SECRET: z.string().min(1).optional(),
+    TURN_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
+
+    // Master switch for the calls feature. Defaults OFF: the calls code ships ahead of a deployed
+    // coturn server and the mobile-client prerequisites it depends on. While false, TURN
+    // configuration is NOT required to boot in any environment — `GET /v1/calls/ice-servers`
+    // simply keeps answering its existing 503. Flip to true only once coturn is up; production
+    // then requires TURN_HOST/TURN_STATIC_SECRET exactly as before this flag existed.
+    CALLS_ENABLED: z.enum(['true', 'false']).default('false'),
+
+    // Gates `CallsGateway`'s exp+grace disconnect (design §6.4). Defaults OFF: until both mobile
+    // clients send `call:auth` to refresh a socket's token in place, enforcing this tears down
+    // every call longer than ~16 minutes — strictly worse than the pre-existing gap it closes.
+    CALLS_ENFORCE_TOKEN_EXPIRY: z.enum(['true', 'false']).default('false'),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === 'production') {
@@ -102,6 +123,17 @@ export const envSchema = z
           path: ['PUBLIC_MEDIA_BASE_URL'],
           message:
             'must be a public URL in production, not localhost — e.g. https://api.studentclub.uz/uploads',
+        });
+      }
+
+      if (env.CALLS_ENABLED === 'true' && (!env.TURN_HOST || !env.TURN_STATIC_SECRET)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['TURN_HOST'],
+          message:
+            'TURN_HOST and TURN_STATIC_SECRET are required in production when CALLS_ENABLED=true ' +
+            '— without them GET /v1/calls/ice-servers returns nothing usable and calls behind NAT ' +
+            'never connect.',
         });
       }
     }
@@ -115,6 +147,10 @@ export function validateEnv(config: Record<string, unknown>): Env {
     const issues = parsed.error.issues
       .map((i) => `  - ${i.path.join('.')}: ${i.message}`)
       .join('\n');
+    // console, not the Pino logger: this runs at bootstrap, before Nest's DI container (and thus
+    // the logger) exists — it is what decides whether boot proceeds far enough to construct one.
+    // Without this, a bad env produced a bare, silent process exit with no diagnostic at all.
+    console.error(`Invalid environment variables:\n${issues}`);
     throw new Error(`Invalid environment variables:\n${issues}`);
   }
   return parsed.data;

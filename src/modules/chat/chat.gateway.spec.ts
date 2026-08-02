@@ -1,12 +1,16 @@
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import type { Server } from 'socket.io';
+import { CallEndedBus } from '../calls/application/call-ended.bus';
+import { CallEndReason } from '../calls/domain/enums/call-end-reason.enum';
+import { CallMedia } from '../calls/domain/enums/call-media.enum';
+import { CallStatus } from '../calls/domain/enums/call-status.enum';
 import { MediaReadyBus } from '../media/application/media-ready.bus';
 import { NotificationsService } from '../notifications/application/notifications.service';
 import { CHAT_EVENT } from './application/chat-events';
 import { ChatService } from './application/chat.service';
 import { ChatGateway } from './chat.gateway';
-import { Message } from './domain/entities/message.entity';
+import { CallSnapshot, Message } from './domain/entities/message.entity';
 import { MessageType } from './domain/enums/message-type.enum';
 
 const SENDER = 'std_sender';
@@ -25,6 +29,7 @@ const message: Message = {
   attachment: null,
   sticker: null,
   replyTo: null,
+  call: null,
   createdAt: new Date('2026-07-28T09:14:22.531Z'),
 };
 
@@ -36,18 +41,25 @@ interface ChatMocks {
   markDelivered?: jest.Mock;
 }
 
-function makeGateway(chat: ChatMocks): { gateway: ChatGateway; emit: jest.Mock; to: jest.Mock } {
+function makeGateway(chat: ChatMocks): {
+  gateway: ChatGateway;
+  emit: jest.Mock;
+  to: jest.Mock;
+  push: jest.Mock;
+} {
+  const push = jest.fn();
   const gateway = new ChatGateway(
     chat as unknown as ChatService,
-    { pushToStudent: jest.fn() } as unknown as NotificationsService,
+    { pushToStudent: push } as unknown as NotificationsService,
     {} as JwtService,
     { get: () => 'v1' } as unknown as ConfigService<never, true>,
     new MediaReadyBus(),
+    new CallEndedBus(),
   );
   const emit = jest.fn();
   const to = jest.fn().mockReturnValue({ emit });
   (gateway as unknown as { server: Server }).server = { to } as unknown as Server;
-  return { gateway, emit, to };
+  return { gateway, emit, to, push };
 }
 
 describe('ChatGateway — message:new fan-out (§17.1)', () => {
@@ -83,6 +95,57 @@ describe('ChatGateway — message:new fan-out (§17.1)', () => {
 
     const payloads = emit.mock.calls.filter(([event]) => event === CHAT_EVENT.MESSAGE_NEW);
     expect(payloads).toHaveLength(1);
+  });
+});
+
+/**
+ * ⚠️ Every CALL message pushed "Javobsiz qo‘ng‘iroq". The push fires whenever the recipient's chat
+ * socket is closed — routine while they are on the `/calls` socket or backgrounded — so an answered
+ * ten-minute call, a decline and a cancel all told the callee they had missed a call.
+ */
+describe('ChatGateway — the offline push for a CALL message', () => {
+  const callMessage = (call: Partial<CallSnapshot>): Message => ({
+    ...message,
+    type: MessageType.CALL,
+    body: null,
+    call: {
+      callId: 'call_1',
+      media: CallMedia.AUDIO,
+      status: CallStatus.ENDED,
+      durationMs: 184_000,
+      endReason: CallEndReason.HANGUP,
+      ...call,
+    },
+  });
+
+  async function pushBodyFor(call: Partial<CallSnapshot>): Promise<string> {
+    const { gateway, push } = makeGateway({
+      otherMemberId: jest.fn().mockResolvedValue(OTHER),
+      isOnline: jest.fn().mockResolvedValue(false), // the callee is on /calls, not /chat
+    });
+    await gateway.broadcastMessage(callMessage(call));
+    return (push.mock.calls[0][1] as { body: string }).body;
+  }
+
+  it('tells the callee an answered call is over, with its duration', async () => {
+    expect(await pushBodyFor({ status: CallStatus.ENDED })).toBe('📞 Qo‘ng‘iroq · 3:04');
+  });
+
+  it('says "missed" only for a call that really was missed', async () => {
+    expect(
+      await pushBodyFor({
+        status: CallStatus.MISSED,
+        durationMs: 0,
+        endReason: CallEndReason.TIMEOUT,
+      }),
+    ).toBe('📞 Javobsiz qo‘ng‘iroq');
+  });
+
+  it.each([
+    ['declined', CallStatus.DECLINED, CallEndReason.DECLINED],
+    ['canceled', CallStatus.CANCELED, CallEndReason.CANCELED],
+  ])('does not call a %s call missed', async (_name, status, endReason) => {
+    expect(await pushBodyFor({ status, durationMs: 0, endReason })).toBe('📞 Qo‘ng‘iroq');
   });
 });
 

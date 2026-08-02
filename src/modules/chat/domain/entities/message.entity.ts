@@ -1,3 +1,6 @@
+import { CallEndReason } from '../../../calls/domain/enums/call-end-reason.enum';
+import { CallMedia } from '../../../calls/domain/enums/call-media.enum';
+import { CallStatus } from '../../../calls/domain/enums/call-status.enum';
 import { MediaAsset } from '../../../media/domain/entities/media-asset.entity';
 import { MessageType } from '../enums/message-type.enum';
 import { MessageSticker } from '../sticker-directory.repository';
@@ -14,6 +17,18 @@ export interface ReplySnapshot {
   preview: string | null;
   quote: { text: string; offset: number } | null;
   originalDeleted: boolean;
+}
+
+/**
+ * The finished call this row records, snapshotted at insert time (see `appendCallMessage`). Never
+ * joined from `calls` — same reasoning as `ReplySnapshot`.
+ */
+export interface CallSnapshot {
+  callId: string;
+  media: CallMedia;
+  status: CallStatus;
+  durationMs: number;
+  endReason: CallEndReason | null;
 }
 
 /** A chat message with a per-conversation monotonic `seq` (C4). */
@@ -39,5 +54,7 @@ export interface Message {
   sticker: MessageSticker | null;
   /** What this message replied to, frozen at send time (§C2). */
   replyTo: ReplySnapshot | null;
+  /** Set for `CALL` messages; null otherwise. */
+  call: CallSnapshot | null;
   createdAt: Date;
 }

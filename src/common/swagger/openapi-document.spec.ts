@@ -90,4 +90,18 @@ describe('OpenAPI type quality (§19)', () => {
       expect(out).toEqual([]);
     },
   );
+
+  /**
+   * ⚠️ `filterOpenApiByTags` drops an operation whose tag is in no document's list, and the tag
+   * guard in `buildAppDocuments` only checks the other direction — so a new student-facing
+   * controller silently vanishes from the mobile contract. `Calls` did exactly that until `'Calls'`
+   * was added to `STUDENT_DOC_TAGS` and `.addTag`.
+   */
+  it('serves the student call endpoints in the student document', () => {
+    // Paths are prefix-less here: the preview app never calls `setGlobalPrefix`, so `/v1` is added
+    // by the running app, not by the document.
+    expect(Object.keys(docs.student.paths)).toEqual(
+      expect.arrayContaining(['/calls', '/calls/ice-servers']),
+    );
+  });
 });

@@ -6,6 +6,9 @@ import {
   Sticker as PrismaSticker,
   Student,
 } from '@prisma/client';
+import { CallEndReason } from '../../calls/domain/enums/call-end-reason.enum';
+import { CallMedia } from '../../calls/domain/enums/call-media.enum';
+import { CallStatus } from '../../calls/domain/enums/call-status.enum';
 import { MediaAsset } from '../../media/domain/entities/media-asset.entity';
 import { MediaKind, MediaProvider, MediaStatus } from '../../media/domain/enums/media-kind.enum';
 import { StudentSummary } from '../../connections/domain/entities/student-summary.entity';
@@ -20,7 +23,7 @@ import {
   PHONE_VISIBILITY_TO_DOMAIN,
 } from '../../profiles/infrastructure/profile-enums.mapper';
 import { Conversation, ConversationMember } from '../domain/entities/conversation.entity';
-import { Message, ReplySnapshot } from '../domain/entities/message.entity';
+import { CallSnapshot, Message, ReplySnapshot } from '../domain/entities/message.entity';
 import { ConversationType } from '../domain/enums/conversation-type.enum';
 import { MessageType } from '../domain/enums/message-type.enum';
 import { MessageSticker } from '../domain/sticker-directory.repository';
@@ -77,7 +80,22 @@ export class ChatMapper {
           : ChatMapper.toAttachment(row.attachment),
       sticker: ChatMapper.toSticker(row),
       replyTo: ChatMapper.toReplySnapshot(row),
+      call: ChatMapper.toCallSnapshot(row),
       createdAt: row.createdAt,
+    };
+  }
+
+  /** Rebuilds the call snapshot from its columns — set only on a `CALL` message. */
+  private static toCallSnapshot(row: PrismaMessage): CallSnapshot | null {
+    if (row.callId === null || row.callMedia === null || row.callStatus === null) {
+      return null;
+    }
+    return {
+      callId: row.callId,
+      media: CallMedia[row.callMedia],
+      status: CallStatus[row.callStatus],
+      durationMs: row.callDuration ?? 0,
+      endReason: row.callEndReason === null ? null : CallEndReason[row.callEndReason],
     };
   }
 
