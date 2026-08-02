@@ -1,8 +1,17 @@
-import { MediaKind } from '../domain/enums/media-kind.enum';
+import { MediaKind, MediaQuality } from '../domain/enums/media-kind.enum';
 
-/** The subset of a Multer file the upload use-case reads. */
+/**
+ * An upload waiting on disk.
+ *
+ * A **path**, not a buffer: parity spec §2 removed the size ceiling, and multer's `memoryStorage`
+ * turns a 2 GB send into 2 GB of heap. Everything downstream — `file-type`, sharp, ffmpeg — reads
+ * from a path more cheaply than from a buffer anyway, so nothing is worse for it.
+ *
+ * The caller owns the file and deletes it once the upload has been processed, whether it succeeded
+ * or not.
+ */
 export interface UploadedChatFile {
-  buffer: Buffer;
+  path: string;
   size: number;
   mimetype?: string;
   originalname?: string;
@@ -17,6 +26,8 @@ export interface UploadedChatFile {
 export interface ChatUploadInput {
   kind: MediaKind;
   conversationId: string | null;
+  /** Video only, ignored elsewhere. Absent ⇒ `AUTO` (parity spec §4.2). */
+  quality?: MediaQuality;
   file?: UploadedChatFile;
 }
 
@@ -25,7 +36,7 @@ export const MEDIA_QUEUE = Symbol('MEDIA_QUEUE');
 
 /**
  * Long-running work that must not block the upload response. Video is the only user of this today:
- * a 64 MB clip can take a minute to re-encode, and the client needs its `mediaId` immediately so it
+ * a long clip can take minutes to re-encode, and the client needs its `mediaId` immediately so it
  * can send the message and show a placeholder.
  */
 export interface MediaQueuePort {

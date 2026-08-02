@@ -239,6 +239,7 @@ model Student {
   messagesSent            Message[]
   hiddenMessages          MessageHidden[]
   mediaAssets             MediaAsset[]
+  uploadSessions          UploadSession[]
   deviceTokens            DeviceToken[]
 
   callsMade     Call[]     @relation("CallCaller")
@@ -994,6 +995,8 @@ enum MessageType {
   IMAGE
   GIF
   VIDEO
+  /// Round video message (parity spec §5). Carries a VIDEO_NOTE asset and never a caption.
+  VIDEO_NOTE
   FILE
   VOICE
   STICKER
@@ -1010,10 +1013,11 @@ model Conversation {
   lastMessageAt DateTime?        @map("last_message_at")
   createdAt     DateTime         @default(now()) @map("created_at")
 
-  members  ConversationMember[]
-  messages Message[]
-  media    MediaAsset[]
-  calls    Call[]
+  members        ConversationMember[]
+  messages       Message[]
+  media          MediaAsset[]
+  uploadSessions UploadSession[]
+  calls          Call[]
 
   @@index([lastMessageAt])
   @@map("conversations")
@@ -1203,8 +1207,13 @@ model CallStat {
 
 enum MediaKind {
   IMAGE
+  /// The same picture at full resolution (parity spec §3). Only EXIF is stripped; a message carrying
+  /// one is still `type: IMAGE`, so the difference is quality rather than how it renders.
+  IMAGE_ORIGINAL
   GIF
   VIDEO
+  /// Telegram's round video message (parity spec §5). Square, at most a minute, never captioned.
+  VIDEO_NOTE
   VOICE
   FILE
   /// One of a student's profile pictures. Not conversation-scoped, and claimed by a ProfilePhoto row
@@ -1220,6 +1229,14 @@ enum MediaStatus {
   PROCESSING
   READY
   FAILED
+}
+
+/// How hard to try on a video upload (parity spec §4.2). `ORIGINAL` skips the transcode queue
+/// entirely — the sender's own encode is what the recipient plays.
+enum MediaQuality {
+  AUTO
+  HIGH
+  ORIGINAL
 }
 
 /// Where an attachment came from. Null ⇒ the student uploaded it to us.
@@ -1255,6 +1272,9 @@ model MediaAsset {
   conversationId String?          @map("conversation_id")
   kind           MediaKind
   status         MediaStatus      @default(READY)
+  /// What the sender asked for on a video upload (parity spec §4.2). Null for every other kind, and
+  /// for rows written before the field existed — both read as AUTO.
+  quality        MediaQuality?
   moderation     ModerationStatus @default(PENDING)
   /// GIFs and the MP4s converted from them — the client autoplays these muted and looping.
   isAnimated     Boolean          @default(false) @map("is_animated")
@@ -1273,9 +1293,15 @@ model MediaAsset {
   width      Int?
   height     Int?
   durationMs Int?    @map("duration_ms")
-  /// 48 normalised RMS points, voice notes only. Computed server-side — the client cannot derive it
-  /// from an already-compressed file. Empty for every other kind.
+  /// Normalised RMS points, voice notes only — 100 since parity spec §6, 48 on rows written before
+  /// it. Computed server-side; the client cannot derive it from an already-compressed file. Empty
+  /// for every other kind.
   waveform   Int[]   @default([])
+  /// Speech-to-text for a voice note (parity spec §6). Reserved: nothing writes it yet.
+  transcript String?
+  /// Alternative renditions, `[{ height, bitrate, url }]` (parity spec §4.3). Reserved: nothing
+  /// writes it yet, so the client always sees null and plays `storageKey`.
+  variants   Json?
   /// Original upload name for FILE, sanitised. Null for the other kinds.
   fileName   String? @map("file_name")
   blurHash   String? @map("blur_hash")
@@ -1297,6 +1323,41 @@ model MediaAsset {
   // Orphan sweep: unattached rows older than a day.
   @@index([createdAt])
   @@map("media_assets")
+}
+
+/// An upload in progress, sent in parts (parity spec §7).
+///
+/// Holds only what `init` was told. **Which parts have arrived is not stored here** — it is the set
+/// of files in the session's directory, read back with a `readdir`. Parts may arrive in any order,
+/// in parallel, and more than once, and a column would need every one of those writes to go through
+/// `array_append` in raw SQL to avoid losing an update; a filename is atomic for free.
+///
+/// No `MediaAsset` exists until `complete`, so an abandoned session costs a row and some bytes that
+/// the sweep removes after `expiresAt`, and nothing else.
+model UploadSession {
+  id             String        @id @default(cuid())
+  ownerId        String        @map("owner_id")
+  /// Required for the chat kinds, exactly as on a one-shot upload; checked again at `complete`.
+  conversationId String?       @map("conversation_id")
+  kind           MediaKind
+  quality        MediaQuality?
+  /// Sanitised at `init` — the same treatment a one-shot upload's filename gets.
+  fileName       String?       @map("file_name")
+  /// BigInt: the whole point of this endpoint is files that do not fit in an Int of bytes.
+  totalBytes     BigInt        @map("total_bytes")
+  chunkSize      Int           @map("chunk_size")
+  expiresAt      DateTime      @map("expires_at")
+  createdAt      DateTime      @default(now()) @map("created_at")
+
+  owner        Student       @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  // Every lookup is "this student's session", so ownership is checked by the same index that finds it.
+  @@index([ownerId])
+  // The sweep: everything past its expiry, oldest first.
+  @@index([expiresAt])
+  @@index([conversationId])
+  @@map("upload_sessions")
 }
 
 /// A sticker pack. `version` lets the client cache the whole catalogue and refetch only on a bump.

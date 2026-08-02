@@ -1,15 +1,22 @@
 import { MediaKind } from './enums/media-kind.enum';
 
 /**
- * Per-kind upload limits (chat media spec §1.1). Pure data — the upload use-case reads it, and the
- * numbers live in one place so the Swagger text, the multipart limit and the runtime check can never
- * disagree.
+ * Per-kind upload rules. Pure data — the upload use-case reads it, and the numbers live in one place
+ * so the Swagger text and the runtime check can never disagree.
+ *
+ * Parity spec §2 removed the product-level ceilings: `maxBytes` is `null` for almost everything, and
+ * what remains is either a format definition (a round video *is* short and small) or a guard against
+ * a file that would take the process down rather than one that is merely large.
  */
 export interface KindLimits {
-  /** MIME types accepted, as detected from the file's magic bytes — never from the request header. */
-  mimeTypes: readonly string[];
-  maxBytes: number;
-  /** Duration ceiling for time-based media, in ms. `null` for images and documents. */
+  /**
+   * MIME types accepted, as detected from the file's magic bytes — never from the request header.
+   * `null` means **any type at all**, which is what `FILE` is (parity spec §1).
+   */
+  mimeTypes: readonly string[] | null;
+  /** Byte ceiling. `null` where the kind has none — the daily quota is the only bound. */
+  maxBytes: number | null;
+  /** Duration ceiling for time-based media, in ms. `null` where the kind has none. */
   maxDurationMs: number | null;
   /** Longest allowed side in pixels, for images. `null` where it does not apply. */
   maxDimension: number | null;
@@ -17,103 +24,120 @@ export interface KindLimits {
 
 const MB = 1024 * 1024;
 
-/**
- * Executables are rejected outright, whatever the extension claims. A chat that will happily host
- * an APK is a malware delivery channel, and the store review that notices is not a conversation
- * anyone wants to have.
- */
-export const BLOCKED_EXTENSIONS = [
-  '.apk',
-  '.exe',
-  '.sh',
-  '.bat',
-  '.cmd',
-  '.com',
-  '.jar',
-  '.dex',
-  '.ipa',
-  '.msi',
-  '.dmg',
-  '.scr',
-  '.ps1',
+const IMAGE_MIME_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/heic',
+  'image/heif',
 ] as const;
 
-/** Documents a student can send. Anything outside this list is refused (spec §1.1). */
-const FILE_MIME_TYPES = [
-  'application/pdf',
-  'application/zip',
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-  'text/plain',
-  'text/csv',
+const VIDEO_MIME_TYPES = ['video/mp4', 'video/quicktime'] as const;
+
+/**
+ * Voice containers.
+ *
+ * Opus (`audio/opus`, and Opus-in-WebM) is what Telegram uses and is roughly half the bytes, but the
+ * m4a/AAC set has to stay: iOS's system recorder cannot produce Opus at all, and on Android it needs
+ * API 29+. Dropping either half would silently break voice notes on real devices (parity spec §6).
+ */
+const VOICE_MIME_TYPES = [
+  'audio/mp4',
+  'audio/aac',
+  'audio/x-m4a',
+  'audio/mpeg',
+  'audio/ogg',
+  'audio/opus',
+  'audio/webm',
 ] as const;
+
+/**
+ * The pixel ceiling that stops a decompression bomb, not a product limit.
+ *
+ * A 50000×50000 PNG is a few hundred kilobytes on disk and about ten gigabytes decoded, so this
+ * check has to survive §2's "no size limits" — it is about what the file costs to *open*, not what it
+ * costs to store. 16384 is sharp's own default pixel budget, and anything larger can still be sent
+ * as `FILE`, byte for byte.
+ */
+export const MAX_IMAGE_DIMENSION = 16384;
 
 export const MEDIA_LIMITS: Record<MediaKind, KindLimits> = {
   [MediaKind.IMAGE]: {
-    mimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'],
-    maxBytes: 12 * MB,
+    mimeTypes: IMAGE_MIME_TYPES,
+    maxBytes: null,
     maxDurationMs: null,
-    maxDimension: 8192,
+    maxDimension: MAX_IMAGE_DIMENSION,
+  },
+  [MediaKind.IMAGE_ORIGINAL]: {
+    mimeTypes: IMAGE_MIME_TYPES,
+    maxBytes: null,
+    maxDurationMs: null,
+    maxDimension: MAX_IMAGE_DIMENSION,
   },
   [MediaKind.GIF]: {
     // An .mp4 is accepted here too: "send as GIF" in the client means "play muted and looping",
     // which is a presentation choice, not a container.
     mimeTypes: ['image/gif', 'video/mp4'],
-    maxBytes: 20 * MB,
-    maxDurationMs: 30_000,
+    maxBytes: null,
+    maxDurationMs: null,
     maxDimension: null,
   },
   [MediaKind.VIDEO]: {
-    mimeTypes: ['video/mp4', 'video/quicktime'],
-    maxBytes: 64 * MB,
-    maxDurationMs: 3 * 60_000,
+    mimeTypes: VIDEO_MIME_TYPES,
+    maxBytes: null,
+    maxDurationMs: null,
+    maxDimension: null,
+  },
+  [MediaKind.VIDEO_NOTE]: {
+    // The one kind that keeps both ceilings, because they are what the format *is* rather than a
+    // restriction on it: a round message is a glance, recorded at 384², and a minute of that is
+    // nowhere near 12 MB (parity spec §5).
+    mimeTypes: VIDEO_MIME_TYPES,
+    maxBytes: 12 * MB,
+    maxDurationMs: 60_000,
     maxDimension: null,
   },
   [MediaKind.VOICE]: {
-    mimeTypes: ['audio/mp4', 'audio/aac', 'audio/ogg', 'audio/mpeg', 'audio/x-m4a'],
-    maxBytes: 16 * MB,
-    maxDurationMs: 5 * 60_000,
+    mimeTypes: VOICE_MIME_TYPES,
+    maxBytes: null,
+    maxDurationMs: null,
     maxDimension: null,
   },
   [MediaKind.FILE]: {
-    mimeTypes: FILE_MIME_TYPES,
-    maxBytes: 48 * MB,
+    // Any type at all. The allowlist that used to live here is gone (parity spec §1); what replaced
+    // it is on the way out — `application/octet-stream` and `Content-Disposition: attachment`, so a
+    // browser never executes what a chat stored.
+    mimeTypes: null,
+    maxBytes: null,
     maxDurationMs: null,
     maxDimension: null,
   },
   [MediaKind.PROFILE_PHOTO]: {
-    mimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'],
-    maxBytes: 12 * MB,
+    mimeTypes: IMAGE_MIME_TYPES,
+    maxBytes: null,
     maxDurationMs: null,
-    maxDimension: 8192,
+    maxDimension: MAX_IMAGE_DIMENSION,
   },
   [MediaKind.STORY_IMAGE]: {
-    mimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'],
-    maxBytes: 12 * MB,
+    mimeTypes: IMAGE_MIME_TYPES,
+    maxBytes: null,
     maxDurationMs: null,
-    maxDimension: 8192,
+    maxDimension: MAX_IMAGE_DIMENSION,
   },
   [MediaKind.STORY_VIDEO]: {
-    mimeTypes: ['video/mp4', 'video/quicktime'],
-    maxBytes: 48 * MB,
-    // 30 seconds, deliberately far below the 3 minutes a chat VIDEO gets: a story is watched by
-    // tapping through, and anything longer is skipped rather than finished.
-    maxDurationMs: 30_000,
+    mimeTypes: VIDEO_MIME_TYPES,
+    // Size is unbounded — a minute of 4K is welcome. The minute itself is not: a story is tapped
+    // through, and the cap is a product decision rather than a technical one (parity spec §2).
+    maxBytes: null,
+    maxDurationMs: 60_000,
     maxDimension: null,
   },
 };
 
-/** The largest upload any kind allows — the multipart interceptor's hard ceiling. */
-export const MAX_UPLOAD_BYTES = Math.max(
-  ...Object.values(MEDIA_LIMITS).map((limits) => limits.maxBytes),
-);
+/** Voice waveform resolution the client draws (parity spec §6: 48 was too coarse to read). */
+export const WAVEFORM_POINTS = 100;
 
-/** Voice waveform resolution the client draws. Fixed: the bubble is a fixed number of bars. */
-export const WAVEFORM_POINTS = 48;
-
-/** Long side an uploaded image is downscaled to; anything smaller is left alone. */
+/** Long side an uploaded `IMAGE` is downscaled to; anything smaller is left alone. */
 export const IMAGE_MAX_SIDE = 1920;
 
 /** Long side of the generated thumbnail. */
@@ -122,6 +146,9 @@ export const THUMB_MAX_SIDE = 320;
 /**
  * Strips a client-supplied filename down to something safe to store and echo back: no directory
  * traversal, no control characters, bounded length. Returns `null` when nothing usable is left.
+ *
+ * This survived §1's removal of the type allowlist and always will: `../../etc/passwd` is a path
+ * traversal, not a file type, and the two were never the same check.
  */
 export function sanitizeFileName(raw: string | undefined): string | null {
   if (raw === undefined) {
@@ -135,13 +162,4 @@ export function sanitizeFileName(raw: string | undefined): string | null {
     return null;
   }
   return cleaned.slice(0, 120);
-}
-
-/** Whether a filename ends in an extension we refuse regardless of detected MIME type. */
-export function hasBlockedExtension(fileName: string | null): boolean {
-  if (fileName === null) {
-    return false;
-  }
-  const lower = fileName.toLowerCase();
-  return BLOCKED_EXTENSIONS.some((extension) => lower.endsWith(extension));
 }

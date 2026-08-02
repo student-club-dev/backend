@@ -78,13 +78,21 @@ export const envSchema = z
     // Chat media. Unlike listing images these are private: they are served through
     // `GET /v1/media/{id}/raw`, which checks conversation membership, never over the static path.
     CHAT_MEDIA_DIR: z.string().min(1).default('./uploads/chat'),
-    // Per-student upload quota (abuse limits, chat spec §9).
-    CHAT_UPLOADS_PER_MINUTE: z.coerce.number().int().positive().default(20),
+    // Per-student upload quota. Parity spec §2.1 raised both: with the per-file size ceilings gone,
+    // these are what is left standing between the bucket and a script, and they are deliberately far
+    // above anything a person does by hand.
+    CHAT_UPLOADS_PER_MINUTE: z.coerce.number().int().positive().default(60),
     CHAT_UPLOAD_BYTES_PER_DAY: z.coerce
       .number()
       .int()
       .positive()
-      .default(500 * 1024 * 1024),
+      .default(20 * 1024 * 1024 * 1024),
+    // How full the media volume may get before uploads are refused with 503 STORAGE_FULL. Failing
+    // loudly at 85% beats writes failing one by one at 100% (parity spec §2.1).
+    CHAT_MEDIA_DISK_FULL_RATIO: z.coerce.number().min(0.5).max(1).default(0.85),
+    // How long an unfinished resumable upload survives before the sweep removes its parts. A day, so
+    // that a send interrupted on the metro can be resumed after it (parity spec §7).
+    CHAT_UPLOAD_SESSION_TTL_HOURS: z.coerce.number().int().positive().default(24),
     // Transcoding binaries. Present in the Docker image; override for a non-standard local install.
     FFMPEG_PATH: z.string().min(1).default('ffmpeg'),
     FFPROBE_PATH: z.string().min(1).default('ffprobe'),

@@ -16,6 +16,11 @@ describe('computeWaveform', () => {
     expect(bars).toHaveLength(WAVEFORM_POINTS);
   });
 
+  // Parity spec §6 raised this from 48, which was too coarse to read on a long note.
+  it('draws a hundred bars', () => {
+    expect(WAVEFORM_POINTS).toBe(100);
+  });
+
   it('returns a flat zero line for silence rather than dividing by zero', () => {
     expect(computeWaveform(pcm(10_000, () => 0))).toEqual(
       new Array<number>(WAVEFORM_POINTS).fill(0),
@@ -40,7 +45,7 @@ describe('computeWaveform', () => {
     // Same shape, different absolute level — the drawn bars must match.
     expect(quiet[0]).toBe(100);
     expect(loud[0]).toBe(100);
-    expect(Math.abs(quiet[47] - loud[47])).toBeLessThanOrEqual(1);
+    expect(Math.abs(quiet[WAVEFORM_POINTS - 1] - loud[WAVEFORM_POINTS - 1])).toBeLessThanOrEqual(1);
   });
 
   it('tracks loudness across the recording', () => {

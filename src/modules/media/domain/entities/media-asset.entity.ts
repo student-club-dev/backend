@@ -1,4 +1,17 @@
-import { MediaKind, MediaProvider, MediaStatus } from '../enums/media-kind.enum';
+import { MediaKind, MediaProvider, MediaQuality, MediaStatus } from '../enums/media-kind.enum';
+
+/**
+ * One rendition of a video at a particular height (parity spec §4.3).
+ *
+ * Nothing writes these yet — the second phase picks a rendition from the recipient's bandwidth the
+ * way Telegram does. The shape is fixed now so that turning it on is a background job rather than a
+ * migration plus a client release.
+ */
+export interface MediaVariant {
+  height: number;
+  bitrate: number;
+  url: string;
+}
 
 /**
  * One chat attachment.
@@ -15,6 +28,8 @@ export interface MediaAsset {
   conversationId: string | null;
   kind: MediaKind;
   status: MediaStatus;
+  /** What the sender asked for on a video upload. `null` for every other kind. */
+  quality: MediaQuality | null;
   isAnimated: boolean;
   storageKey: string | null;
   thumbStorageKey: string | null;
@@ -27,8 +42,12 @@ export interface MediaAsset {
   width: number | null;
   height: number | null;
   durationMs: number | null;
-  /** 48 normalised RMS points; empty for anything that is not a voice note. */
+  /** Normalised RMS points; empty for anything that is not a voice note. */
   waveform: number[];
+  /** Speech-to-text for a voice note. Always `null` today — reserved by parity spec §6. */
+  transcript: string | null;
+  /** Alternative renditions of a video. Always `null` today — reserved by parity spec §4.3. */
+  variants: MediaVariant[] | null;
   fileName: string | null;
   blurHash: string | null;
   messageId: string | null;

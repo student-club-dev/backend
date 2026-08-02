@@ -15695,8 +15695,10 @@
         "type": "string",
         "enum": [
           "IMAGE",
+          "IMAGE_ORIGINAL",
           "GIF",
           "VIDEO",
+          "VIDEO_NOTE",
           "VOICE",
           "FILE",
           "PROFILE_PHOTO",
@@ -15769,7 +15771,31 @@
             "items": {
               "type": "integer"
             },
-            "description": "Voice notes only: 48 amplitude points in 0..100, computed server-side. Empty for every other kind — the client cannot derive it from an already-compressed file."
+            "description": "Voice notes only: 100 amplitude points in 0..100, computed server-side. Empty for every other kind — the client cannot derive it from an already-compressed file.\n\nDraw whatever length arrives rather than assuming 100: notes recorded before this was raised still carry the original 48 points, and they are not rewritten."
+          },
+          "transcript": {
+            "type": "string",
+            "nullable": true,
+            "description": "Speech-to-text for a voice note. **Always null today** — reserved so that turning transcription on later needs no client change."
+          },
+          "variants": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "object",
+              "properties": {
+                "height": {
+                  "type": "integer"
+                },
+                "bitrate": {
+                  "type": "integer"
+                },
+                "url": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Alternative renditions of a video, for picking one by bandwidth. **Always null today** — reserved. Play `url` until this is populated."
           },
           "fileName": {
             "type": "string",
@@ -15806,11 +15832,84 @@
           "height",
           "durationMs",
           "waveform",
+          "transcript",
+          "variants",
           "fileName",
           "blurHash",
           "isAnimated",
           "provider",
           "externalId"
+        ]
+      },
+      "UploadProgressDto": {
+        "type": "object",
+        "properties": {
+          "uploadId": {
+            "type": "string"
+          },
+          "received": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "description": "Part indexes stored so far, ascending. After an interruption, send the ones not listed here — in any order, in parallel, and repeats are harmless."
+          },
+          "chunkSize": {
+            "type": "integer",
+            "description": "Bytes per part. Only the last part may be shorter."
+          },
+          "totalBytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO-8601. At least 24 hours out — a send interrupted on the metro survives it."
+          }
+        },
+        "required": [
+          "uploadId",
+          "received",
+          "chunkSize",
+          "totalBytes",
+          "expiresAt"
+        ]
+      },
+      "MediaQualityDto": {
+        "type": "string",
+        "enum": [
+          "AUTO",
+          "HIGH",
+          "ORIGINAL"
+        ]
+      },
+      "InitUploadDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/MediaKindDto"
+          },
+          "conversationId": {
+            "type": "string",
+            "description": "Required for the chat kinds; omit for PROFILE_PHOTO and STORY_*."
+          },
+          "quality": {
+            "$ref": "#/components/schemas/MediaQualityDto"
+          },
+          "fileName": {
+            "type": "string",
+            "description": "Original name, kept for FILE. Sanitised server-side."
+          },
+          "totalBytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Exact size of the whole file. Checked against what actually arrives before `complete` runs, and used to reserve your daily quota up front."
+          }
+        },
+        "required": [
+          "kind",
+          "totalBytes"
         ]
       },
       "BusinessDto": {
@@ -17303,6 +17402,7 @@
           "IMAGE",
           "GIF",
           "VIDEO",
+          "VIDEO_NOTE",
           "FILE",
           "VOICE",
           "STICKER",

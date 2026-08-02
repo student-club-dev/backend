@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { MediaAsset } from '../../domain/entities/media-asset.entity';
+import { MediaAsset, MediaVariant } from '../../domain/entities/media-asset.entity';
 import { MediaKind, MediaProvider, MediaStatus } from '../../domain/enums/media-kind.enum';
 
 /**
@@ -52,10 +52,38 @@ export class AttachmentDto {
     type: 'array',
     items: { type: 'integer' },
     description:
-      'Voice notes only: 48 amplitude points in 0..100, computed server-side. Empty for every ' +
-      'other kind — the client cannot derive it from an already-compressed file.',
+      'Voice notes only: 100 amplitude points in 0..100, computed server-side. Empty for every ' +
+      'other kind — the client cannot derive it from an already-compressed file.\n\n' +
+      'Draw whatever length arrives rather than assuming 100: notes recorded before this was ' +
+      'raised still carry the original 48 points, and they are not rewritten.',
   })
   waveform!: number[];
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    description:
+      'Speech-to-text for a voice note. **Always null today** — reserved so that turning ' +
+      'transcription on later needs no client change.',
+  })
+  transcript!: string | null;
+
+  @ApiProperty({
+    type: 'array',
+    nullable: true,
+    items: {
+      type: 'object',
+      properties: {
+        height: { type: 'integer' },
+        bitrate: { type: 'integer' },
+        url: { type: 'string' },
+      },
+    },
+    description:
+      'Alternative renditions of a video, for picking one by bandwidth. **Always null today** — ' +
+      'reserved. Play `url` until this is populated.',
+  })
+  variants!: MediaVariant[] | null;
 
   @ApiProperty({ type: String, nullable: true, description: 'Original name, FILE only.' })
   fileName!: string | null;
@@ -93,6 +121,8 @@ export class AttachmentDto {
     dto.height = asset.height;
     dto.durationMs = asset.durationMs;
     dto.waveform = asset.waveform;
+    dto.transcript = asset.transcript;
+    dto.variants = asset.variants;
     dto.fileName = asset.fileName;
     dto.blurHash = asset.blurHash;
     dto.isAnimated = asset.isAnimated;

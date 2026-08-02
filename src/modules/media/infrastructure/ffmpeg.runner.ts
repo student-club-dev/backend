@@ -3,8 +3,14 @@ import { promisify } from 'util';
 
 const run = promisify(execFile);
 
-/** Never let a malformed upload pin a worker forever. */
-const TIMEOUT_MS = 120_000;
+/** Never let a malformed upload pin a worker forever. Probing is metadata only, so it is quick. */
+const PROBE_TIMEOUT_MS = 60_000;
+/**
+ * Encoding gets far longer than probing: parity spec §2 removed the duration ceiling, so an hour of
+ * 4K is now a legitimate upload and two minutes would kill it halfway through. This is a deadlock
+ * guard, not a performance budget.
+ */
+const ENCODE_TIMEOUT_MS = 60 * 60_000;
 /** ffprobe JSON is small; a transcode writes to disk, so neither needs a large pipe. */
 const MAX_BUFFER = 16 * 1024 * 1024;
 
@@ -47,7 +53,7 @@ export class FfmpegRunner {
     const { stdout } = await run(
       this.ffprobePath,
       ['-v', 'error', '-show_format', '-show_streams', '-of', 'json', path],
-      { timeout: TIMEOUT_MS, maxBuffer: MAX_BUFFER },
+      { timeout: PROBE_TIMEOUT_MS, maxBuffer: MAX_BUFFER },
     );
     const parsed = JSON.parse(stdout) as FfprobeOutput;
     const streams = parsed.streams ?? [];
@@ -68,7 +74,7 @@ export class FfmpegRunner {
   /** Runs ffmpeg with the given arguments, overwriting the output. */
   async run(args: string[]): Promise<void> {
     await run(this.ffmpegPath, ['-y', '-v', 'error', ...args], {
-      timeout: TIMEOUT_MS,
+      timeout: ENCODE_TIMEOUT_MS,
       maxBuffer: MAX_BUFFER,
     });
   }
@@ -99,8 +105,18 @@ export class FfmpegRunner {
     ]);
   }
 
-  /** Re-encodes a video to the baseline profile every mobile device can hardware-decode. */
-  async transcodeVideo(input: string, output: string): Promise<void> {
+  /**
+   * Re-encodes a video to a profile every mobile device can hardware-decode.
+   *
+   * Two ladders (parity spec §4.2). `AUTO` is the one that shipped before the `quality` field
+   * existed — 720p baseline, small and universally playable. `HIGH` keeps 1080p and a lower CRF for
+   * a sender who chose detail over data, and steps up to the `high` profile, which every device that
+   * can usefully show 1080p supports anyway.
+   *
+   * `ORIGINAL` never reaches here: it is not queued at all.
+   */
+  async transcodeVideo(input: string, output: string, high = false): Promise<void> {
+    const [maxWidth, maxHeight] = high ? [1920, 1080] : [1280, 720];
     await this.run([
       '-i',
       input,
@@ -109,21 +125,21 @@ export class FfmpegRunner {
       '-pix_fmt',
       'yuv420p',
       '-vf',
-      "scale='min(1280,iw)':'min(720,ih)':force_original_aspect_ratio=decrease,scale=trunc(iw/2)*2:trunc(ih/2)*2",
+      `scale='min(${maxWidth},iw)':'min(${maxHeight},ih)':force_original_aspect_ratio=decrease,scale=trunc(iw/2)*2:trunc(ih/2)*2`,
       '-c:v',
       'libx264',
       '-profile:v',
-      'baseline',
+      high ? 'high' : 'baseline',
       '-level',
-      '3.1',
+      high ? '4.1' : '3.1',
       '-crf',
-      '24',
+      high ? '21' : '24',
       '-preset',
       'veryfast',
       '-c:a',
       'aac',
       '-b:a',
-      '96k',
+      high ? '128k' : '96k',
       output,
     ]);
   }
@@ -135,13 +151,16 @@ export class FfmpegRunner {
 
   /**
    * Decodes audio to raw mono PCM so the caller can compute a waveform. 8 kHz is plenty: the output
-   * is 48 bars, and resampling down first keeps the decode cheap.
+   * is a hundred bars, and resampling down first keeps the decode cheap.
+   *
+   * `maxBuffer` bounds this rather than the duration limit that used to: 16 MB of 8 kHz 16-bit mono
+   * is a bit under three hours, and a voice note longer than that is not a voice note.
    */
   async decodePcm(input: string): Promise<Buffer> {
     const { stdout } = await run(
       this.ffmpegPath,
       ['-v', 'error', '-i', input, '-f', 's16le', '-ac', '1', '-ar', '8000', '-'],
-      { timeout: TIMEOUT_MS, maxBuffer: MAX_BUFFER, encoding: 'buffer' },
+      { timeout: ENCODE_TIMEOUT_MS, maxBuffer: MAX_BUFFER, encoding: 'buffer' },
     );
     return stdout;
   }

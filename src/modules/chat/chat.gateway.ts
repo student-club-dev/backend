@@ -455,6 +455,8 @@ function pushTextFor(message: Message): string {
       return '🎞 GIF';
     case MessageType.VIDEO:
       return `🎥 Video${caption}`.slice(0, 120);
+    case MessageType.VIDEO_NOTE:
+      return '⚪️ Video xabar';
     case MessageType.VOICE:
       return '🎤 Ovozli xabar';
     case MessageType.FILE:

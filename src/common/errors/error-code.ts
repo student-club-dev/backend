@@ -130,6 +130,12 @@ export const ERROR_CODE = {
   FILE_TYPE_NOT_ALLOWED: 'FILE_TYPE_NOT_ALLOWED',
   MEDIA_TOO_LONG: 'MEDIA_TOO_LONG',
   MEDIA_TOO_LARGE_DIMENSIONS: 'MEDIA_TOO_LARGE_DIMENSIONS',
+  // The only duration ceiling left on a chat upload (parity spec §2), and its own code because it is
+  // a product decision the client quotes back to the user rather than a generic "too long".
+  STORY_VIDEO_TOO_LONG: 'STORY_VIDEO_TOO_LONG',
+  // A round video message that is not actually round. Caught server-side because the alternative is
+  // a recipient seeing a stretched circle and blaming their own app (parity spec §5).
+  MEDIA_NOT_SQUARE: 'MEDIA_NOT_SQUARE',
   MEDIA_NOT_FOUND: 'MEDIA_NOT_FOUND',
   MEDIA_ALREADY_USED: 'MEDIA_ALREADY_USED',
   MEDIA_NOT_READY: 'MEDIA_NOT_READY',
@@ -137,6 +143,10 @@ export const ERROR_CODE = {
   MEDIA_PROCESSING_FAILED: 'MEDIA_PROCESSING_FAILED',
   ALBUM_TOO_LARGE: 'ALBUM_TOO_LARGE',
   UPLOAD_RATE_LIMIT: 'UPLOAD_RATE_LIMIT',
+  // chat media — resumable chunked upload (parity spec §7)
+  UPLOAD_SESSION_NOT_FOUND: 'UPLOAD_SESSION_NOT_FOUND',
+  UPLOAD_INCOMPLETE: 'UPLOAD_INCOMPLETE',
+  UPLOAD_SIZE_MISMATCH: 'UPLOAD_SIZE_MISMATCH',
   STICKER_NOT_FOUND: 'STICKER_NOT_FOUND',
   STICKER_URL_NOT_ALLOWED: 'STICKER_URL_NOT_ALLOWED',
   STICKER_SOURCE_AMBIGUOUS: 'STICKER_SOURCE_AMBIGUOUS',
@@ -156,6 +166,9 @@ export const ERROR_CODE = {
   // infra
   RATE_LIMITED: 'RATE_LIMITED',
   FILE_TOO_LARGE: 'FILE_TOO_LARGE',
+  // The media volume is nearly full. A 503 that says so beats writes failing one by one somewhere
+  // deep in the pipeline once there is no room left (parity spec §2.1).
+  STORAGE_FULL: 'STORAGE_FULL',
   NOT_IMPLEMENTED: 'NOT_IMPLEMENTED',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
 } as const;

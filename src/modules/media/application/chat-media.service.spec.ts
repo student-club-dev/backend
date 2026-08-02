@@ -1,3 +1,7 @@
+import { createHash } from 'crypto';
+import { mkdtemp, readFile, rm, writeFile } from 'fs/promises';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import { ConfigService } from '@nestjs/config';
 import sharp from 'sharp';
 import { AccountType } from '../../../common/enums/account-type.enum';
@@ -13,7 +17,19 @@ import { ChatMediaService } from './chat-media.service';
 
 const me: AuthenticatedUser = { id: 'std_me', type: AccountType.STUDENT };
 const CONVERSATION = 'cnv_1';
-const DAILY_QUOTA = 500 * 1024 * 1024;
+const DAILY_QUOTA = 20 * 1024 * 1024 * 1024;
+const DISK_FULL_RATIO = 0.85;
+
+let dir: string;
+let counter = 0;
+
+beforeAll(async () => {
+  dir = await mkdtemp(join(tmpdir(), 'chat-media-spec-'));
+});
+
+afterAll(async () => {
+  await rm(dir, { recursive: true, force: true });
+});
 
 async function jpeg(width = 64, height = 64): Promise<Buffer> {
   return sharp({ create: { width, height, channels: 3, background: '#3b82f6' } })
@@ -21,8 +37,20 @@ async function jpeg(width = 64, height = 64): Promise<Buffer> {
     .toBuffer();
 }
 
-function upload(buffer: Buffer, overrides: Partial<UploadedChatFile> = {}): UploadedChatFile {
-  return { buffer, size: buffer.length, mimetype: 'image/jpeg', ...overrides };
+/**
+ * Writes the bytes to disk and describes them the way multer would.
+ *
+ * The service takes a path, not a buffer (parity spec §2) — so the fixtures are real files, which
+ * also means the byte-identity assertion below is testing the real mechanism.
+ */
+async function upload(
+  bytes: Buffer,
+  overrides: Partial<UploadedChatFile> = {},
+): Promise<UploadedChatFile> {
+  counter += 1;
+  const path = join(dir, `upload-${counter}`);
+  await writeFile(path, bytes);
+  return { path, size: bytes.length, mimetype: 'image/jpeg', ...overrides };
 }
 
 function makeAssets(overrides: Partial<MediaAssetRepository> = {}): MediaAssetRepository {
@@ -52,22 +80,35 @@ function makeAccess(canSend = true, isMember = true, areConnected = true): ChatA
   };
 }
 
+interface StorageMock {
+  save: jest.Mock;
+  saveFile: jest.Mock;
+  delete: jest.Mock;
+  usedRatio: jest.Mock;
+  tempDir: string;
+}
+
 function makeService(
   assets: MediaAssetRepository = makeAssets(),
   access: ChatAccessRepository = makeAccess(),
   queue: MediaQueuePort = { enqueueTranscode: jest.fn().mockResolvedValue(undefined) },
-): { service: ChatMediaService; storage: { save: jest.Mock; delete: jest.Mock } } {
-  const storage = {
+): { service: ChatMediaService; storage: StorageMock } {
+  const storage: StorageMock = {
     save: jest.fn(async (): Promise<string> => 'key/abc.webp'),
+    saveFile: jest.fn(async (): Promise<string> => 'key/abc.bin'),
     delete: jest.fn(async (): Promise<void> => undefined),
+    usedRatio: jest.fn(async (): Promise<number> => 0.1),
+    tempDir: dir,
   };
   const config = {
     get: (key: string) =>
       key === 'CHAT_UPLOAD_BYTES_PER_DAY'
         ? DAILY_QUOTA
-        : key === 'FFMPEG_PATH'
-          ? 'ffmpeg'
-          : 'ffprobe',
+        : key === 'CHAT_MEDIA_DISK_FULL_RATIO'
+          ? DISK_FULL_RATIO
+          : key === 'FFMPEG_PATH'
+            ? 'ffmpeg'
+            : 'ffprobe',
   } as unknown as ConfigService<never, true>;
   const service = new ChatMediaService(
     assets,
@@ -79,7 +120,7 @@ function makeService(
   return { service, storage };
 }
 
-describe('ChatMediaService — upload', () => {
+describe('ChatMediaService — permission and quota', () => {
   it('refuses an upload into a conversation you cannot send to', async () => {
     const assets = makeAssets();
     const { service } = makeService(assets, makeAccess(false));
@@ -88,7 +129,7 @@ describe('ChatMediaService — upload', () => {
       service.upload(me, {
         kind: MediaKind.IMAGE,
         conversationId: CONVERSATION,
-        file: upload(await jpeg()),
+        file: await upload(await jpeg()),
       }),
     ).rejects.toMatchObject({ code: ERROR_CODE.NOT_CONNECTED, status: 403 });
 
@@ -102,7 +143,7 @@ describe('ChatMediaService — upload', () => {
       service.upload(me, {
         kind: MediaKind.IMAGE,
         conversationId: CONVERSATION,
-        file: upload(await jpeg()),
+        file: await upload(await jpeg()),
       }),
     ).rejects.toThrow();
 
@@ -119,34 +160,152 @@ describe('ChatMediaService — upload', () => {
       service.upload(me, {
         kind: MediaKind.IMAGE,
         conversationId: CONVERSATION,
-        file: upload(await jpeg()),
+        file: await upload(await jpeg()),
       }),
     ).rejects.toMatchObject({ code: ERROR_CODE.UPLOAD_RATE_LIMIT, status: 429 });
   });
 
-  it('rejects a file larger than the limit for its kind', async () => {
-    const { service } = makeService();
-    const huge = upload(await jpeg(), { size: 20 * 1024 * 1024 });
+  // Parity spec §2.1: with the per-file ceilings gone, running out of disk is the failure mode that
+  // matters, and it has to be reported rather than discovered.
+  it('refuses uploads with 503 once the media volume is nearly full', async () => {
+    const { service, storage } = makeService();
+    storage.usedRatio = jest.fn(async () => 0.92);
 
     await expect(
-      service.upload(me, { kind: MediaKind.IMAGE, conversationId: CONVERSATION, file: huge }),
-    ).rejects.toMatchObject({ code: ERROR_CODE.FILE_TOO_LARGE, status: 413 });
+      service.upload(me, {
+        kind: MediaKind.IMAGE,
+        conversationId: CONVERSATION,
+        file: await upload(await jpeg()),
+      }),
+    ).rejects.toMatchObject({ code: ERROR_CODE.STORAGE_FULL, status: 503 });
   });
 
-  it('rejects a blocked extension even when the bytes are a legitimate document', async () => {
+  it('keeps accepting uploads when the volume cannot report its usage', async () => {
+    const { service, storage } = makeService();
+    storage.usedRatio = jest.fn().mockRejectedValue(new Error('ENOSYS'));
+
+    await expect(
+      service.upload(me, {
+        kind: MediaKind.IMAGE,
+        conversationId: CONVERSATION,
+        file: await upload(await jpeg(40, 40)),
+      }),
+    ).resolves.toMatchObject({ kind: MediaKind.IMAGE });
+  });
+
+  it('requires a file', async () => {
     const { service } = makeService();
-    const pdf = Buffer.from('%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF\n');
+    await expect(
+      service.upload(me, { kind: MediaKind.IMAGE, conversationId: CONVERSATION }),
+    ).rejects.toMatchObject({ code: ERROR_CODE.VALIDATION_ERROR });
+  });
+});
+
+// Parity spec §1. The whole section is one rule — a document is whatever the sender said it was, and
+// it comes back unchanged — so these tests are about what no longer happens.
+describe('ChatMediaService — kind = FILE takes anything', () => {
+  it('accepts an ordinary JPEG sent as a document', async () => {
+    const { service } = makeService();
+
+    const asset = await service.upload(me, {
+      kind: MediaKind.FILE,
+      conversationId: CONVERSATION,
+      file: await upload(await jpeg(), {
+        mimetype: 'image/jpeg',
+        originalname: 'Screenshot_20260727_102908_Telegram.jpg',
+      }),
+    });
+
+    expect(asset.kind).toBe(MediaKind.FILE);
+    expect(asset.fileName).toBe('Screenshot_20260727_102908_Telegram.jpg');
+  });
+
+  it('accepts an APK, which the old extension blocklist refused', async () => {
+    const { service } = makeService();
+    const apk = Buffer.concat([Buffer.from('PK'), Buffer.alloc(128)]);
+
+    const asset = await service.upload(me, {
+      kind: MediaKind.FILE,
+      conversationId: CONVERSATION,
+      file: await upload(apk, {
+        mimetype: 'application/vnd.android.package-archive',
+        originalname: 'app-release.apk',
+      }),
+    });
+
+    expect(asset.fileName).toBe('app-release.apk');
+  });
+
+  it('accepts an ELF binary, which the magic-byte check refused', async () => {
+    const { service } = makeService();
+    const elf = Buffer.concat([Buffer.from([0x7f, 0x45, 0x4c, 0x46]), Buffer.alloc(128)]);
 
     await expect(
       service.upload(me, {
         kind: MediaKind.FILE,
         conversationId: CONVERSATION,
-        file: upload(pdf, { mimetype: 'application/pdf', originalname: 'malware.apk' }),
+        file: await upload(elf, { mimetype: 'application/octet-stream', originalname: 'tool' }),
       }),
-    ).rejects.toMatchObject({ code: ERROR_CODE.FILE_TYPE_NOT_ALLOWED, status: 422 });
+    ).resolves.toMatchObject({ kind: MediaKind.FILE });
   });
 
-  it('rejects bytes that are not what the kind allows', async () => {
+  /**
+   * The acceptance criterion parity spec §1.2 gave the backend team, run against the real mechanism:
+   * the upload is *moved* into storage rather than read, so the stored bytes cannot differ.
+   */
+  it('stores the uploaded file byte for byte', async () => {
+    const { service, storage } = makeService();
+    const original = Buffer.concat([
+      Buffer.from([0x00, 0xff, 0x7f, 0x80]),
+      await jpeg(),
+      Buffer.from('trailing-bytes'),
+    ]);
+    const file = await upload(original, {
+      mimetype: 'application/octet-stream',
+      originalname: 'original.bin',
+    });
+    const beforeHash = createHash('sha256').update(original).digest('hex');
+
+    // The mock stands in for the real `rename` by copying the source it is handed, which is the only
+    // thing the service tells it about the bytes.
+    const stored = join(dir, 'stored.bin');
+    storage.saveFile = jest.fn(async (source: string) => {
+      await writeFile(stored, await readFile(source));
+      return 'key/stored.bin';
+    });
+
+    await service.upload(me, {
+      kind: MediaKind.FILE,
+      conversationId: CONVERSATION,
+      file,
+    });
+
+    const afterHash = createHash('sha256')
+      .update(await readFile(stored))
+      .digest('hex');
+    expect(afterHash).toBe(beforeHash);
+  });
+
+  it('still sanitises a traversing filename — that was never a type check', async () => {
+    const { service } = makeService();
+    const pdf = Buffer.from('%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF\n');
+
+    const asset = await service.upload(me, {
+      kind: MediaKind.FILE,
+      conversationId: CONVERSATION,
+      file: await upload(pdf, {
+        mimetype: 'application/pdf',
+        originalname: '../../Diplom ishi.pdf',
+      }),
+    });
+
+    expect(asset.fileName).toBe('Diplom ishi.pdf');
+    expect(asset.mimeType).toBe('application/pdf');
+  });
+});
+
+describe('ChatMediaService — images', () => {
+  it('rejects bytes that are not what a type-checked kind allows', async () => {
     const { service } = makeService();
     const elf = Buffer.concat([Buffer.from([0x7f, 0x45, 0x4c, 0x46]), Buffer.alloc(64)]);
 
@@ -154,32 +313,43 @@ describe('ChatMediaService — upload', () => {
       service.upload(me, {
         kind: MediaKind.IMAGE,
         conversationId: CONVERSATION,
-        file: upload(elf, { mimetype: 'image/jpeg' }),
+        file: await upload(elf, { mimetype: 'image/jpeg' }),
       }),
     ).rejects.toMatchObject({ code: ERROR_CODE.FILE_TYPE_NOT_ALLOWED });
   });
 
-  it('rejects an image whose longest side is over the pixel ceiling', async () => {
+  it('rejects an image past the decompression-bomb ceiling', async () => {
     const { service } = makeService();
-    const wide = await jpeg(9000, 10);
+    const wide = await jpeg(20000, 10);
 
     await expect(
       service.upload(me, {
         kind: MediaKind.IMAGE,
         conversationId: CONVERSATION,
-        file: upload(wide),
+        file: await upload(wide),
       }),
     ).rejects.toMatchObject({ code: ERROR_CODE.MEDIA_TOO_LARGE_DIMENSIONS, status: 422 });
   });
 
+  it('accepts an image that would have failed the old 8192px ceiling', async () => {
+    const { service } = makeService();
+
+    await expect(
+      service.upload(me, {
+        kind: MediaKind.IMAGE,
+        conversationId: CONVERSATION,
+        file: await upload(await jpeg(9000, 10)),
+      }),
+    ).resolves.toMatchObject({ kind: MediaKind.IMAGE });
+  });
+
   it('stores an image as WebP with a thumbnail and a blurHash', async () => {
-    const assets = makeAssets();
-    const { service, storage } = makeService(assets);
+    const { service, storage } = makeService();
 
     const asset = await service.upload(me, {
       kind: MediaKind.IMAGE,
       conversationId: CONVERSATION,
-      file: upload(await jpeg(200, 100)),
+      file: await upload(await jpeg(200, 100)),
     });
 
     expect(storage.save).toHaveBeenCalledTimes(2); // full + thumb
@@ -194,25 +364,76 @@ describe('ChatMediaService — upload', () => {
     expect(asset.waveform).toEqual([]);
   });
 
-  it('keeps the sanitised original name for a document', async () => {
-    const { service } = makeService();
-    const pdf = Buffer.from('%PDF-1.4\n1 0 obj\n<<>>\nendobj\n%%EOF\n');
+  // Parity spec §3.
+  describe('IMAGE_ORIGINAL', () => {
+    it('keeps the sender bytes untouched when there is no metadata to strip', async () => {
+      const { service, storage } = makeService();
+      // sharp writes no EXIF, so this is the passthrough case — which is also the screenshot case.
+      const file = await upload(await jpeg(300, 200));
 
-    const asset = await service.upload(me, {
-      kind: MediaKind.FILE,
-      conversationId: CONVERSATION,
-      file: upload(pdf, { mimetype: 'application/pdf', originalname: '../../Diplom ishi.pdf' }),
+      const asset = await service.upload(me, {
+        kind: MediaKind.IMAGE_ORIGINAL,
+        conversationId: CONVERSATION,
+        file,
+      });
+
+      expect(storage.saveFile).toHaveBeenCalledWith(file.path, 'jpg');
+      expect(asset).toMatchObject({
+        kind: MediaKind.IMAGE_ORIGINAL,
+        mimeType: 'image/jpeg',
+        width: 300,
+        height: 200,
+        sizeBytes: file.size,
+      });
     });
 
-    expect(asset.fileName).toBe('Diplom ishi.pdf');
-    expect(asset.mimeType).toBe('application/pdf');
-  });
+    it('keeps the full resolution instead of downscaling to 1920', async () => {
+      const { service } = makeService();
 
-  it('requires a file', async () => {
-    const { service } = makeService();
-    await expect(
-      service.upload(me, { kind: MediaKind.IMAGE, conversationId: CONVERSATION }),
-    ).rejects.toMatchObject({ code: ERROR_CODE.VALIDATION_ERROR });
+      const asset = await service.upload(me, {
+        kind: MediaKind.IMAGE_ORIGINAL,
+        conversationId: CONVERSATION,
+        file: await upload(await jpeg(4000, 3000)),
+      });
+
+      expect(asset.width).toBe(4000);
+      expect(asset.height).toBe(3000);
+    });
+
+    it('still produces a thumbnail and a blurHash', async () => {
+      const { service } = makeService();
+
+      const asset = await service.upload(me, {
+        kind: MediaKind.IMAGE_ORIGINAL,
+        conversationId: CONVERSATION,
+        file: await upload(await jpeg(300, 200)),
+      });
+
+      expect(asset.thumbStorageKey).not.toBeNull();
+      expect(asset.blurHash).toEqual(expect.any(String));
+    });
+
+    it('re-encodes rather than passing through when the image carries EXIF', async () => {
+      const { service, storage } = makeService();
+      const withExif = await sharp({
+        create: { width: 300, height: 200, channels: 3, background: '#3b82f6' },
+      })
+        .withExif({ IFD0: { Copyright: 'ElonUz' } })
+        .jpeg()
+        .toBuffer();
+
+      const asset = await service.upload(me, {
+        kind: MediaKind.IMAGE_ORIGINAL,
+        conversationId: CONVERSATION,
+        file: await upload(withExif),
+      });
+
+      // Stripping the metadata means writing new bytes, so the file is saved as a buffer rather
+      // than moved. GPS coordinates are not worth keeping the original encode for.
+      expect(storage.saveFile).not.toHaveBeenCalled();
+      expect(asset.mimeType).toBe('image/jpeg');
+      expect(asset.width).toBe(300);
+    });
   });
 });
 
@@ -223,6 +444,7 @@ describe('ChatMediaService — deleteOrphans', () => {
     conversationId: CONVERSATION,
     kind: MediaKind.IMAGE,
     status: MediaStatus.READY,
+    quality: null,
     isAnimated: false,
     storageKey: `${id}.webp`,
     thumbStorageKey: `${id}-t.webp`,
@@ -236,6 +458,8 @@ describe('ChatMediaService — deleteOrphans', () => {
     height: 1,
     durationMs: null,
     waveform: [],
+    transcript: null,
+    variants: null,
     fileName: null,
     blurHash: null,
     messageId: null,
@@ -286,6 +510,7 @@ describe('ChatMediaService — findForMember', () => {
     conversationId: CONVERSATION,
     kind: MediaKind.IMAGE,
     status: MediaStatus.READY,
+    quality: null,
     isAnimated: false,
     storageKey: 'k.webp',
     thumbStorageKey: 't.webp',
@@ -299,6 +524,8 @@ describe('ChatMediaService — findForMember', () => {
     height: 10,
     durationMs: null,
     waveform: [],
+    transcript: null,
+    variants: null,
     fileName: null,
     blurHash: null,
     messageId: null,
