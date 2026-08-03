@@ -191,14 +191,29 @@ postlar tushadi va keyin asta to'ladi. Klientda bo'sh holat ko'rinsa, bu xato em
 
 ## 8. Testlar
 
-`npx jest` — **1633 ta test o'tdi**, yiqilgani yo'q. Shu vazifa uchun qo'shilganlari:
+**Unit:** `npx jest` — 1633 ta test o'tdi, yiqilgani yo'q.
 
-- arxiv faqat tokendagi `authorId` bo'yicha so'raladi; `viewsCount` muzlatilgan holda qaytadi;
-- `views` arxivdagi post uchun ishlaydi; begona odamga `403` emas, **`404`**;
-- retention chegarasi aniq 365 kun; fayl o'chadi, **qator qoladi**, keyin flag qo'yiladi;
-- o'chirish sweep'i `deletedAt` bo'yicha ishlaydi (`expiresAt` bo'yicha emas — aks holda
-  butun arxivni o'chirardi);
-- media: bog'langan odam **faol** story'ni ocha oladi, **arxivdagini** yo'q, muallif esa ochadi.
+**E2E (haqiqiy bazaga qarshi):** `test/story-archive.e2e-spec.ts` — **12 ta test**, §6 dagi
+qabul mezonlarining har biri. Bu alohida yozildi, chunki unit testlar repozitoriyni mock
+qiladi — ya'ni feature'ning o'zi bo'lgan SQL shartlari (`expiresAt <= now()` arxiv uchun,
+`expiresAt > now()` media uchun, ikkita purge so'rovi) u yerda umuman tekshirilmagan edi.
+
+```
+✓ yangi post /mine da, arxivda emas
+✓ muddati o'tgan post lentadan va /mine dan chiqib, /archive ga tushadi
+✓ viewsCount muzlaydi (null bo'lmaydi), seen=true, expiresAt o'tmishda
+✓ tartib createdAt DESC; page=1/page=2 har xil, oxirgi sahifada hasNext=false
+✓ boshqa odamning arxivi ko'rinmaydi
+✓ /{id}/views arxivda muallifga ishlaydi; bog'langanga va begonaga 404
+✓ media: faol → bog'langan ocha oladi; arxivda → faqat muallif (boshqalarga 404)
+✓ arxivdagi postga yangi ko'rish qo'shilmaydi (404)
+✓ arxivdagi post o'chirilsa /archive dan yo'qoladi
+✓ purgeDeleted arxivga tegmaydi (10 kunlik post ham joyida qoladi)
+✓ retention'dan keyin fayl o'chadi, POST QOLADI, archivedMediaPurged=true
+✓ ikkinchi sweep o'sha qatorlarni qayta olmaydi
+```
+
+Ishga tushirish: `OTP_CHANNEL=dev SMS_PROVIDER=dev npx jest --config ./test/jest-e2e.json test/story-archive.e2e-spec.ts`
 
 ---
 

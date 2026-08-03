@@ -496,12 +496,13 @@ describe('StoriesService', () => {
       const stories = makeStories();
       const before = Date.now();
       await makeService(stories).purgeDeleted();
+      const after = Date.now();
 
       // The cutoff is `deletedAt < now - 24h`. Were this still driven by `expiresAt`, every
       // archived story in the table would be inside the batch it deletes.
       const [cutoff] = (stories.findDeletedPurgeable as jest.Mock).mock.calls[0] as [Date];
-      expect(before - cutoff.getTime()).toBeGreaterThanOrEqual(24 * 3600_000);
-      expect(before - cutoff.getTime()).toBeLessThan(24 * 3600_000 + 5_000);
+      expect(cutoff.getTime()).toBeGreaterThanOrEqual(before - 24 * 3600_000);
+      expect(cutoff.getTime()).toBeLessThanOrEqual(after - 24 * 3600_000);
     });
   });
 
@@ -510,10 +511,13 @@ describe('StoriesService', () => {
       const stories = makeStories();
       const before = Date.now();
       await makeService(stories).purgeArchivedMedia();
+      const after = Date.now();
+
+      // 365 days back, bracketed by the clock either side of the call rather than by a tolerance —
+      // the cutoff is computed inside it, so anything looser is a race against the scheduler.
       const [cutoff] = (stories.findArchivePurgeable as jest.Mock).mock.calls[0] as [Date];
-      // 365 days back, give or take the millisecond the call took.
-      expect(before - cutoff.getTime()).toBeGreaterThanOrEqual(365 * 24 * 3600_000);
-      expect(before - cutoff.getTime()).toBeLessThan(365 * 24 * 3600_000 + 5_000);
+      expect(cutoff.getTime()).toBeGreaterThanOrEqual(before - 365 * 24 * 3600_000);
+      expect(cutoff.getTime()).toBeLessThanOrEqual(after - 365 * 24 * 3600_000);
     });
 
     it('takes the bytes but keeps the row, then flags it', async () => {
