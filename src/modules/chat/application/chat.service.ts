@@ -27,6 +27,7 @@ import {
   ChatRepository,
   ExternalStickerRow,
   MessageViewer,
+  PushSender,
   ReplyColumns,
   SkippedMessage,
   UnreadSummary,
@@ -42,7 +43,8 @@ import {
   MAX_ALBUM_SIZE,
   MAX_REPLY_PREVIEW,
   normalizeBody,
-  requiredKindFor,
+  carriesAttachment,
+  kindFitsType,
 } from '../domain/message-composition';
 import { Conversation, ConversationMember } from '../domain/entities/conversation.entity';
 import { ConversationListItem } from '../domain/entities/conversation-view.entity';
@@ -277,8 +279,7 @@ export class ChatService {
     type: MessageType,
     input: SendMessageInput,
   ): Promise<string | null> {
-    const requiredKind = requiredKindFor(type);
-    if (requiredKind === null) {
+    if (!carriesAttachment(type)) {
       return null;
     }
 
@@ -309,7 +310,7 @@ export class ChatService {
     if (asset.status !== MediaStatus.READY) {
       throw new AppException(ERROR_CODE.MEDIA_NOT_READY, 422, 'Fayl hali tayyor emas');
     }
-    if (asset.kind !== requiredKind) {
+    if (!kindFitsType(type, asset.kind)) {
       throw new AppException(
         ERROR_CODE.MEDIA_KIND_MISMATCH,
         422,
@@ -341,6 +342,11 @@ export class ChatService {
       conversationId,
       kind: MediaKind.GIF,
       status: MediaStatus.READY,
+      // Video-only fields, and this is somebody else's already-encoded GIF: nothing to choose and
+      // nothing to transcode.
+      quality: null,
+      variants: null,
+      transcript: null,
       isAnimated: true,
       storageKey: null,
       thumbStorageKey: null,
@@ -649,6 +655,11 @@ export class ChatService {
   /** How many messages share an album id — the gateway coalesces pushes with it. */
   countInAlbum(conversationId: string, albumId: string): Promise<number> {
     return this.chat.countInAlbum(conversationId, albumId);
+  }
+
+  /** Name + avatar for the title of an offline push. */
+  pushSenderOf(studentId: string): Promise<PushSender | null> {
+    return this.chat.pushSenderOf(studentId);
   }
 
   /** A socket connected — mark the student online. */

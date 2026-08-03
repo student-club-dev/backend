@@ -10,8 +10,23 @@ import {
   emptyPushOutcome,
 } from './push-provider';
 
-/** FCM answers a rejected token with one of these; both mean "stop sending here". */
-const DEAD_TOKEN_ERRORS = new Set(['UNREGISTERED', 'INVALID_ARGUMENT', 'SENDER_ID_MISMATCH']);
+/**
+ * FCM's ordinary way of saying "this device is gone": the app was uninstalled, or the token was
+ * reissued. Routine and expected — no alarm.
+ */
+const DEAD_TOKEN_ERRORS = new Set(['UNREGISTERED', 'INVALID_ARGUMENT']);
+
+/**
+ * Not a dead device at all: the token belongs to a **different Firebase project** than the one we
+ * send from. The token can never be delivered to by us, so the row still goes — but this is a
+ * configuration mismatch between the app's `google-services.json` and our service account, and it
+ * used to be handled exactly like an uninstall: silently, with no log line anywhere.
+ *
+ * That is the worst possible shape for this failure. `POST /v1/devices` answers 200, the send
+ * reports success, the row quietly disappears, and every Android user is left without push while
+ * nothing anywhere looks wrong. It is reported at ERROR level for that reason.
+ */
+const SENDER_ID_MISMATCH = 'SENDER_ID_MISMATCH';
 
 interface FcmErrorResponse {
   error?: {
@@ -90,6 +105,7 @@ export class FcmPushProvider implements PushProvider {
     target: PushTarget,
     notification: PushNotification,
   ): Promise<'DELIVERED' | 'DEAD' | 'KEPT'> {
+    const startedAt = Date.now();
     let response: globalThis.Response;
     try {
       response = await fetch(
@@ -106,26 +122,47 @@ export class FcmPushProvider implements PushProvider {
       );
     } catch (error) {
       // A network blip is transient — keep the token, it is probably still good.
-      this.logger.warn(`FCM request failed: ${(error as Error).message}`);
+      this.log(target, 0, (error as Error).message, Date.now() - startedAt);
       return 'KEPT';
     }
+
+    const body = response.ok ? {} : ((await response.json().catch(() => ({}))) as FcmErrorResponse);
+    const code =
+      body.error?.details?.find((detail) => detail.errorCode !== undefined)?.errorCode ??
+      body.error?.status;
+    this.log(target, response.status, code ?? null, Date.now() - startedAt);
 
     if (response.ok) {
       return 'DELIVERED';
     }
 
-    const body = (await response.json().catch(() => ({}))) as FcmErrorResponse;
-    const code =
-      body.error?.details?.find((detail) => detail.errorCode !== undefined)?.errorCode ??
-      body.error?.status;
-
-    if (code !== undefined && DEAD_TOKEN_ERRORS.has(code)) {
-      // The app was uninstalled or the token was reissued. Report it so the caller can delete it.
+    if (code === SENDER_ID_MISMATCH) {
+      this.logger.error(
+        `FCM: this device's token belongs to a different Firebase project than ${this.projectId}. ` +
+          "The Android app's google-services.json must come from that same project — until it " +
+          'does, NO Android device will receive a notification and the registration will keep ' +
+          'looking successful. The device row was removed.',
+      );
       return 'DEAD';
     }
-    // Never log the token itself — it addresses a specific person's device.
-    this.logger.warn(`FCM rejected a send: ${response.status} ${code ?? 'unknown'}`);
+    if (code !== undefined && DEAD_TOKEN_ERRORS.has(code)) {
+      // The app was uninstalled or the token was reissued. Routine — the trace line above is enough.
+      return 'DEAD';
+    }
     return 'KEPT';
+  }
+
+  /**
+   * Per-send trace, matching the APNs provider's line so both platforms can be read the same way.
+   * The token itself is never logged — it addresses a specific person's device; `id` names the row.
+   */
+  private log(target: PushTarget, status: number, code: string | null, durationMs: number): void {
+    const line = `fcm deviceId=${target.id} platform=${target.platform} status=${status} code=${code ?? '-'} durationMs=${durationMs}`;
+    if (status === 200) {
+      this.logger.log(line);
+    } else {
+      this.logger.warn(line);
+    }
   }
 
   private async authorize(): Promise<string> {

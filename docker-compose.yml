@@ -91,6 +91,58 @@ services:
     ports:
       - '3000:3000'
 
+  # TURN relay for 1:1 calls (docs/architecture/calls.md, deploy/coturn/README.md). Not started by
+  # a plain `docker compose up` — it needs a real TLS cert and a public IP that do not exist in
+  # every environment this file is used in (local dev, CI), so it sits behind the `calls` profile.
+  # Bring it up explicitly once those exist: `docker compose --profile calls up -d coturn`.
+  coturn:
+    image: coturn/coturn:4.16.0-alpine
+    container_name: elonuz-coturn
+    restart: unless-stopped
+    profiles: ['calls']
+
+    # The image's default user is non-root `nobody`, which cannot read Let's Encrypt's private
+    # key: `archive/<domain>/` is `root:root 0700`, so `live/<domain>/privkey.pem` — a symlink into
+    # it — is unreadable to a non-root process regardless of its own permissions. Root is what
+    # lets the mounted certs below actually be read.
+    user: root
+
+    # coturn allocates a relay port PER ACTIVE CALL out of a wide range (49152-65535 by default —
+    # left unset here, so min-port/max-port stay out of turnserver.conf on purpose), and mapping
+    # that whole range through Docker's bridge/NAT is impractical. `network_mode: host` is
+    # coturn's documented Docker deployment mode for exactly this reason.
+    # NOTE: host networking makes the `ports:` list below meaningless — Docker ignores `ports:`
+    # under this mode. It is kept only as a record of what the host firewall must actually open:
+    #   3478/udp, 3478/tcp  — STUN/TURN
+    #   5349/tcp            — TURN over TLS
+    #   443/tcp             — alt-tls-listening-port; the one port open on many university networks
+    #   49152-65535/udp     — the relay range
+    network_mode: host
+    # ports: see the note above — not used under host networking.
+
+    entrypoint: ['/bin/sh', '/deploy/entrypoint.sh']
+    # Clears the image's default CMD (`--log-file=stdout --external-ip=$(detect-external-ip)`),
+    # which is meaningless here since entrypoint.sh execs turnserver itself.
+    command: []
+
+    environment:
+      # Must be byte-identical to the backend's own TURN_STATIC_SECRET — coturn validates the HMAC
+      # the API computes, so a mismatch fails every relayed call with an auth error, not a clear
+      # one. Empty by default so `docker compose config` still parses when calls are not set up yet;
+      # entrypoint.sh itself refuses to start without a real value.
+      TURN_STATIC_SECRET: ${TURN_STATIC_SECRET:-}
+      # The server's address on each side of NAT. A wrong SERVER_PUBLIC_IP is the most confusing
+      # way this fails: the call connects (signalling + STUN still work through it) but there is no
+      # audio, because the relay hands peers an address they can never actually reach.
+      SERVER_PRIVATE_IP: ${SERVER_PRIVATE_IP:-}
+      SERVER_PUBLIC_IP: ${SERVER_PUBLIC_IP:-}
+
+    volumes:
+      - ./deploy/coturn/turnserver.conf:/deploy/turnserver.conf.template:ro
+      - ./deploy/coturn/entrypoint.sh:/deploy/entrypoint.sh:ro
+      # Read-only: coturn only ever needs to read the certificate, never renew it.
+      - /etc/letsencrypt:/etc/letsencrypt:ro
+
 volumes:
   elonuz-db-data:
   elonuz-redis-data:

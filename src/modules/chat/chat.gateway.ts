@@ -43,6 +43,12 @@ import { MessageType } from './domain/enums/message-type.enum';
 import { MessageDto } from './presentation/dto/message.dto';
 
 /**
+ * How much of a sender's name a push may carry. Generous for a real name and far below the 4 KB
+ * FCM/APNs payload ceiling — see `broadcastMessage` for why the ceiling matters.
+ */
+const MAX_PUSH_SENDER_NAME = 64;
+
+/**
  * Socket.IO gateway for real-time chat (`/chat`, C2/C6). JWT verified on the handshake (students
  * only); each socket joins its personal room. Delivery/receipts/typing target the other member's
  * personal room. Scales across instances via the Redis adapter attached in `main.ts`.
@@ -231,16 +237,39 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
         message.albumId !== null &&
         (await this.chat.countInAlbum(message.conversationId, message.albumId)) > 1;
       if (!isAlbumFollowUp) {
+        // A SYSTEM row is written by the server, not by the person in `senderId`, so it carries no
+        // sender identity at all — neither in the title nor in `data`. Both lookups are needed
+        // unconditionally and neither depends on the other, so they overlap: `broadcastMessage` is
+        // awaited by the send path, and a second round trip here would be felt as send latency.
+        const [sender, badge] = await Promise.all([
+          message.type === MessageType.SYSTEM ? null : this.chat.pushSenderOf(message.senderId),
+          this.chat.unreadTotalFor(otherId),
+        ]);
+        // Blank is not a name. `firstName` is stored untrimmed, so "   " would otherwise become a
+        // notification with no visible title at all — worse than the generic fallback.
+        //
+        // The cap is not cosmetic. `firstName`/`lastName` have no length limit of their own, and
+        // this is the only user-controlled string in the payload that is NOT already bounded
+        // (`pushTextFor` cuts the body to 120). FCM rejects a message over 4 KB with
+        // INVALID_ARGUMENT, which `FcmPushProvider` reads as a dead token — so the recipient's
+        // registration would be deleted and they would silently stop receiving push from everyone.
+        // A sender could do that to anyone they are connected to, just by renaming themselves.
+        const senderName = sender?.name?.trim().slice(0, MAX_PUSH_SENDER_NAME) || null;
         await this.notifications.pushToStudent(otherId, {
-          title: 'Yangi xabar',
+          title: pushTitleFor(message, senderName),
           body: pushTextFor(message),
           // iOS shows exactly this number on the app icon — it does not derive one from the
           // notifications it received (§3.1). Android ignores it.
-          badge: await this.chat.unreadTotalFor(otherId),
+          badge,
           data: {
             conversationId: message.conversationId,
             messageType: message.type,
             ...(message.albumId === null ? {} : { albumId: message.albumId }),
+            senderId: message.senderId,
+            // Omitted rather than sent empty: FCM rejects a non-string `data` value, and a client
+            // that trusts the key's presence would render "null" as a name or a broken avatar.
+            ...(senderName === null ? {} : { senderName }),
+            ...(sender?.avatarUrl == null ? {} : { senderAvatarUrl: sender.avatarUrl }),
           },
         });
       }
@@ -441,6 +470,23 @@ function toMessageType(value: string | undefined): MessageType | undefined {
 }
 
 /**
+ * Who the notification is from. The client cannot supply this: with a `notification` block present
+ * Android draws the push itself without running app code, and iOS cannot rewrite `aps.alert.title`
+ * — so a name absent here is a name the user never sees.
+ *
+ * `Yangi xabar` remains the fallback for a sender with neither a name nor a username (or a deleted
+ * account). Generic beats blank: the notification still arrives and still opens the conversation.
+ */
+function pushTitleFor(message: Message, senderName: string | null): string {
+  // SYSTEM rows are written by the server, never by the person in `senderId` — `sendMessage`
+  // rejects the type outright — so naming one after them would be a lie.
+  if (message.type === MessageType.SYSTEM) {
+    return 'StudentClub';
+  }
+  return senderName ?? 'Yangi xabar';
+}
+
+/**
  * What the recipient sees on the lock screen (chat media spec §7). Localisation stays here rather
  * than on the client because a push arrives while the app is not running.
  */
@@ -455,6 +501,8 @@ function pushTextFor(message: Message): string {
       return '🎞 GIF';
     case MessageType.VIDEO:
       return `🎥 Video${caption}`.slice(0, 120);
+    case MessageType.VIDEO_NOTE:
+      return '⚪️ Video xabar';
     case MessageType.VOICE:
       return '🎤 Ovozli xabar';
     case MessageType.FILE:

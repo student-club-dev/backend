@@ -9,6 +9,7 @@ import { ListingStatusCron } from './listing-status.cron';
 import { MessagePurgeCron } from './message-purge.cron';
 import { OrphanMediaCron } from './orphan-media.cron';
 import { StoryCleanupCron } from './story-cleanup.cron';
+import { UploadSessionCron } from './upload-session.cron';
 
 /**
  * Scheduled jobs. Imports ListingsModule for the listing status sweep (BACKEND_PROMPT §7) and
@@ -23,6 +24,7 @@ import { StoryCleanupCron } from './story-cleanup.cron';
     MessagePurgeCron,
     OrphanMediaCron,
     StoryCleanupCron,
+    UploadSessionCron,
   ],
 })
 export class CronModule {}

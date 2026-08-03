@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { FcmPushProvider } from './fcm-push.provider';
 import { PushOutcome, PushTarget } from './push-provider';
@@ -101,6 +102,50 @@ describe('FcmPushProvider', () => {
       });
     },
   );
+
+  /**
+   * A token from another Firebase project is a configuration mismatch, not a gone device. It used
+   * to be deleted in exactly the same silence as an uninstall, which is how Android push could be
+   * completely dead while `POST /v1/devices` answered 200 and no log said anything at all.
+   */
+  describe('a token from the wrong Firebase project (SENDER_ID_MISMATCH)', () => {
+    it('says so at ERROR level, naming the project and the file to fix', async () => {
+      const errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+      global.fetch = jest.fn().mockResolvedValue(fcmError('SENDER_ID_MISMATCH'));
+
+      await makeProvider().send([android('mismatched')], NOTIFICATION);
+
+      expect(errorSpy).toHaveBeenCalled();
+      const message = String(errorSpy.mock.calls[0][0]);
+      expect(message).toContain('studentclub');
+      expect(message).toContain('google-services.json');
+      errorSpy.mockRestore();
+    });
+
+    it('stays quiet for an ordinary uninstall — only the mismatch is an alarm', async () => {
+      const errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => undefined);
+      global.fetch = jest.fn().mockResolvedValue(fcmError('UNREGISTERED'));
+
+      await makeProvider().send([android('uninstalled')], NOTIFICATION);
+
+      expect(errorSpy).not.toHaveBeenCalled();
+      errorSpy.mockRestore();
+    });
+  });
+
+  it('traces every send without ever printing the token', async () => {
+    const logSpy = jest.spyOn(Logger.prototype, 'log').mockImplementation(() => undefined);
+    global.fetch = jest.fn().mockResolvedValue(ACCEPTED);
+
+    await makeProvider().send([android('secret-token')], NOTIFICATION);
+
+    const line = String(logSpy.mock.calls[0][0]);
+    expect(line).toContain('deviceId=dev_secret-token');
+    expect(line).toContain('platform=ANDROID');
+    expect(line).toContain('status=200');
+    expect(line).not.toContain(' secret-token');
+    logSpy.mockRestore();
+  });
 
   it('keeps a token when the failure is transient, not the token’s fault', async () => {
     // A 500 from Google says nothing about this device — deleting the token would lose a real user.

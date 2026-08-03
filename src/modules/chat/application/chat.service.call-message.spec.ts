@@ -121,6 +121,7 @@ function makeChat(overrides: Partial<ChatRepository> = {}): ChatRepository {
       message({ id, body: null, deletedAt: new Date('2026-07-29T00:00:00Z') }),
     ),
     displayNameOf: jest.fn().mockResolvedValue('Kumushim'),
+    pushSenderOf: jest.fn().mockResolvedValue({ name: 'Kumushim', avatarUrl: null }),
     listAround: jest.fn().mockResolvedValue({ items: [], hasMore: false }),
     findMessagesByIds: jest.fn().mockResolvedValue([]),
     deleteMessages: jest.fn().mockResolvedValue({ unreadCount: 0, lastMessage: null }),

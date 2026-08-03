@@ -10,28 +10,36 @@ Nginx is not managed from this repository — it lives on the server — so this
 configuration and someone with server access applies it. **Nothing in the application code can fix
 this.**
 
-## The other half: `client_max_body_size`
+## The other half: media uploads
 
-Chat media is uploaded through the same server block, and nginx's default cap is **1 MB** (the
-studentclub-prod site had it set to `10m`). The largest upload the API accepts is a **64 MB video**
-— see `MEDIA_LIMITS` in `src/modules/media/domain/media-limits.ts`. Anything over the nginx cap is
-answered **413** before it ever reaches Node, so the application's own limit and its Uzbek error
-message never run.
+Chat media is uploaded through the same server block, and nginx caps request bodies — default 1 MB,
+`10m` on the studentclub-prod site. **The application no longer has a size limit of its own** (chat
+media parity spec §2), so nginx's cap is now the only one there is: anything over it is answered
+**413** before it ever reaches Node, and the client never learns why.
 
-Set it at `server` level, above the room the app needs:
+`deploy/nginx/media-upload.conf` removes it for the two upload routes and turns off request
+buffering, so the body streams to Node instead of being spooled to nginx's disk first. See the
+comments in that file for why both halves are needed.
 
-```nginx
-client_max_body_size 70m;
-```
+Uploads are now bounded by the daily quota and by disk space, not by a number in nginx — so this no
+longer needs raising when a limit changes, because there is no longer a limit to change.
 
-Raise this whenever a `maxBytes` in `media-limits.ts` goes up.
+### Serving media from a separate origin
+
+Worth doing when there is time. `kind = FILE` now accepts **any** type (parity spec §1), which is
+safe because `GET /v1/media/{id}/raw` always answers `application/octet-stream` with
+`Content-Disposition: attachment`, `nosniff` and a `sandbox` CSP — a browser never executes what a
+chat stored. Serving media from `media.studentclub.uz` instead would add one more layer: even a
+bypass of those headers would land on an origin with no session cookies to steal.
 
 ## Applying it
 
 ```bash
 sudo cp deploy/nginx/socket-io.conf /etc/nginx/snippets/socket-io.conf
+sudo cp deploy/nginx/media-upload.conf /etc/nginx/snippets/media-upload.conf
 # then, inside the API server { } block:
 #     include /etc/nginx/snippets/socket-io.conf;
+#     include /etc/nginx/snippets/media-upload.conf;
 sudo nginx -t && sudo systemctl reload nginx
 ```
 

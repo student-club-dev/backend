@@ -57,6 +57,8 @@ describe('CallsService relay & timers', () => {
     clearInCallCounters: jest.fn(),
   };
   const bus = { publish: jest.fn() };
+  // Only `invite` reads CALLS_ENABLED — none of the relay/timer methods this file exercises do.
+  const config = { get: jest.fn(() => 'true') };
 
   const service = (): CallsService =>
     new CallsService(
@@ -68,6 +70,7 @@ describe('CallsService relay & timers', () => {
       { connectionState: jest.fn() } as never,
       limiter as never,
       bus as never,
+      config as never,
     );
 
   beforeEach(() => {

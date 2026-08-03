@@ -9,6 +9,7 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiBody, ApiConsumes, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { memoryStorage } from 'multer';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { ERROR_CODE } from '../../../common/errors/error-code';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
@@ -38,7 +39,14 @@ export class MediaController {
   @Post('upload')
   @HttpCode(200)
   @Throttle({ default: { limit: 100, ttl: 3_600_000 } })
-  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: MAX_IMAGE_SIZE_BYTES } }))
+  // `memoryStorage` explicitly: the module now defaults to writing uploads to disk for chat media,
+  // and a listing image is small, capped, and consumed as a buffer.
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: memoryStorage(),
+      limits: { fileSize: MAX_IMAGE_SIZE_BYTES },
+    }),
+  )
   @ApiOperation({
     summary: 'Upload an image (logo, cover, listing photo)',
     description: 'multipart/form-data. JPEG/PNG/WebP, max 5 MB. Returns the public URL.',

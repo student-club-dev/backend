@@ -1,15 +1,22 @@
 import { Injectable } from '@nestjs/common';
-import type { MediaAsset as PrismaMediaAsset } from '@prisma/client';
+import { Prisma, type MediaAsset as PrismaMediaAsset } from '@prisma/client';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
-import { MediaAsset, NewMediaAsset } from '../domain/entities/media-asset.entity';
-import { MediaKind, MediaProvider, MediaStatus } from '../domain/enums/media-kind.enum';
+import { MediaAsset, MediaVariant, NewMediaAsset } from '../domain/entities/media-asset.entity';
+import {
+  MediaKind,
+  MediaProvider,
+  MediaQuality,
+  MediaStatus,
+} from '../domain/enums/media-kind.enum';
 import { MediaAssetRepository } from '../domain/media-asset.repository';
 
 /** The kinds the orphan sweep is allowed to touch — see `findOrphans`. */
 const CHAT_KINDS: MediaKind[] = [
   MediaKind.IMAGE,
+  MediaKind.IMAGE_ORIGINAL,
   MediaKind.GIF,
   MediaKind.VIDEO,
+  MediaKind.VIDEO_NOTE,
   MediaKind.VOICE,
   MediaKind.FILE,
 ];
@@ -20,7 +27,17 @@ export class MediaAssetPrismaRepository implements MediaAssetRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(asset: NewMediaAsset): Promise<MediaAsset> {
-    const row = await this.prisma.mediaAsset.create({ data: asset });
+    // `variants` needs unpacking because a nullable Json column does not take a plain `null`:
+    // Prisma makes you say which null you mean, and ours is "no column value" rather than the JSON
+    // literal `null`.
+    const { variants, ...rest } = asset;
+    const row = await this.prisma.mediaAsset.create({
+      data: {
+        ...rest,
+        variants:
+          variants === null ? Prisma.DbNull : (variants as unknown as Prisma.InputJsonValue),
+      },
+    });
     return toDomain(row);
   }
 
@@ -98,6 +115,7 @@ function toDomain(row: PrismaMediaAsset): MediaAsset {
     conversationId: row.conversationId,
     kind: MediaKind[row.kind],
     status: MediaStatus[row.status],
+    quality: row.quality === null ? null : MediaQuality[row.quality],
     isAnimated: row.isAnimated,
     storageKey: row.storageKey,
     thumbStorageKey: row.thumbStorageKey,
@@ -111,6 +129,11 @@ function toDomain(row: PrismaMediaAsset): MediaAsset {
     height: row.height,
     durationMs: row.durationMs,
     waveform: row.waveform,
+    transcript: row.transcript,
+    // `Json?` is `Prisma.JsonValue`, which is `any`-adjacent by nature. Nothing writes the column
+    // yet (parity spec §4.3), so the read is the narrow half of the contract: a stored array is
+    // handed over as one, and anything else — including the null every row holds today — is null.
+    variants: Array.isArray(row.variants) ? (row.variants as unknown as MediaVariant[]) : null,
     fileName: row.fileName,
     blurHash: row.blurHash,
     messageId: row.messageId,

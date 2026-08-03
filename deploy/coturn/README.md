@@ -8,11 +8,69 @@ them. TURN is the fallback: it relays the audio/video through a server both side
 `GET /v1/calls/ice-servers` (`src/modules/calls/infrastructure/ice-credentials.ts`) mints a
 short-lived coturn credential for the app; this directory holds the coturn side of that contract.
 
-coturn is not managed from this repository — it runs on its own host — so this directory holds the
-configuration and someone with server access applies it. **Nothing in the application code can fix
-a coturn misconfiguration.**
+coturn is not managed from this repository the way `db`/`redis`/`backend` are — it needs a public
+IP and a real TLS certificate that do not exist in every environment this compose file is used in
+(local dev, CI) — so it stays off by default and someone with server access brings it up
+explicitly. **Nothing in the application code can fix a coturn misconfiguration.**
 
-## Installing coturn
+## Certificates
+
+Both routes below (Docker and manual) expect a cert/key pair for `turn.elonuz.uz` (or your chosen
+TURN hostname) at the paths in `turnserver.conf`'s `cert`/`pkey` lines. Issue with certbot the same
+way as the API host:
+
+```bash
+sudo certbot certonly --standalone -d turn.elonuz.uz
+```
+
+coturn does not reload its cert automatically — a renewal hook must restart it. Which command that
+is depends on how you run coturn; see the matching section below.
+
+## Running it via Docker Compose (recommended)
+
+`docker-compose.yml` has a `coturn` service that renders `turnserver.conf` and runs `turnserver` in
+a container. It is **not** started by a plain `docker compose up` — it sits behind the `calls`
+Compose profile precisely because the certificate above and a public IP are not guaranteed to exist
+yet. Bring it up explicitly once they do:
+
+```bash
+# Fill in .env first: TURN_STATIC_SECRET (byte-identical to the backend's own value),
+# SERVER_PRIVATE_IP, SERVER_PUBLIC_IP — see .env.example for what each one does.
+docker compose --profile calls up -d coturn
+docker compose logs -f coturn
+```
+
+What the service does, so a failure is easy to place:
+
+- `deploy/coturn/entrypoint.sh` substitutes `__TURN_STATIC_SECRET__`, `__SERVER_PRIVATE_IP__` and
+  `__SERVER_PUBLIC_IP__` in a copy of `turnserver.conf` from those three env vars, then execs
+  `turnserver` with it. The committed file on disk keeps the placeholders — nothing renders them
+  until the container starts, and the rendered copy never gets written back into the repo.
+- It refuses to start (clear message on stderr, non-zero exit) if any of the three env vars is
+  empty, or if the TLS cert/key are not present at the mounted path — never silently falling back
+  to serving without TLS.
+- `network_mode: host`: coturn allocates a relay port per active call out of a wide range
+  (49152–65535 by default), and mapping that whole range through Docker's bridge/NAT is
+  impractical — host networking is coturn's documented Docker deployment mode for this reason.
+  This also means the `ports:` note in `docker-compose.yml` is descriptive only (Docker ignores
+  `ports:` under host networking); what actually needs to be open on the host firewall is 3478
+  (UDP+TCP), 5349/tcp, 443/tcp, and the relay range above.
+- The container runs as root, not the image's default `nobody`: Let's Encrypt's
+  `archive/<domain>/` directory is `root:root 0700`, so `live/<domain>/privkey.pem` — a symlink
+  into it — cannot be read by a non-root process no matter its own permissions.
+
+Renewal hook for this route:
+
+```bash
+echo 'cd /opt/studentclub && docker compose --profile calls restart coturn' | \
+  sudo tee /etc/letsencrypt/renewal-hooks/deploy/coturn-restart.sh
+sudo chmod +x /etc/letsencrypt/renewal-hooks/deploy/coturn-restart.sh
+```
+
+## Installing coturn manually (no Docker)
+
+Everything below is an alternative to the Compose service above — use it only if coturn runs
+directly on a host that is not managed through this repo's `docker-compose.yml`.
 
 Ubuntu/Debian:
 
@@ -26,23 +84,14 @@ Enable the systemd service (Debian/Ubuntu packages ship it disabled by default):
 sudo sed -i 's/^#TURNSERVER_ENABLED=1/TURNSERVER_ENABLED=1/' /etc/default/coturn
 ```
 
-## Certificates
-
-`turnserver.conf` expects a cert/key pair for `turn.elonuz.uz` (or your chosen TURN hostname) at
-the paths in the `cert`/`pkey` lines. Issue with certbot the same way as the API host:
-
-```bash
-sudo certbot certonly --standalone -d turn.elonuz.uz
-```
-
-coturn does not reload its cert automatically — add a renewal hook that restarts it:
+Renewal hook for this route:
 
 ```bash
 echo 'systemctl restart coturn' | sudo tee /etc/letsencrypt/renewal-hooks/deploy/coturn-restart.sh
 sudo chmod +x /etc/letsencrypt/renewal-hooks/deploy/coturn-restart.sh
 ```
 
-## Applying it
+### Applying the config by hand
 
 `turnserver.conf` in this directory ships with three placeholders that must never be committed as
 real values: `__TURN_STATIC_SECRET__`, `__SERVER_PRIVATE_IP__`, `__SERVER_PUBLIC_IP__`. Render them
@@ -86,6 +135,9 @@ mode, not a theoretical one — see `docs/architecture/calls.md` §TURN/ICE and 
 - [ ] **`static-auth-secret` is rendered from `TURN_STATIC_SECRET` at deploy time and identical to
       the backend's `TURN_STATIC_SECRET`.** Never a value typed or committed by hand. Confirm:
       ```bash
+      # Docker Compose route:
+      docker compose exec coturn grep static-auth-secret /tmp/turnserver.conf
+      # Manual route:
       grep static-auth-secret /etc/turnserver.conf   # must NOT show __TURN_STATIC_SECRET__
       ```
 - [ ] **The coturn host sits on a network segment with no route to the API, the database, or the

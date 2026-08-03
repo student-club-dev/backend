@@ -295,7 +295,13 @@ REST bilan bir xil to'plam — klientda bitta xato yo'li yetarli.
 | `INVALID_CALL_STATE` | 409 | boshqa qurilmangiz avvalroq javob berdi | `call:accept` |
 | `VALIDATION_ERROR` | 422 | payload chekdan o'tmadi (§7) | har joyda |
 | `RATE_LIMITED` | 429 | chegaradan oshdi (§10) | har joyda |
+| `NOT_IMPLEMENTED` | 503 | qo'ng'iroqlar xususiyati bu joylashtirishda o'chirilgan (`CALLS_ENABLED=false`, `REST.md`) — chastota chegarasi, Redis holati va tarix qatori hech biri sarflanmaydi | **faqat `call:invite`** |
 | `INTERNAL_ERROR` | 500 | kutilmagan xato | har joyda |
+
+⚠️ **`NOT_IMPLEMENTED` faqat yangi qo'ng'iroqni to'xtatadi.** `CALLS_ENABLED=false` bo'lganda ham
+qolgan barcha hodisa (`accept`/`connected`/`decline`/`cancel`/`end`/`ice`/`renegotiate`/
+`media-state`) va `GET /v1/calls` bayroqdan qat'i nazar ishlaydi — bayroqni o'chirish jonli
+qo'ng'iroqni tugatib bo'lmaydigan holga hech qachon keltirmaydi.
 
 ⚠️ Sizning §12.3.1 dagi **`BLOCKED`** kodi qo'shilmadi — mavjud **`USER_BLOCKED`** ishlatiladi
 (`DEVIATIONS.md`).

@@ -3,11 +3,12 @@ import { MediaKind } from '../../media/domain/enums/media-kind.enum';
 import { MessageType } from './enums/message-type.enum';
 import {
   assertQuoteMatches,
+  carriesAttachment,
+  kindFitsType,
   MAX_CAPTION_LENGTH,
   MAX_QUOTE_LENGTH,
   MAX_TEXT_LENGTH,
   normalizeBody,
-  requiredKindFor,
 } from './message-composition';
 
 describe('normalizeBody', () => {
@@ -57,19 +58,34 @@ describe('normalizeBody', () => {
   );
 });
 
-describe('requiredKindFor', () => {
-  it('maps each media type to the attachment kind it must carry', () => {
-    expect(requiredKindFor(MessageType.IMAGE)).toBe(MediaKind.IMAGE);
-    expect(requiredKindFor(MessageType.GIF)).toBe(MediaKind.GIF);
-    expect(requiredKindFor(MessageType.VIDEO)).toBe(MediaKind.VIDEO);
-    expect(requiredKindFor(MessageType.VOICE)).toBe(MediaKind.VOICE);
-    expect(requiredKindFor(MessageType.FILE)).toBe(MediaKind.FILE);
+describe('kindFitsType', () => {
+  it('matches each media type to the attachment kind it carries', () => {
+    expect(kindFitsType(MessageType.IMAGE, MediaKind.IMAGE)).toBe(true);
+    expect(kindFitsType(MessageType.GIF, MediaKind.GIF)).toBe(true);
+    expect(kindFitsType(MessageType.VIDEO, MediaKind.VIDEO)).toBe(true);
+    expect(kindFitsType(MessageType.VIDEO_NOTE, MediaKind.VIDEO_NOTE)).toBe(true);
+    expect(kindFitsType(MessageType.VOICE, MediaKind.VOICE)).toBe(true);
+    expect(kindFitsType(MessageType.FILE, MediaKind.FILE)).toBe(true);
+  });
+
+  // Parity spec §3: an original-quality photo is still an IMAGE message. The client renders the two
+  // identically and only the bytes differ, so both kinds have to pass here.
+  it('accepts either image kind on an IMAGE message', () => {
+    expect(kindFitsType(MessageType.IMAGE, MediaKind.IMAGE_ORIGINAL)).toBe(true);
+  });
+
+  it('rejects a kind that belongs to another type', () => {
+    expect(kindFitsType(MessageType.VIDEO, MediaKind.VIDEO_NOTE)).toBe(false);
+    expect(kindFitsType(MessageType.VIDEO_NOTE, MediaKind.VIDEO)).toBe(false);
+    expect(kindFitsType(MessageType.IMAGE, MediaKind.FILE)).toBe(false);
+    expect(kindFitsType(MessageType.FILE, MediaKind.IMAGE)).toBe(false);
   });
 
   it('expects no attachment on the non-media types', () => {
-    expect(requiredKindFor(MessageType.TEXT)).toBeNull();
-    expect(requiredKindFor(MessageType.STICKER)).toBeNull();
-    expect(requiredKindFor(MessageType.SYSTEM)).toBeNull();
+    expect(carriesAttachment(MessageType.TEXT)).toBe(false);
+    expect(carriesAttachment(MessageType.STICKER)).toBe(false);
+    expect(carriesAttachment(MessageType.SYSTEM)).toBe(false);
+    expect(carriesAttachment(MessageType.IMAGE)).toBe(true);
   });
 });
 

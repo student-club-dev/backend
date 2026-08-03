@@ -40,6 +40,16 @@ export interface BulkDeleteResult {
   lastMessage: Message | null;
 }
 
+/**
+ * Who an offline push says it is from. `name` follows the same full-name-else-username-else-null
+ * rule as `displayNameOf`, so the person named on the lock screen is the one named in the
+ * conversation list. `avatarUrl` is already absolute — the storage adapter stores it that way.
+ */
+export interface PushSender {
+  name: string | null;
+  avatarUrl: string | null;
+}
+
 /** Who is reading — every history query is filtered through this (§A4.3). */
 export interface MessageViewer {
   studentId: string;
@@ -226,6 +236,9 @@ export interface ChatRepository {
 
   /** A student's display name for a reply snapshot — full name, else username, else null (§C2). */
   displayNameOf(studentId: string): Promise<string | null>;
+
+  /** Name + avatar for the title of an offline push. Null when the student row is gone. */
+  pushSenderOf(studentId: string): Promise<PushSender | null>;
 
   /** A window of `size` messages centred on `seq` (§C3). `hasMore` ⇒ older messages exist below. */
   listAround(

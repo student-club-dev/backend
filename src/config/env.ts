@@ -5,6 +5,9 @@ import { z } from 'zod';
  * DATABASE_URL / SMS / OAuth are optional at this stage (M0) and become required
  * as the modules that need them land.
  */
+/** An empty `.env` value (`KEY=`) is still "defined" to zod — normalise it to absent. */
+const blankAsUndefined = (value: unknown): unknown => (value === '' ? undefined : value);
+
 export const envSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -78,13 +81,21 @@ export const envSchema = z
     // Chat media. Unlike listing images these are private: they are served through
     // `GET /v1/media/{id}/raw`, which checks conversation membership, never over the static path.
     CHAT_MEDIA_DIR: z.string().min(1).default('./uploads/chat'),
-    // Per-student upload quota (abuse limits, chat spec §9).
-    CHAT_UPLOADS_PER_MINUTE: z.coerce.number().int().positive().default(20),
+    // Per-student upload quota. Parity spec §2.1 raised both: with the per-file size ceilings gone,
+    // these are what is left standing between the bucket and a script, and they are deliberately far
+    // above anything a person does by hand.
+    CHAT_UPLOADS_PER_MINUTE: z.coerce.number().int().positive().default(60),
     CHAT_UPLOAD_BYTES_PER_DAY: z.coerce
       .number()
       .int()
       .positive()
-      .default(500 * 1024 * 1024),
+      .default(20 * 1024 * 1024 * 1024),
+    // How full the media volume may get before uploads are refused with 503 STORAGE_FULL. Failing
+    // loudly at 85% beats writes failing one by one at 100% (parity spec §2.1).
+    CHAT_MEDIA_DISK_FULL_RATIO: z.coerce.number().min(0.5).max(1).default(0.85),
+    // How long an unfinished resumable upload survives before the sweep removes its parts. A day, so
+    // that a send interrupted on the metro can be resumed after it (parity spec §7).
+    CHAT_UPLOAD_SESSION_TTL_HOURS: z.coerce.number().int().positive().default(24),
     // Transcoding binaries. Present in the Docker image; override for a non-standard local install.
     FFMPEG_PATH: z.string().min(1).default('ffmpeg'),
     FFPROBE_PATH: z.string().min(1).default('ffprobe'),
@@ -107,18 +118,26 @@ export const envSchema = z
 
     // TURN (coturn `use-auth-secret` REST scheme) for 1:1 calls. Left optional here — a missing
     // value must fail loudly in production when CALLS_ENABLED=true (see superRefine below), not
-    // silently boot with a guessable default the way JWT_ACCESS_SECRET currently does. `.min(1)`
-    // matters as much as `.optional()`: `.env.example` ships these blank, and a blank string is
-    // still "defined".
-    TURN_HOST: z.string().min(1).optional(),
-    TURN_STATIC_SECRET: z.string().min(1).optional(),
+    // silently boot with a guessable default the way JWT_ACCESS_SECRET currently does.
+    //
+    // `blankAsUndefined` is what makes that gate the ONLY one: `.env.example` ships these blank, so
+    // a real `.env` copied from it has them defined-but-empty, and `.min(1)` alone then rejected
+    // them at every boot regardless of CALLS_ENABLED — which took production down (502, container
+    // crash-loop) on 2026-08-02. Blank now means "not set", so a disabled feature cannot block boot
+    // and an enabled one still fails with the explanatory message below rather than a bare
+    // "must contain at least 1 character".
+    TURN_HOST: z.preprocess(blankAsUndefined, z.string().min(1).optional()),
+    TURN_STATIC_SECRET: z.preprocess(blankAsUndefined, z.string().min(1).optional()),
     TURN_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
 
     // Master switch for the calls feature. Defaults OFF: the calls code ships ahead of a deployed
     // coturn server and the mobile-client prerequisites it depends on. While false, TURN
-    // configuration is NOT required to boot in any environment — `GET /v1/calls/ice-servers`
-    // simply keeps answering its existing 503. Flip to true only once coturn is up; production
-    // then requires TURN_HOST/TURN_STATIC_SECRET exactly as before this flag existed.
+    // configuration is NOT required to boot in any environment, `GET /v1/calls/ice-servers` answers
+    // 503 regardless of whether TURN happens to be configured, and `call:invite` rejects every new
+    // call — but every other call event (`accept`/`connected`/`decline`/`cancel`/`end`/`ice`/
+    // `renegotiate`/`media-state`) and `GET /v1/calls` keep working, so a call already in progress
+    // when the flag is flipped off can still be ended cleanly. Flip to true only once coturn is up;
+    // production then requires TURN_HOST/TURN_STATIC_SECRET exactly as before this flag existed.
     CALLS_ENABLED: z.enum(['true', 'false']).default('false'),
 
     // Gates `CallsGateway`'s exp+grace disconnect (design §6.4). Defaults OFF: until both mobile

@@ -4797,7 +4797,7 @@
       "post": {
         "operationId": "ChatMediaController_chatUpload",
         "summary": "Upload an attachment, profile photo or story",
-        "description": "multipart/form-data. One pipeline for everything a student uploads: the type is decided by the file's magic bytes, never by `Content-Type` or the filename; images are stripped of EXIF (including GPS); GIFs become silent looping MP4; video is transcoded to H.264/AAC and gets a poster frame; voice notes get a 48-point waveform.\n\n`conversationId` is **required for the chat kinds** (`IMAGE`, `GIF`, `VIDEO`, `VOICE`, `FILE`) and is their permission check — you must be a member, still connected and not blocked. It is **ignored for `PROFILE_PHOTO`, `STORY_IMAGE` and `STORY_VIDEO`**, which have no conversation; those are authorised on read by their own rule instead.\n\nThe returned `id` is the `mediaId` you then pass to `POST /v1/profile/photos` or `POST /v1/stories`. Story framing is yours: send a 9:16 crop if you want one — the server accepts any ratio.",
+        "description": "multipart/form-data. One pipeline for everything a student uploads.\n\n**No size limit, and no duration limit except one.** A `STORY_VIDEO` over 60 s is refused with `STORY_VIDEO_TOO_LONG`; a `VIDEO_NOTE` is capped at 60 s and 12 MB because that is what the format is. Everything else is bounded only by your daily quota and by how full the server's disk is (`STORAGE_FULL`). For anything over ~10 MB prefer the resumable `/v1/media/upload/*` endpoints — a one-shot upload that drops restarts from zero.\n\n`kind` decides the processing:\n- `IMAGE` — EXIF (including GPS) stripped, downscaled to 1920px, WebP, thumb, BlurHash\n- `IMAGE_ORIGINAL` — full resolution, format kept, **only** EXIF removed. Still a `type: IMAGE` message; the difference is quality\n- `FILE` — **any type at all**, stored byte for byte. Downloaded as `application/octet-stream` with `Content-Disposition: attachment`, always\n- `GIF` — silent looping MP4\n- `VIDEO` — H.264/AAC ⇒ `READY`, otherwise `PROCESSING` and a `media:ready` event later\n- `VIDEO_NOTE` — round message; must be square (`MEDIA_NOT_SQUARE`) and carries no caption\n- `VOICE` — duration and a 100-point waveform. m4a/AAC and OGG/Opus both accepted\n\n`conversationId` is **required for the chat kinds** and is their permission check — you must be a member, still connected and not blocked. It is **ignored for `PROFILE_PHOTO`, `STORY_IMAGE` and `STORY_VIDEO`**, which have no conversation.\n\nThe returned `id` is the `mediaId` you then pass to `POST /v1/messages`, `POST /v1/profile/photos` or `POST /v1/stories`.",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -4818,19 +4818,30 @@
                     "type": "string",
                     "enum": [
                       "IMAGE",
+                      "IMAGE_ORIGINAL",
                       "GIF",
                       "VIDEO",
+                      "VIDEO_NOTE",
                       "VOICE",
                       "FILE",
                       "PROFILE_PHOTO",
                       "STORY_IMAGE",
                       "STORY_VIDEO"
                     ],
-                    "description": "IMAGE 12 MB · GIF 20 MB · VIDEO 64 MB · VOICE 16 MB · FILE 48 MB · PROFILE_PHOTO 12 MB · STORY_IMAGE 12 MB · STORY_VIDEO 48 MB (≤ 30 s)"
+                    "description": "IMAGE · IMAGE_ORIGINAL · GIF · VIDEO · VIDEO_NOTE (square, ≤ 60 s, ≤ 12 MB) · VOICE · FILE (any type) · PROFILE_PHOTO · STORY_IMAGE · STORY_VIDEO (≤ 60 s). No size limit except VIDEO_NOTE."
                   },
                   "conversationId": {
                     "type": "string",
                     "description": "Required for the chat kinds; omit for PROFILE_PHOTO and STORY_*."
+                  },
+                  "quality": {
+                    "type": "string",
+                    "enum": [
+                      "AUTO",
+                      "HIGH",
+                      "ORIGINAL"
+                    ],
+                    "description": "Video only, default `AUTO`. `ORIGINAL` stores the file exactly as sent and never transcodes it; `HIGH` keeps 1080p when a transcode is needed."
                   }
                 }
               }
@@ -4955,7 +4966,7 @@
             }
           },
           "413": {
-            "description": "Larger than the limit for this `kind`.",
+            "description": "A `VIDEO_NOTE` over 12 MB. No other kind.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5002,7 +5013,7 @@
             }
           },
           "422": {
-            "description": "Unknown `kind`, missing file, a type outside the allowlist (`FILE_TYPE_NOT_ALLOWED`), too long (`MEDIA_TOO_LONG`) or too many pixels (`MEDIA_TOO_LARGE_DIMENSIONS`).",
+            "description": "Unknown `kind` or `quality`, missing file, an undecodable image or clip (`FILE_TYPE_NOT_ALLOWED`), a story video over 60 s (`STORY_VIDEO_TOO_LONG`), a round video that is not square (`MEDIA_NOT_SQUARE`), or an image over 16384px a side (`MEDIA_TOO_LARGE_DIMENSIONS`).",
             "content": {
               "application/json": {
                 "schema": {
@@ -5049,7 +5060,7 @@
             }
           },
           "429": {
-            "description": "20 uploads a minute, or 500 MB a day.",
+            "description": "60 uploads a minute, or 20 GB a day.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5094,6 +5105,53 @@
                 }
               }
             }
+          },
+          "503": {
+            "description": "The media volume is nearly full. Retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 503
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Xatolik yuz berdi"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "STORAGE_FULL",
+                            "message": "Xatolik yuz berdi",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
           }
         },
         "tags": [
@@ -5110,7 +5168,7 @@
       "get": {
         "operationId": "ChatMediaController_raw",
         "summary": "Download a chat attachment",
-        "description": "Streams the bytes after checking that you are a member of the conversation it belongs to. Chat media is never on a public path — a leaked link is useless without a token.",
+        "description": "Streams the bytes after checking that you are a member of the conversation it belongs to. Chat media is never on a public path — a leaked link is useless without a token.\n\nA `FILE` always comes back as `application/octet-stream` with `Content-Disposition: attachment`, whatever it actually contains. Its bytes are identical to what was uploaded: `sha256` in equals `sha256` out.",
         "parameters": [
           {
             "name": "id",
@@ -5265,6 +5323,1212 @@
                           "example": {
                             "code": "MEDIA_NOT_FOUND",
                             "message": "Fayl topilmadi",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Chat"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/media/upload/init": {
+      "post": {
+        "operationId": "UploadSessionController_init",
+        "summary": "Open a resumable upload",
+        "description": "Reserves quota and returns the part size to cut the file into. Everything that can refuse the upload cheaply happens here rather than at the end — permission, quota and disk space — so a rejection costs one request instead of a gigabyte.\n\nNo `mediaId` exists yet. Send the parts, then `complete`.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InitUploadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "$ref": "#/components/schemas/UploadProgressDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (`UNAUTHORIZED`), or expired (`TOKEN_EXPIRED`) — refresh and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 401
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Avtorizatsiyadan o‘tilmagan"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UNAUTHORIZED",
+                            "message": "Avtorizatsiyadan o‘tilmagan",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Not a member, not connected any more, or blocked (`NOT_CONNECTED`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 403
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Ruxsat yo‘q"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "FORBIDDEN",
+                            "message": "Ruxsat yo‘q",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Unknown `kind` or `quality`, or a missing/invalid `totalBytes`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 422
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Ma’lumotlar noto‘g‘ri"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "VALIDATION_ERROR",
+                            "message": "Ma’lumotlar noto‘g‘ri",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "The daily byte quota is spent.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 429
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Xatolik yuz berdi"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UPLOAD_RATE_LIMIT",
+                            "message": "Xatolik yuz berdi",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The media volume is nearly full. Retry later.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 503
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Xatolik yuz berdi"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "STORAGE_FULL",
+                            "message": "Xatolik yuz berdi",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Chat"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/media/upload/{uploadId}/part/{index}": {
+      "put": {
+        "operationId": "UploadSessionController_part",
+        "summary": "Send one part",
+        "description": "The raw bytes of part `index` as the request body — **not** multipart.\n\nParts may be sent **in any order and in parallel**, and re-sending one is harmless: the same index simply overwrites itself. That is what makes this safe to retry blindly after a dropped connection. Every part is `chunkSize` bytes except the last.\n\n`Content-Range` is accepted and ignored — `index` in the path is what decides where the bytes go.",
+        "parameters": [
+          {
+            "name": "uploadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "index",
+            "required": true,
+            "in": "path",
+            "description": "Zero-based part number.",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/octet-stream": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "$ref": "#/components/schemas/UploadProgressDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (`UNAUTHORIZED`), or expired (`TOKEN_EXPIRED`) — refresh and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 401
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Avtorizatsiyadan o‘tilmagan"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UNAUTHORIZED",
+                            "message": "Avtorizatsiyadan o‘tilmagan",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not a STUDENT account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 403
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Ruxsat yo‘q"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "FORBIDDEN",
+                            "message": "Ruxsat yo‘q",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such session, not yours, or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 404
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Yuklash sessiyasi topilmadi"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UPLOAD_SESSION_NOT_FOUND",
+                            "message": "Yuklash sessiyasi topilmadi",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "`index` is outside the range implied by `totalBytes` and `chunkSize`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 422
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Ma’lumotlar noto‘g‘ri"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "VALIDATION_ERROR",
+                            "message": "Ma’lumotlar noto‘g‘ri",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The media volume filled up mid-upload.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 503
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Xatolik yuz berdi"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "STORAGE_FULL",
+                            "message": "Xatolik yuz berdi",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Chat"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/media/upload/{uploadId}": {
+      "get": {
+        "operationId": "UploadSessionController_status",
+        "summary": "What has arrived so far",
+        "description": "Call this after an interruption. Send whatever indexes are missing from `received` and then `complete` — there is no need to start over.",
+        "parameters": [
+          {
+            "name": "uploadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "$ref": "#/components/schemas/UploadProgressDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (`UNAUTHORIZED`), or expired (`TOKEN_EXPIRED`) — refresh and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 401
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Avtorizatsiyadan o‘tilmagan"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UNAUTHORIZED",
+                            "message": "Avtorizatsiyadan o‘tilmagan",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not a STUDENT account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 403
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Ruxsat yo‘q"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "FORBIDDEN",
+                            "message": "Ruxsat yo‘q",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such session, not yours, or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 404
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Yuklash sessiyasi topilmadi"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UPLOAD_SESSION_NOT_FOUND",
+                            "message": "Yuklash sessiyasi topilmadi",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Chat"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "UploadSessionController_cancel",
+        "summary": "Abandon an upload",
+        "description": "Removes the session and every part stored for it. Optional — an untouched session expires on its own — but it frees the disk immediately when the user cancels a send.",
+        "parameters": [
+          {
+            "name": "uploadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "nullable": true,
+                          "example": null,
+                          "description": "No payload for this endpoint."
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (`UNAUTHORIZED`), or expired (`TOKEN_EXPIRED`) — refresh and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 401
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Avtorizatsiyadan o‘tilmagan"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UNAUTHORIZED",
+                            "message": "Avtorizatsiyadan o‘tilmagan",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not a STUDENT account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 403
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Ruxsat yo‘q"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "FORBIDDEN",
+                            "message": "Ruxsat yo‘q",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such session, not yours, or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 404
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Yuklash sessiyasi topilmadi"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UPLOAD_SESSION_NOT_FOUND",
+                            "message": "Yuklash sessiyasi topilmadi",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Chat"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/media/upload/{uploadId}/complete": {
+      "post": {
+        "operationId": "UploadSessionController_complete",
+        "summary": "Finish the upload",
+        "description": "Joins the parts and processes them exactly as `POST /v1/media/chat-upload` would — same type detection, same EXIF stripping, same transcoding. Returns the same `AttachmentDto`, and its `id` is the `mediaId` to send with a message.\n\nA video may come back `PROCESSING`; wait for `media:ready` as usual. The session and its parts are removed once this succeeds.",
+        "parameters": [
+          {
+            "name": "uploadId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "$ref": "#/components/schemas/AttachmentDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (`UNAUTHORIZED`), or expired (`TOKEN_EXPIRED`) — refresh and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 401
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Avtorizatsiyadan o‘tilmagan"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UNAUTHORIZED",
+                            "message": "Avtorizatsiyadan o‘tilmagan",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not a STUDENT account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 403
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Ruxsat yo‘q"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "FORBIDDEN",
+                            "message": "Ruxsat yo‘q",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No such session, not yours, or expired.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 404
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Yuklash sessiyasi topilmadi"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UPLOAD_SESSION_NOT_FOUND",
+                            "message": "Yuklash sessiyasi topilmadi",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Parts are missing (`UPLOAD_INCOMPLETE`), the assembled size does not match `totalBytes` (`UPLOAD_SIZE_MISMATCH`), or the finished file fails the checks for its `kind`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 422
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Ma’lumotlar noto‘g‘ri"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "VALIDATION_ERROR",
+                            "message": "Ma’lumotlar noto‘g‘ri",
                             "fields": {}
                           }
                         }
@@ -8303,7 +9567,7 @@
             }
           },
           "503": {
-            "description": "TURN is not configured on this deployment (`TURN_HOST`/`TURN_STATIC_SECRET`). Only possible outside production — the env schema requires both there.",
+            "description": "Either the calls feature is switched off (`CALLS_ENABLED=false` — happens in any environment, including production), or, once enabled, TURN is not configured on this deployment (`TURN_HOST`/`TURN_STATIC_SECRET`) — only possible outside production, since the env schema requires both once `CALLS_ENABLED=true`.",
             "content": {
               "application/json": {
                 "schema": {
@@ -19863,8 +21127,10 @@
         "type": "string",
         "enum": [
           "IMAGE",
+          "IMAGE_ORIGINAL",
           "GIF",
           "VIDEO",
+          "VIDEO_NOTE",
           "VOICE",
           "FILE",
           "PROFILE_PHOTO",
@@ -19937,7 +21203,31 @@
             "items": {
               "type": "integer"
             },
-            "description": "Voice notes only: 48 amplitude points in 0..100, computed server-side. Empty for every other kind — the client cannot derive it from an already-compressed file."
+            "description": "Voice notes only: 100 amplitude points in 0..100, computed server-side. Empty for every other kind — the client cannot derive it from an already-compressed file.\n\nDraw whatever length arrives rather than assuming 100: notes recorded before this was raised still carry the original 48 points, and they are not rewritten."
+          },
+          "transcript": {
+            "type": "string",
+            "nullable": true,
+            "description": "Speech-to-text for a voice note. **Always null today** — reserved so that turning transcription on later needs no client change."
+          },
+          "variants": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "object",
+              "properties": {
+                "height": {
+                  "type": "integer"
+                },
+                "bitrate": {
+                  "type": "integer"
+                },
+                "url": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Alternative renditions of a video, for picking one by bandwidth. **Always null today** — reserved. Play `url` until this is populated."
           },
           "fileName": {
             "type": "string",
@@ -19974,11 +21264,84 @@
           "height",
           "durationMs",
           "waveform",
+          "transcript",
+          "variants",
           "fileName",
           "blurHash",
           "isAnimated",
           "provider",
           "externalId"
+        ]
+      },
+      "UploadProgressDto": {
+        "type": "object",
+        "properties": {
+          "uploadId": {
+            "type": "string"
+          },
+          "received": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            },
+            "description": "Part indexes stored so far, ascending. After an interruption, send the ones not listed here — in any order, in parallel, and repeats are harmless."
+          },
+          "chunkSize": {
+            "type": "integer",
+            "description": "Bytes per part. Only the last part may be shorter."
+          },
+          "totalBytes": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "ISO-8601. At least 24 hours out — a send interrupted on the metro survives it."
+          }
+        },
+        "required": [
+          "uploadId",
+          "received",
+          "chunkSize",
+          "totalBytes",
+          "expiresAt"
+        ]
+      },
+      "MediaQualityDto": {
+        "type": "string",
+        "enum": [
+          "AUTO",
+          "HIGH",
+          "ORIGINAL"
+        ]
+      },
+      "InitUploadDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/MediaKindDto"
+          },
+          "conversationId": {
+            "type": "string",
+            "description": "Required for the chat kinds; omit for PROFILE_PHOTO and STORY_*."
+          },
+          "quality": {
+            "$ref": "#/components/schemas/MediaQualityDto"
+          },
+          "fileName": {
+            "type": "string",
+            "description": "Original name, kept for FILE. Sanitised server-side."
+          },
+          "totalBytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Exact size of the whole file. Checked against what actually arrives before `complete` runs, and used to reserve your daily quota up front."
+          }
+        },
+        "required": [
+          "kind",
+          "totalBytes"
         ]
       },
       "BusinessDto": {
@@ -21471,6 +22834,7 @@
           "IMAGE",
           "GIF",
           "VIDEO",
+          "VIDEO_NOTE",
           "FILE",
           "VOICE",
           "STICKER",

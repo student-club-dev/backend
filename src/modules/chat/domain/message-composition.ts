@@ -10,26 +10,39 @@ export const MAX_TEXT_LENGTH = 4000;
 /** Images in one album. Beyond this the grid stops being a grid (chat media spec §3). */
 export const MAX_ALBUM_SIZE = 10;
 
-/** Which attachment kind each message type must carry, or `null` when it carries none. */
-const REQUIRED_KIND: Record<MessageType, MediaKind | null> = {
+/**
+ * Which attachment kinds each message type may carry, or `null` when it carries none.
+ *
+ * A **set**, because `IMAGE` has two of them: a compressed `IMAGE` and a full-resolution
+ * `IMAGE_ORIGINAL` are the same message as far as the client is concerned — a photo in the grid that
+ * opens in the viewer — and only differ in quality (parity spec §3). Splitting them into two message
+ * types would have made every client branch on a distinction it does not care about.
+ */
+const ALLOWED_KINDS: Record<MessageType, ReadonlySet<MediaKind> | null> = {
   [MessageType.TEXT]: null,
   [MessageType.STICKER]: null,
   [MessageType.SYSTEM]: null,
   // A CALL row is written by the server and never carries a MediaAsset — null, same as SYSTEM.
   [MessageType.CALL]: null,
-  [MessageType.IMAGE]: MediaKind.IMAGE,
-  [MessageType.GIF]: MediaKind.GIF,
-  [MessageType.VIDEO]: MediaKind.VIDEO,
-  [MessageType.VOICE]: MediaKind.VOICE,
-  [MessageType.FILE]: MediaKind.FILE,
+  [MessageType.IMAGE]: new Set([MediaKind.IMAGE, MediaKind.IMAGE_ORIGINAL]),
+  [MessageType.GIF]: new Set([MediaKind.GIF]),
+  [MessageType.VIDEO]: new Set([MediaKind.VIDEO]),
+  [MessageType.VIDEO_NOTE]: new Set([MediaKind.VIDEO_NOTE]),
+  [MessageType.VOICE]: new Set([MediaKind.VOICE]),
+  [MessageType.FILE]: new Set([MediaKind.FILE]),
 };
 
 /** Types where a caption alongside the attachment makes sense. */
 const CAPTIONABLE = new Set([MessageType.IMAGE, MessageType.VIDEO, MessageType.FILE]);
 
-/** The attachment kind a message of this type must reference, or `null`. */
-export function requiredKindFor(type: MessageType): MediaKind | null {
-  return REQUIRED_KIND[type];
+/** Whether a message of this type carries an attachment at all. */
+export function carriesAttachment(type: MessageType): boolean {
+  return ALLOWED_KINDS[type] !== null;
+}
+
+/** Whether an asset of this kind may be attached to a message of this type. */
+export function kindFitsType(type: MessageType, kind: MediaKind): boolean {
+  return ALLOWED_KINDS[type]?.has(kind) ?? false;
 }
 
 /**

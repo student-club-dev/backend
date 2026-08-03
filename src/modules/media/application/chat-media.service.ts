@@ -1,5 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from 'fs/promises';
-import { tmpdir } from 'os';
+import { mkdtemp, rm, stat } from 'fs/promises';
 import { join } from 'path';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -9,12 +8,23 @@ import type { AuthenticatedUser } from '../../../common/types/authenticated-user
 import type { Env } from '../../../config/env';
 import { CHAT_ACCESS, ChatAccessRepository } from '../domain/chat-access.repository';
 import { MediaAsset, NewMediaAsset } from '../domain/entities/media-asset.entity';
-import { isChatKind, isStoryKind, MediaKind, MediaStatus } from '../domain/enums/media-kind.enum';
-import { MEDIA_LIMITS, hasBlockedExtension, sanitizeFileName } from '../domain/media-limits';
+import {
+  isChatKind,
+  isStoryKind,
+  MediaKind,
+  MediaQuality,
+  MediaStatus,
+} from '../domain/enums/media-kind.enum';
+import { MEDIA_LIMITS, sanitizeFileName } from '../domain/media-limits';
 import { MEDIA_ASSET_REPOSITORY, MediaAssetRepository } from '../domain/media-asset.repository';
 import { computeWaveform } from '../domain/waveform';
-import { FfmpegRunner } from '../infrastructure/ffmpeg.runner';
-import { processImage, readDimensions, thumbnailFrom } from '../infrastructure/image.processor';
+import { FfmpegRunner, type ProbeResult } from '../infrastructure/ffmpeg.runner';
+import {
+  processImage,
+  processOriginalImage,
+  readDimensions,
+  thumbnailFrom,
+} from '../infrastructure/image.processor';
 import { ChatMediaStorage } from '../infrastructure/chat-media.storage';
 import { detectMediaType } from '../infrastructure/media-type.detector';
 import { ChatUploadInput, MEDIA_QUEUE, MediaQueuePort, UploadedChatFile } from './chat-media.io';
@@ -22,18 +32,24 @@ import { ChatUploadInput, MEDIA_QUEUE, MediaQueuePort, UploadedChatFile } from '
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
- * Chat attachment uploads (chat media spec §1).
+ * Chat attachment uploads (parity spec §1–§6).
  *
  * The order of checks matters and is not arbitrary: permission first (so an outsider never gets far
- * enough to spend CPU), then quota, then the file's real type, then its size and duration, and only
- * then any decoding. Anything that costs money to run happens after everything that can reject the
- * request for free.
+ * enough to spend CPU), then whether there is anywhere to put the bytes, then quota, then the file's
+ * real type, and only then any decoding. Anything that costs money to run happens after everything
+ * that can reject the request for free.
+ *
+ * Every path here works from a **file on disk**, never a buffer. Parity spec §2 removed the size
+ * ceiling, and the only way to honour that without a 2 GB upload becoming 2 GB of heap is to never
+ * hold one. It also makes `kind = FILE` byte-exact by construction: the temp file is moved into
+ * storage and nothing ever reads it.
  */
 @Injectable()
 export class ChatMediaService {
   private readonly logger = new Logger(ChatMediaService.name);
   private readonly ffmpeg: FfmpegRunner;
   private readonly dailyByteQuota: number;
+  private readonly diskFullRatio: number;
 
   constructor(
     @Inject(MEDIA_ASSET_REPOSITORY) private readonly assets: MediaAssetRepository,
@@ -47,36 +63,42 @@ export class ChatMediaService {
       config.get('FFPROBE_PATH', { infer: true }),
     );
     this.dailyByteQuota = config.get('CHAT_UPLOAD_BYTES_PER_DAY', { infer: true });
+    this.diskFullRatio = config.get('CHAT_MEDIA_DISK_FULL_RATIO', { infer: true });
   }
 
+  /**
+   * Accepts an upload and returns the stored asset.
+   *
+   * The temp file is removed on every exit, including a rejection — except where a builder has
+   * already moved it into storage, in which case the removal is a no-op.
+   */
   async upload(user: AuthenticatedUser, input: ChatUploadInput): Promise<MediaAsset> {
     const file = requireFile(input.file);
+    try {
+      return await this.store(user, input, file);
+    } finally {
+      await rm(file.path, { force: true }).catch(() => undefined);
+    }
+  }
 
+  private async store(
+    user: AuthenticatedUser,
+    input: ChatUploadInput,
+    file: UploadedChatFile,
+  ): Promise<MediaAsset> {
     // 1. Permission. For a chat attachment, scoping the upload to a conversation is what stops the
     //    endpoint being used as anonymous file hosting by someone with nobody to send to. A profile
     //    photo or a story has no conversation to scope to; the daily byte quota below is what bounds
     //    those, together with the per-set caps their own endpoints enforce.
-    if (isChatKind(input.kind)) {
-      if (input.conversationId === null) {
-        throw AppException.validation({ conversationId: 'Suhbat id sini yuboring' });
-      }
-      if (!(await this.access.canSend(input.conversationId, user.id))) {
-        throw new AppException(ERROR_CODE.NOT_CONNECTED, 403, "Bu suhbatga fayl yuklab bo'lmaydi");
-      }
-    }
+    await this.assertMayUpload(user, input.kind, input.conversationId);
 
-    // 2. Daily byte quota.
-    const usedToday = await this.assets.bytesUploadedSince(user.id, new Date(Date.now() - DAY_MS));
-    if (usedToday + file.size > this.dailyByteQuota) {
-      throw new AppException(
-        ERROR_CODE.UPLOAD_RATE_LIMIT,
-        429,
-        "Kunlik yuklash chegarasiga yetdingiz, ertaga urinib ko'ring",
-      );
-    }
+    // 2. Somewhere to put it, then how much of their allowance is left. Both replace the per-file
+    //    size ceiling that parity spec §2 removed.
+    await this.assertStorageAvailable();
+    await this.assertWithinQuota(user.id, file.size);
 
     const limits = MEDIA_LIMITS[input.kind];
-    if (file.size > limits.maxBytes) {
+    if (limits.maxBytes !== null && file.size > limits.maxBytes) {
       throw new AppException(
         ERROR_CODE.FILE_TOO_LARGE,
         413,
@@ -84,17 +106,10 @@ export class ChatMediaService {
       );
     }
 
-    // 3. What the bytes really are. The filename is checked too: a PDF renamed to .apk is still
-    //    something a store reviewer will find on our servers.
+    // 3. What the bytes really are. For `FILE` this can no longer fail — every type is allowed
+    //    (parity spec §1) — and the detected type is kept only so the client can show an icon.
     const fileName = sanitizeFileName(file.originalname);
-    if (hasBlockedExtension(fileName)) {
-      throw new AppException(
-        ERROR_CODE.FILE_TYPE_NOT_ALLOWED,
-        422,
-        "Bu turdagi fayllarni yuborib bo'lmaydi",
-      );
-    }
-    const detected = await detectMediaType(file.buffer, input.kind, file.mimetype);
+    const detected = await detectMediaType(file.path, input.kind, file.mimetype);
     if (detected === null) {
       throw new AppException(
         ERROR_CODE.FILE_TYPE_NOT_ALLOWED,
@@ -112,6 +127,7 @@ export class ChatMediaService {
       conversationId: isChatKind(input.kind) ? input.conversationId : null,
       kind: input.kind,
       status: MediaStatus.READY,
+      quality: null,
       isAnimated: false,
       storageKey: null,
       thumbStorageKey: null,
@@ -125,6 +141,8 @@ export class ChatMediaService {
       height: null,
       durationMs: null,
       waveform: [],
+      transcript: null,
+      variants: null,
       fileName: null,
       blurHash: null,
     };
@@ -137,22 +155,27 @@ export class ChatMediaService {
       case MediaKind.IMAGE:
       case MediaKind.PROFILE_PHOTO:
       case MediaKind.STORY_IMAGE:
-        return this.assets.create(await this.buildImage(base, file));
+        return this.assets.create(await this.buildImage(base, file, input.kind));
+      case MediaKind.IMAGE_ORIGINAL:
+        return this.assets.create(await this.buildOriginalImage(base, file, input.kind));
       case MediaKind.GIF:
-        return this.assets.create(await this.buildGif(base, file, detected.extension));
+        return this.assets.create(await this.buildGif(base, file));
       case MediaKind.VOICE:
         return this.assets.create(await this.buildVoice(base, file, detected.extension));
       case MediaKind.VIDEO:
+      case MediaKind.VIDEO_NOTE:
       case MediaKind.STORY_VIDEO:
         return this.enqueueIfNeeded(
           await this.assets.create(
-            await this.buildVideo(base, file, detected.extension, input.kind),
+            await this.buildVideo(base, file, detected.extension, input.kind, input.quality),
           ),
         );
       case MediaKind.FILE:
+        // Nothing reads the bytes: they are moved into storage exactly as they arrived, which is
+        // what makes the sha256 of the download equal the sha256 of the upload (parity spec §1.2).
         return this.assets.create({
           ...base,
-          storageKey: await this.storage.save(file.buffer, detected.extension),
+          storageKey: await this.storage.saveFile(file.path, detected.extension),
           fileName,
         });
     }
@@ -182,6 +205,60 @@ export class ChatMediaService {
       throw AppException.notFound(ERROR_CODE.MEDIA_NOT_FOUND, 'Fayl topilmadi');
     }
     return asset;
+  }
+
+  /**
+   * The upload-time permission check, shared with the resumable path (parity spec §7) so that
+   * starting a chunked upload cannot bypass what a one-shot upload has to pass.
+   */
+  async assertMayUpload(
+    user: AuthenticatedUser,
+    kind: MediaKind,
+    conversationId: string | null,
+  ): Promise<void> {
+    if (!isChatKind(kind)) {
+      return;
+    }
+    if (conversationId === null) {
+      throw AppException.validation({ conversationId: 'Suhbat id sini yuboring' });
+    }
+    if (!(await this.access.canSend(conversationId, user.id))) {
+      throw new AppException(ERROR_CODE.NOT_CONNECTED, 403, "Bu suhbatga fayl yuklab bo'lmaydi");
+    }
+  }
+
+  /**
+   * Refuses the upload when the media volume is nearly full.
+   *
+   * This is one half of what replaced the per-file size limits: the bound that matters is not how
+   * big one upload is but whether there is room for it, and a 503 that says so is far easier to act
+   * on than writes failing one at a time deep inside the pipeline (parity spec §2.1).
+   */
+  async assertStorageAvailable(): Promise<void> {
+    const used = await this.storage.usedRatio().catch((error: Error) => {
+      // A filesystem that will not report its size is not a reason to stop accepting uploads.
+      this.logger.warn(`Could not read media volume usage: ${error.message}`);
+      return 0;
+    });
+    if (used >= this.diskFullRatio) {
+      throw new AppException(
+        ERROR_CODE.STORAGE_FULL,
+        503,
+        "Server hozircha yangi fayl qabul qila olmaydi, birozdan so'ng urinib ko'ring",
+      );
+    }
+  }
+
+  /** The other half: a per-account daily byte allowance, which is what stops a scripted flood. */
+  async assertWithinQuota(ownerId: string, incomingBytes: number): Promise<void> {
+    const usedToday = await this.assets.bytesUploadedSince(ownerId, new Date(Date.now() - DAY_MS));
+    if (usedToday + incomingBytes > this.dailyByteQuota) {
+      throw new AppException(
+        ERROR_CODE.UPLOAD_RATE_LIMIT,
+        429,
+        "Kunlik yuklash chegarasiga yetdingiz, ertaga urinib ko'ring",
+      );
+    }
   }
 
   private async mayRead(asset: MediaAsset, studentId: string): Promise<boolean> {
@@ -248,21 +325,13 @@ export class ChatMediaService {
 
   // ---- per-kind processing ----
 
-  private async buildImage(base: NewMediaAsset, file: UploadedChatFile): Promise<NewMediaAsset> {
-    const dimensions = await readDimensions(file.buffer).catch(() => null);
-    if (dimensions === null) {
-      throw new AppException(ERROR_CODE.FILE_TYPE_NOT_ALLOWED, 422, "Rasmni o'qib bo'lmadi");
-    }
-    const maxSide = MEDIA_LIMITS[MediaKind.IMAGE].maxDimension;
-    if (maxSide !== null && Math.max(dimensions.width, dimensions.height) > maxSide) {
-      throw new AppException(
-        ERROR_CODE.MEDIA_TOO_LARGE_DIMENSIONS,
-        422,
-        `Rasm tomoni ${maxSide} pikseldan oshmasligi kerak`,
-      );
-    }
-
-    const processed = await processImage(file.buffer);
+  private async buildImage(
+    base: NewMediaAsset,
+    file: UploadedChatFile,
+    kind: MediaKind,
+  ): Promise<NewMediaAsset> {
+    await this.assertDecodable(file, kind);
+    const processed = await processImage(file.path);
     return {
       ...base,
       storageKey: await this.storage.save(processed.full, processed.extension),
@@ -275,35 +344,58 @@ export class ChatMediaService {
     };
   }
 
-  /** GIF in, silent looping MP4 out — the same trade every modern chat makes (spec §4.5). */
-  private async buildGif(
+  /**
+   * Full-resolution image (parity spec §3).
+   *
+   * `full === null` means the processor found nothing to strip, so the upload's own bytes are what
+   * gets stored — `saveFile` moves them without reading them, and the recipient downloads exactly
+   * what the sender picked.
+   */
+  private async buildOriginalImage(
     base: NewMediaAsset,
     file: UploadedChatFile,
-    extension: string,
+    kind: MediaKind,
   ): Promise<NewMediaAsset> {
+    await this.assertDecodable(file, kind);
+    const processed = await processOriginalImage(file.path);
+    return {
+      ...base,
+      storageKey:
+        processed.full === null
+          ? await this.storage.saveFile(file.path, processed.extension)
+          : await this.storage.save(processed.full, processed.extension),
+      thumbStorageKey: await this.storage.save(processed.thumb, 'webp'),
+      mimeType: processed.mimeType,
+      sizeBytes: processed.full === null ? file.size : processed.full.length,
+      width: processed.width,
+      height: processed.height,
+      blurHash: processed.blurHash,
+    };
+  }
+
+  /** GIF in, silent looping MP4 out — the same trade every modern chat makes. */
+  private async buildGif(base: NewMediaAsset, file: UploadedChatFile): Promise<NewMediaAsset> {
     return this.inTempDir(async (dir) => {
-      const source = join(dir, `in.${extension}`);
       const output = join(dir, 'out.mp4');
       const poster = join(dir, 'poster.jpg');
-      await writeFile(source, file.buffer);
 
-      const probe = await this.probeOrReject(source);
+      const probe = await this.probeOrReject(file.path);
       this.assertDuration(probe.durationMs, MediaKind.GIF);
 
-      await this.ffmpeg.toLoopingMp4(source, output);
+      await this.ffmpeg.toLoopingMp4(file.path, output);
       await this.ffmpeg.extractFrame(output, poster, 0);
 
-      const mp4 = await readFile(output);
-      const { thumb, blurHash } = await thumbnailFrom(await readFile(poster));
+      const { thumb, blurHash } = await thumbnailFrom(poster);
       const converted = await this.ffmpeg.probe(output);
+      const { size } = await stat(output);
 
       return {
         ...base,
         isAnimated: true,
-        storageKey: await this.storage.save(mp4, 'mp4'),
+        storageKey: await this.storage.saveFile(output, 'mp4'),
         thumbStorageKey: await this.storage.save(thumb, 'jpg'),
         mimeType: 'video/mp4',
-        sizeBytes: mp4.length,
+        sizeBytes: size,
         width: converted.width,
         height: converted.height,
         durationMs: converted.durationMs,
@@ -317,24 +409,19 @@ export class ChatMediaService {
     file: UploadedChatFile,
     extension: string,
   ): Promise<NewMediaAsset> {
-    return this.inTempDir(async (dir) => {
-      const source = join(dir, `voice.${extension}`);
-      await writeFile(source, file.buffer);
+    const probe = await this.probeOrReject(file.path);
+    this.assertDuration(probe.durationMs, MediaKind.VOICE);
 
-      const probe = await this.probeOrReject(source);
-      this.assertDuration(probe.durationMs, MediaKind.VOICE);
+    // The waveform is not decoration: without it the client cannot draw the bubble at all, so a
+    // half-computed voice note is worse than a rejected one.
+    const waveform = computeWaveform(await this.ffmpeg.decodePcm(file.path));
 
-      // The waveform is not decoration: without it the client cannot draw the bubble at all, so a
-      // half-computed voice note is worse than a rejected one.
-      const waveform = computeWaveform(await this.ffmpeg.decodePcm(source));
-
-      return {
-        ...base,
-        storageKey: await this.storage.save(file.buffer, extension),
-        durationMs: probe.durationMs,
-        waveform,
-      };
-    });
+    return {
+      ...base,
+      storageKey: await this.storage.saveFile(file.path, extension),
+      durationMs: probe.durationMs,
+      waveform,
+    };
   }
 
   private async buildVideo(
@@ -342,32 +429,39 @@ export class ChatMediaService {
     file: UploadedChatFile,
     extension: string,
     kind: MediaKind,
+    requested: MediaQuality | undefined,
   ): Promise<NewMediaAsset> {
     return this.inTempDir(async (dir) => {
-      const source = join(dir, `in.${extension}`);
       const poster = join(dir, 'poster.jpg');
-      await writeFile(source, file.buffer);
 
-      const probe = await this.probeOrReject(source);
-      // `kind`, not a hardcoded VIDEO: a story is capped at 30 seconds where a chat video gets three
-      // minutes, and passing the wrong one here would let a 3-minute story through.
+      const probe = await this.probeOrReject(file.path);
+      // `kind`, not a hardcoded VIDEO: a story is capped at a minute and so is a round message,
+      // where a chat video has no ceiling at all. Passing the wrong one here would let an
+      // hour-long story through.
       this.assertDuration(probe.durationMs, kind);
+      if (kind === MediaKind.VIDEO_NOTE) {
+        assertSquare(probe);
+      }
 
-      await this.ffmpeg.extractFrame(
-        source,
-        poster,
-        probe.durationMs !== null && probe.durationMs > 1000 ? 1 : 0,
-      );
-      const { thumb, blurHash } = await thumbnailFrom(await readFile(poster));
+      // A round message is a glance — the first frame is the subject's face. A normal clip often
+      // opens on black, so a second in is the more useful poster.
+      const posterAt = kind === MediaKind.VIDEO_NOTE ? 0 : posterOffsetFor(probe.durationMs);
+      await this.ffmpeg.extractFrame(file.path, poster, posterAt);
+      const { thumb, blurHash } = await thumbnailFrom(poster);
 
-      // Already the codec pair every phone decodes in hardware ⇒ nothing to re-encode.
+      // Already the codec pair every phone decodes in hardware ⇒ nothing to re-encode. `ORIGINAL`
+      // says not to re-encode whatever the codecs are: the sender chose their own encode, and
+      // honouring that is the entire point of the setting (parity spec §4.2).
+      const quality = requested ?? MediaQuality.AUTO;
       const alreadyPlayable =
         probe.videoCodec === 'h264' && (!probe.hasAudio || probe.audioCodec === 'aac');
+      const keepAsSent = quality === MediaQuality.ORIGINAL || alreadyPlayable;
 
       return {
         ...base,
-        status: alreadyPlayable ? MediaStatus.READY : MediaStatus.PROCESSING,
-        storageKey: await this.storage.save(file.buffer, extension),
+        status: keepAsSent ? MediaStatus.READY : MediaStatus.PROCESSING,
+        quality,
+        storageKey: await this.storage.saveFile(file.path, extension),
         thumbStorageKey: await this.storage.save(thumb, 'jpg'),
         // Keep the real type until the transcode actually runs — the bytes on disk are still the
         // original container, and the transcoder sets `video/mp4` when it has produced one.
@@ -389,7 +483,28 @@ export class ChatMediaService {
 
   // ---- helpers ----
 
-  private async probeOrReject(path: string): ReturnType<FfmpegRunner['probe']> {
+  /**
+   * Checks that sharp can open the image and that it is not a decompression bomb.
+   *
+   * This survives §2's removal of the size limits on purpose, because it is not about size: a
+   * 50000×50000 PNG is a few hundred kilobytes on disk and about ten gigabytes decoded.
+   */
+  private async assertDecodable(file: UploadedChatFile, kind: MediaKind): Promise<void> {
+    const dimensions = await readDimensions(file.path).catch(() => null);
+    if (dimensions === null) {
+      throw new AppException(ERROR_CODE.FILE_TYPE_NOT_ALLOWED, 422, "Rasmni o'qib bo'lmadi");
+    }
+    const maxSide = MEDIA_LIMITS[kind].maxDimension;
+    if (maxSide !== null && Math.max(dimensions.width, dimensions.height) > maxSide) {
+      throw new AppException(
+        ERROR_CODE.MEDIA_TOO_LARGE_DIMENSIONS,
+        422,
+        `Rasm tomoni ${maxSide} pikseldan oshmasligi kerak`,
+      );
+    }
+  }
+
+  private async probeOrReject(path: string): Promise<ProbeResult> {
     try {
       return await this.ffmpeg.probe(path);
     } catch (error) {
@@ -402,26 +517,57 @@ export class ChatMediaService {
     }
   }
 
+  /**
+   * The only duration ceilings left after parity spec §2: a story video and a round message, both a
+   * minute. A story gets its own error code because the client shows that limit to the user.
+   */
   private assertDuration(durationMs: number | null, kind: MediaKind): void {
     const max = MEDIA_LIMITS[kind].maxDurationMs;
-    if (max !== null && durationMs !== null && durationMs > max) {
+    if (max === null || durationMs === null || durationMs <= max) {
+      return;
+    }
+    const seconds = Math.floor(max / 1000);
+    if (kind === MediaKind.STORY_VIDEO) {
       throw new AppException(
-        ERROR_CODE.MEDIA_TOO_LONG,
+        ERROR_CODE.STORY_VIDEO_TOO_LONG,
         422,
-        `Davomiyligi ${Math.floor(max / 1000)} soniyadan oshmasligi kerak`,
+        `Story uchun video ${seconds} soniyadan oshmasligi kerak`,
       );
     }
+    throw new AppException(
+      ERROR_CODE.MEDIA_TOO_LONG,
+      422,
+      `Davomiyligi ${seconds} soniyadan oshmasligi kerak`,
+    );
   }
 
   /** Runs `work` in a scratch directory that is always removed, success or failure. */
   private async inTempDir<T>(work: (dir: string) => Promise<T>): Promise<T> {
-    const dir = await mkdtemp(join(tmpdir(), 'chat-media-'));
+    // Inside the media root, not the OS temp dir: `saveFile` then promotes ffmpeg's output with a
+    // rename instead of copying every byte of it a second time.
+    const dir = await mkdtemp(join(this.storage.tempDir, 'work-'));
     try {
       return await work(dir);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
   }
+}
+
+/** A round video message that is not round would reach the recipient as a squashed circle. */
+function assertSquare(probe: ProbeResult): void {
+  if (probe.width === null || probe.height === null || probe.width !== probe.height) {
+    throw new AppException(
+      ERROR_CODE.MEDIA_NOT_SQUARE,
+      422,
+      "Dumaloq video xabar kvadrat bo'lishi kerak",
+    );
+  }
+}
+
+/** A second in, unless the clip is shorter than that. */
+function posterOffsetFor(durationMs: number | null): number {
+  return durationMs !== null && durationMs > 1000 ? 1 : 0;
 }
 
 function requireFile(file: UploadedChatFile | undefined): UploadedChatFile {

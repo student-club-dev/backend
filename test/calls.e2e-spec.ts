@@ -22,7 +22,9 @@ import { ChatGateway } from '../src/modules/chat/chat.gateway';
 // at import time, and `AppConfigModule` runs it from AppModule's own module metadata. Hence the
 // dynamic import in `beforeAll` — a static one would hoist above these two lines. TURN is optional
 // outside production (a deployment without it answers a clean 503), but the credential path is
-// what this file is here to test.
+// what this file is here to test. CALLS_ENABLED must also be 'true' here — the master switch gates
+// `ice-servers` (and `call:invite`) independently of TURN's own presence.
+process.env.CALLS_ENABLED = 'true';
 process.env.TURN_HOST = 'turn.e2e.test';
 process.env.TURN_STATIC_SECRET = 'e2e-static-secret';
 

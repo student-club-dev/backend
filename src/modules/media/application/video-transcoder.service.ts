@@ -1,10 +1,11 @@
-import { mkdtemp, readFile, rm, writeFile } from 'fs/promises';
-import { tmpdir } from 'os';
+import { createWriteStream } from 'fs';
+import { mkdtemp, rm, stat } from 'fs/promises';
 import { join } from 'path';
+import { pipeline } from 'stream/promises';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { Env } from '../../../config/env';
-import { MediaStatus } from '../domain/enums/media-kind.enum';
+import { MediaQuality, MediaStatus } from '../domain/enums/media-kind.enum';
 import { MEDIA_ASSET_REPOSITORY, MediaAssetRepository } from '../domain/media-asset.repository';
 import { ChatMediaStorage } from '../infrastructure/chat-media.storage';
 import { FfmpegRunner } from '../infrastructure/ffmpeg.runner';
@@ -13,9 +14,13 @@ import { MediaReadyBus } from './media-ready.bus';
 /**
  * Re-encodes an uploaded video to the codec pair every phone decodes in hardware.
  *
- * This is the work behind `status: PROCESSING`. A 64 MB clip can take a minute, which is why the
+ * This is the work behind `status: PROCESSING`. A long clip can take minutes, which is why the
  * upload responds immediately with a `mediaId` and a poster frame: the student sends the message
  * straight away and the bytes catch up.
+ *
+ * Nothing here holds a video in memory. Parity spec §2 removed the size ceiling, so both the source
+ * and the output move through the filesystem — the source streamed out of storage, the output
+ * renamed back into it.
  */
 @Injectable()
 export class VideoTranscoderService {
@@ -44,22 +49,24 @@ export class VideoTranscoderService {
       return; // already done, or retried after success
     }
 
-    const dir = await mkdtemp(join(tmpdir(), 'transcode-'));
+    const dir = await mkdtemp(join(this.storage.tempDir, 'transcode-'));
     try {
       const source = join(dir, 'in');
       const output = join(dir, 'out.mp4');
-      await writeFile(source, await streamToBuffer(this.storage.read(asset.storageKey)));
+      await pipeline(this.storage.read(asset.storageKey), createWriteStream(source));
 
-      await this.ffmpeg.transcodeVideo(source, output);
-      const encoded = await readFile(output);
+      // The ladder the sender asked for (parity spec §4.2). `ORIGINAL` never reaches here — such an
+      // asset is created READY and is never queued.
+      await this.ffmpeg.transcodeVideo(source, output, asset.quality === MediaQuality.HIGH);
       const probe = await this.ffmpeg.probe(output);
-      const newKey = await this.storage.save(encoded, 'mp4');
+      const { size } = await stat(output);
+      const newKey = await this.storage.saveFile(output, 'mp4');
 
       const updated = await this.assets.markProcessed(assetId, {
         status: MediaStatus.READY,
         storageKey: newKey,
         mimeType: 'video/mp4',
-        sizeBytes: encoded.length,
+        sizeBytes: size,
         width: probe.width,
         height: probe.height,
         durationMs: probe.durationMs,
@@ -79,12 +86,4 @@ export class VideoTranscoderService {
       await rm(dir, { recursive: true, force: true });
     }
   }
-}
-
-async function streamToBuffer(stream: NodeJS.ReadableStream): Promise<Buffer> {
-  const chunks: Buffer[] = [];
-  for await (const chunk of stream) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-  }
-  return Buffer.concat(chunks);
 }

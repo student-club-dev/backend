@@ -33,8 +33,13 @@ describe('CallsController', () => {
 
   const config = (env: Record<string, unknown>) => ({ get: (key: string) => env[key] }) as never;
 
+  // CALLS_ENABLED defaults to 'true' here so the pre-existing TURN-focused tests below keep
+  // exercising exactly what they name — the flag itself gets its own dedicated tests.
   const controller = (env: Record<string, unknown> = {}): CallsController =>
-    new CallsController(calls as never, config({ TURN_TTL_SECONDS: 3600, ...env }));
+    new CallsController(
+      calls as never,
+      config({ TURN_TTL_SECONDS: 3600, CALLS_ENABLED: 'true', ...env }),
+    );
 
   const configured = { TURN_HOST: 'turn.elonuz.test', TURN_STATIC_SECRET: 's3cret' };
 
@@ -69,6 +74,20 @@ describe('CallsController', () => {
         expect.objectContaining({ status: 503, code: ERROR_CODE.NOT_IMPLEMENTED }),
       );
     });
+
+    // The master switch: CALLS_ENABLED must gate this endpoint regardless of TURN's own state.
+    describe('CALLS_ENABLED', () => {
+      it('answers 503 when the flag is off, even with TURN fully configured', () => {
+        expect(() =>
+          controller({ ...configured, CALLS_ENABLED: 'false' }).iceServers(user),
+        ).toThrow(expect.objectContaining({ status: 503, code: ERROR_CODE.NOT_IMPLEMENTED }));
+      });
+
+      it('issues a credential when the flag is on and TURN is configured', () => {
+        const result = controller({ ...configured, CALLS_ENABLED: 'true' }).iceServers(user);
+        expect(result.iceServers[1].credential).toEqual(expect.any(String));
+      });
+    });
   });
 
   /**
@@ -99,6 +118,12 @@ describe('CallsController', () => {
     it('defaults to the first page of 20', async () => {
       await controller().list(user, {});
       expect(calls.listForStudent).toHaveBeenCalledWith(ME, 1, 20);
+    });
+
+    // CALLS_ENABLED only gates `iceServers`/`invite` — history must stay readable regardless.
+    it('still returns history when CALLS_ENABLED is false', async () => {
+      const result = await controller({ CALLS_ENABLED: 'false' }).list(user, { page: 1, size: 20 });
+      expect(result.items).toHaveLength(1);
     });
 
     it('returns the project pagination envelope', async () => {

@@ -55,6 +55,9 @@ describe('CallsService lifecycle', () => {
     clearInCallCounters: jest.fn(),
   };
   const bus = { publish: jest.fn() };
+  // Only `invite` reads CALLS_ENABLED — none of the lifecycle methods this file exercises do, so
+  // the value here is inert for everything except the dedicated test below.
+  const config = { get: jest.fn(() => 'true') };
 
   const service = (): CallsService =>
     new CallsService(
@@ -66,6 +69,7 @@ describe('CallsService lifecycle', () => {
       { connectionState: jest.fn() } as never,
       limiter as never,
       bus as never,
+      config as never,
     );
 
   beforeEach(() => {
@@ -158,6 +162,17 @@ describe('CallsService lifecycle', () => {
       expect(outcome).not.toBeNull();
       expect(outcome?.participants).toEqual(expect.arrayContaining([CALLER, CALLEE]));
       expect(outcome?.durationMs).toBe(184_000);
+      expect(outcome?.endedBy).toBe(CallParty.CALLER);
+    });
+
+    // ⚠️ THE regression test for the master switch: flipping CALLS_ENABLED off must never strand a
+    // call already in progress. Only `invite` reads the flag — `end` must succeed exactly as if it
+    // were still on.
+    it('still ends an in-progress call when CALLS_ENABLED is false', async () => {
+      config.get.mockReturnValueOnce('false');
+      state.get.mockResolvedValue(liveState(CallStatus.ACTIVE));
+      const outcome = await service().end(CALLER, CALL_ID);
+      expect(outcome).not.toBeNull();
       expect(outcome?.endedBy).toBe(CallParty.CALLER);
     });
 

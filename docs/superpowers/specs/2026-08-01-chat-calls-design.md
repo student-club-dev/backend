@@ -408,6 +408,14 @@ Ishtirokchi bo'lmagan → **403 `FORBIDDEN`** (`CLAUDE.md` §Auth & Ownership: b
    `seq` ini surib, o'qilmagan sonini ko'tara olardi. Server `conversationId` ni (caller, callee)
    juftligidan **o'zi topadi**, klientning qiymatini e'tiborsiz qoldiradi.
 3. **Rate-limit** — §6.6.
+4. **`CALLS_ENABLED` — xususiyat bosh kaliti (3-tahrir, §16).** `invite()` ning eng boshida
+   tekshiriladi: `false` bo'lsa `NOT_IMPLEMENTED` (503) bilan rad etiladi, chastota chegarasi
+   (`limiter.checkInvite`), Redis `state.claim` va Postgres `calls.create` hech biri ishga
+   tushmaydi — rad etilgan taklif hech narsaga arzimaydi. Faqat shu bitta metodni to'xtatadi:
+   qolgan barcha lifecycle metodi (`accept`, `markConnected`, `decline`, `cancel`, `end`,
+   `relayTo`) va `GET /v1/calls` bayroqdan qat'i nazar ishlaydi — bayroqni o'chirish allaqachon
+   boshlangan qo'ng'iroqni tugatib bo'lmaydigan holga hech qachon keltirmaydi. `ice-servers` ham
+   xuddi shu bayroqqa bog'liq (§9.1).
 
 ### 6.2 Faqat uzatuvchi
 
@@ -651,6 +659,12 @@ HMAC-SHA1 — coturn'ning `use-auth-secret` protokoli
 (draft-uberti-behave-turn-rest-00), **boshqasini qabul qilmaydi**. SHA-1 ning to'qnashuv
 zaifliklari HMAC'ga taalluqli emas. Buni SHA-256 ga «yangilash» kerak emas.
 
+⚠️ **`CALLS_ENABLED` (3-tahrir, §16) — xususiyat bosh kaliti, TURN'dan mustaqil.** `false` bo'lsa
+bu endpoint TURN qanday sozlanganidan qat'i nazar **doim** 503 (`NOT_IMPLEMENTED`) qaytaradi;
+`true` bo'lgandagina pastdagi TURN mavjudligi tekshiruvi ishlaydi. `call:invite` ham xuddi shu
+bayroqqa bog'liq (§6.1 4-band) — ikkalasi ham "yangi qo'ng'iroq boshlash mumkinmi" degan bitta
+savolni javoblaydi.
+
 Lekin nima ekanini aniq bilib turaylik: bu — **relay tarmoq kengligiga bearer capability**, aniq
 qo'ng'iroqqa yoki peer'ga bog'lanmagan. Shuning uchun: `@UseGuards(JwtAuthGuard, StudentGuard)`,
 `studentId` **faqat `@CurrentUser()` dan** (query/body'dan emas), `@Throttle(10/daqiqa)`. coturn
@@ -887,6 +901,15 @@ Qabul qilingan asosiy tuzatishlar:
 | db | §2.2 #4 — `tokenType` taxmini `FCM` (aks holda mavjud iOS push'i o'ladi) |
 | db | §4.3 — telemetriya alohida jadvalga (ikki ishtirokchi, har xil metrika) |
 | db | §4.1 — `durationMs` olib tashlandi, `endedBy` → enum, `updatedAt` qo'shildi |
+
+**3-tahrir (2026-08-03)** — `CALLS_ENABLED` haqiqiy xususiyat bosh kalitiga aylantirildi (repo
+egasining tuzatishi). Ilgari bayroq faqat production'dagi env tekshiruvini boshqarardi:
+`GET /v1/calls/ice-servers` bayroqni umuman o'qimay, faqat TURN mavjudligini tekshirar edi — ya'ni
+`CALLS_ENABLED=false` bo'lsa ham TURN sozlangan bo'lса qo'ng'iroq baribir ishlardi.
+
+| Manba | Tuzatish |
+|---|---|
+| repo egasi | §6.1 4-band, §9.1 — `CALLS_ENABLED=false` endi `GET /v1/calls/ice-servers` ni TURN holatidan qat'i nazar 503 qiladi va `call:invite` ni `NOT_IMPLEMENTED` bilan rad etadi (`limiter.checkInvite`/`state.claim`/`calls.create` ishga tushmaydi — rad etilgan taklif xarajatsiz). Qolgan barcha lifecycle metodi va `GET /v1/calls` bayroqdan mustaqil qoladi, aynan shu — bayroqni o'chirish jonli qo'ng'iroqni tugatib bo'lmaydigan holga hech qachon keltirmasligi uchun |
 
 ## 17. Mobil jamoaga aytiladigan o'zgarishlar
 

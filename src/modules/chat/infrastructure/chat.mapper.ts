@@ -9,8 +9,13 @@ import {
 import { CallEndReason } from '../../calls/domain/enums/call-end-reason.enum';
 import { CallMedia } from '../../calls/domain/enums/call-media.enum';
 import { CallStatus } from '../../calls/domain/enums/call-status.enum';
-import { MediaAsset } from '../../media/domain/entities/media-asset.entity';
-import { MediaKind, MediaProvider, MediaStatus } from '../../media/domain/enums/media-kind.enum';
+import { MediaAsset, MediaVariant } from '../../media/domain/entities/media-asset.entity';
+import {
+  MediaKind,
+  MediaProvider,
+  MediaQuality,
+  MediaStatus,
+} from '../../media/domain/enums/media-kind.enum';
 import { StudentSummary } from '../../connections/domain/entities/student-summary.entity';
 import {
   ProfilePhotoRow,
@@ -171,6 +176,7 @@ export class ChatMapper {
       conversationId: row.conversationId,
       kind: MediaKind[row.kind],
       status: MediaStatus[row.status],
+      quality: row.quality === null ? null : MediaQuality[row.quality],
       isAnimated: row.isAnimated,
       storageKey: row.storageKey,
       thumbStorageKey: row.thumbStorageKey,
@@ -184,6 +190,10 @@ export class ChatMapper {
       height: row.height,
       durationMs: row.durationMs,
       waveform: row.waveform,
+      transcript: row.transcript,
+      // Reserved by parity spec §4.3 and never written yet, so anything but a stored array reads as
+      // absent rather than being trusted into the DTO.
+      variants: Array.isArray(row.variants) ? (row.variants as unknown as MediaVariant[]) : null,
       fileName: row.fileName,
       blurHash: row.blurHash,
       messageId: row.messageId,

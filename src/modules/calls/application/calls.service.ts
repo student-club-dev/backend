@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { ERROR_CODE } from '../../../common/errors/error-code';
 import { AppException } from '../../../common/exceptions/app.exception';
+import type { Env } from '../../../config/env';
 import {
   CONNECTION_CHECK,
   ConnectionCheckRepository,
@@ -80,6 +82,7 @@ export class CallsService {
     @Inject(CONNECTION_CHECK) private readonly connections: ConnectionCheckRepository,
     private readonly limiter: CallRateLimiter,
     private readonly endedBus: CallEndedBus,
+    private readonly config: ConfigService<Env, true>,
   ) {}
 
   /** `CallsGateway` registers here — the service must not import a gateway (transport, and a cycle). */
@@ -111,6 +114,14 @@ export class CallsService {
   }
 
   async invite(callerId: string, input: InviteInput): Promise<InviteResult> {
+    // The feature's master switch: while off, no NEW call may start, but this must never touch the
+    // rate limiter, `state.claim` or `calls.create` — a rejected invite costs nothing. Checked first,
+    // before anything else in this method, for exactly that reason. Every other lifecycle method
+    // (`accept`, `end`, `decline`, `cancel`, `relayTo`, …) is deliberately left ungated: flipping this
+    // off must never strand an already-live call with no way to end it.
+    if (this.config.get('CALLS_ENABLED', { infer: true }) !== 'true') {
+      throw new AppException(ERROR_CODE.NOT_IMPLEMENTED, 503, 'Qo‘ng‘iroq xizmati sozlanmagan');
+    }
     if (input.calleeId === callerId) {
       throw AppException.validation({ calleeId: 'O‘zingizga qo‘ng‘iroq qilib bo‘lmaydi' });
     }
