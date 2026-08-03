@@ -19,6 +19,7 @@ import {
   ConversationPage,
   MessageAuthRow,
   MessageViewer,
+  PushSender,
   UnreadSummary,
 } from '../domain/chat.repository';
 import { DeleteScope } from '../domain/enums/delete-scope.enum';
@@ -676,10 +677,16 @@ export class ChatPrismaRepository implements ChatRepository {
       where: { id: studentId },
       select: { firstName: true, lastName: true, username: true },
     });
-    if (row === null) {
-      return null;
-    }
-    return [row.firstName, row.lastName].filter(Boolean).join(' ') || row.username;
+    return row === null ? null : toDisplayName(row);
+  }
+
+  /** Name + avatar in one read — a push title needs both, or neither. */
+  async pushSenderOf(studentId: string): Promise<PushSender | null> {
+    const row = await this.prisma.student.findUnique({
+      where: { id: studentId },
+      select: { firstName: true, lastName: true, username: true, avatarUrl: true },
+    });
+    return row === null ? null : { name: toDisplayName(row), avatarUrl: row.avatarUrl };
   }
 
   async lastSeenVisibilityOf(studentId: string): Promise<LastSeenVisibility> {
@@ -691,6 +698,19 @@ export class ChatPrismaRepository implements ChatRepository {
       ? LastSeenVisibility.NOBODY
       : LAST_SEEN_VISIBILITY_TO_DOMAIN[row.lastSeenVisibility];
   }
+}
+
+/**
+ * Full name, else username, else null. Shared by the two callers deliberately: a reply snapshot and
+ * a push notification naming the same person differently is the kind of inconsistency nobody
+ * reports as a bug and everybody notices.
+ */
+function toDisplayName(row: {
+  firstName: string | null;
+  lastName: string | null;
+  username: string | null;
+}): string | null {
+  return [row.firstName, row.lastName].filter(Boolean).join(' ') || row.username;
 }
 
 /** Whether a P2002 came from the attachment's `message_id` index rather than `clientMsgId`. */

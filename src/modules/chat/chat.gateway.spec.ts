@@ -40,6 +40,7 @@ interface ChatMocks {
   markRead?: jest.Mock;
   markDelivered?: jest.Mock;
   unreadTotalFor?: jest.Mock;
+  pushSenderOf?: jest.Mock;
 }
 
 function makeGateway(chat: ChatMocks): {
@@ -50,8 +51,13 @@ function makeGateway(chat: ChatMocks): {
 } {
   const push = jest.fn();
   const gateway = new ChatGateway(
-    // The badge count is asked for on every offline push; tests that care override it.
-    { unreadTotalFor: jest.fn().mockResolvedValue(0), ...chat } as unknown as ChatService,
+    // The badge count and the sender's identity are asked for on every offline push; tests that
+    // care override them.
+    {
+      unreadTotalFor: jest.fn().mockResolvedValue(0),
+      pushSenderOf: jest.fn().mockResolvedValue(null),
+      ...chat,
+    } as unknown as ChatService,
     { pushToStudent: push } as unknown as NotificationsService,
     {} as JwtService,
     { get: () => 'v1' } as unknown as ConfigService<never, true>,
@@ -182,6 +188,133 @@ describe('ChatGateway — the badge on an offline push', () => {
 
     expect(push).not.toHaveBeenCalled();
     expect(unreadTotalFor).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * Every push said "Yangi xabar", so a recipient with unread messages from several people could not
+ * tell from the notification list who to answer. The title has to carry the name and the server is
+ * the only place that can put it there: when a `notification` block is present Android draws the
+ * notification itself without ever running app code, and iOS cannot rewrite `aps.alert.title`
+ * either. Requested by the mobile team in `PUSH_SENDER_NAME_BACKEND.md`.
+ */
+describe('ChatGateway — who the offline push says it is from', () => {
+  type PushPayload = { title: string; data: Record<string, string> };
+
+  async function pushFor(
+    sender: { name: string | null; avatarUrl: string | null } | null,
+    override: Partial<Message> = {},
+  ): Promise<PushPayload> {
+    const { gateway, push } = makeGateway({
+      otherMemberId: jest.fn().mockResolvedValue(OTHER),
+      isOnline: jest.fn().mockResolvedValue(false),
+      pushSenderOf: jest.fn().mockResolvedValue(sender),
+    });
+    await gateway.broadcastMessage({ ...message, ...override });
+    return push.mock.calls[0][1] as PushPayload;
+  }
+
+  it('titles the push with the sender’s name and repeats it in data', async () => {
+    const payload = await pushFor({ name: 'Aziz Karimov', avatarUrl: 'https://cdn/a.jpg' });
+
+    expect(payload.title).toBe('Aziz Karimov');
+    expect(payload.data.senderName).toBe('Aziz Karimov');
+    expect(payload.data.senderId).toBe(SENDER);
+    expect(payload.data.senderAvatarUrl).toBe('https://cdn/a.jpg');
+  });
+
+  it('keeps the deep-link data the client already routes on', async () => {
+    const payload = await pushFor({ name: 'Aziz Karimov', avatarUrl: null });
+
+    expect(payload.data.conversationId).toBe('cnv_1');
+    expect(payload.data.messageType).toBe(MessageType.TEXT);
+  });
+
+  // FCM rejects a non-string `data` value, and a literal "null" would be rendered as a broken image
+  // by a client that trusts the field's presence — absent is the only correct way to say "none".
+  it('omits senderAvatarUrl entirely when the sender has no avatar', async () => {
+    const payload = await pushFor({ name: 'Aziz Karimov', avatarUrl: null });
+
+    expect(payload.data).not.toHaveProperty('senderAvatarUrl');
+  });
+
+  // A deleted account, or one that never filled in a name or username. The notification must still
+  // arrive — an empty title is worse than a generic one.
+  it('falls back to “Yangi xabar” when the sender has no name', async () => {
+    expect((await pushFor({ name: null, avatarUrl: null })).title).toBe('Yangi xabar');
+    expect((await pushFor(null)).title).toBe('Yangi xabar');
+  });
+
+  it('omits senderName when there is none, but still sends senderId', async () => {
+    const payload = await pushFor(null);
+
+    expect(payload.data).not.toHaveProperty('senderName');
+    expect(payload.data.senderId).toBe(SENDER);
+  });
+
+  /**
+   * `firstName`/`lastName` are `@IsString()` with no length limit, so the name is attacker-chosen
+   * and unbounded — the only such string in the payload, since `pushTextFor` already cuts the body
+   * to 120. Left whole it would carry a multi-kilobyte name into a 4 KB payload; FCM answers
+   * INVALID_ARGUMENT, `FcmPushProvider` files that under "dead token", and `pushToStudent` deletes
+   * the row. The recipient would then lose push from everyone, silently, because someone they are
+   * connected to renamed themselves.
+   */
+  it('caps the name a sender can put on someone else’s lock screen', async () => {
+    const payload = await pushFor({ name: 'A'.repeat(5000), avatarUrl: null });
+
+    expect(payload.title).toBe('A'.repeat(64));
+    expect(payload.data.senderName).toBe('A'.repeat(64));
+  });
+
+  // A name is stored exactly as it was typed — `firstName` has no trim on the way in — so a title
+  // taken from it straight would render as an empty notification, which §6.3 rules out.
+  it('treats a whitespace-only name as no name at all', async () => {
+    const payload = await pushFor({ name: '   ', avatarUrl: null });
+
+    expect(payload.title).toBe('Yangi xabar');
+    expect(payload.data).not.toHaveProperty('senderName');
+  });
+
+  // SYSTEM rows are written by the server, not by a person (`sendMessage` rejects the type from a
+  // client), so attributing one to whoever happens to be in `senderId` would be a lie. `data` has
+  // to agree with the title: the mobile contract says `senderName` and `title` are the same string.
+  it('gives a SYSTEM message the product name and no sender identity at all', async () => {
+    const pushSenderOf = jest.fn().mockResolvedValue({ name: 'Aziz Karimov', avatarUrl: 'x' });
+    const { gateway, push } = makeGateway({
+      otherMemberId: jest.fn().mockResolvedValue(OTHER),
+      isOnline: jest.fn().mockResolvedValue(false),
+      pushSenderOf,
+    });
+
+    await gateway.broadcastMessage({ ...message, type: MessageType.SYSTEM });
+    const payload = push.mock.calls[0][1] as PushPayload;
+
+    expect(payload.title).toBe('StudentClub');
+    expect(payload.data).not.toHaveProperty('senderName');
+    expect(payload.data).not.toHaveProperty('senderAvatarUrl');
+    // Nothing to look up — the row has no person behind it.
+    expect(pushSenderOf).not.toHaveBeenCalled();
+  });
+
+  // A missed call now names the caller — the same push path, so it comes for free.
+  it('names the caller on a CALL message', async () => {
+    const payload = await pushFor(
+      { name: 'Aziz Karimov', avatarUrl: null },
+      {
+        type: MessageType.CALL,
+        body: null,
+        call: {
+          callId: 'call_1',
+          media: CallMedia.AUDIO,
+          status: CallStatus.MISSED,
+          durationMs: 0,
+          endReason: CallEndReason.TIMEOUT,
+        },
+      },
+    );
+
+    expect(payload.title).toBe('Aziz Karimov');
   });
 });
 

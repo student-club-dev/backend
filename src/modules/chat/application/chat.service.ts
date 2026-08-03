@@ -27,6 +27,7 @@ import {
   ChatRepository,
   ExternalStickerRow,
   MessageViewer,
+  PushSender,
   ReplyColumns,
   SkippedMessage,
   UnreadSummary,
@@ -654,6 +655,11 @@ export class ChatService {
   /** How many messages share an album id — the gateway coalesces pushes with it. */
   countInAlbum(conversationId: string, albumId: string): Promise<number> {
     return this.chat.countInAlbum(conversationId, albumId);
+  }
+
+  /** Name + avatar for the title of an offline push. */
+  pushSenderOf(studentId: string): Promise<PushSender | null> {
+    return this.chat.pushSenderOf(studentId);
   }
 
   /** A socket connected — mark the student online. */
