@@ -492,19 +492,16 @@ describe('StoriesService', () => {
       expect(mediaFiles.deleteAssets).not.toHaveBeenCalled();
     });
 
-    it('leaves an expired story alone — expiry is an archive, not a delete', async () => {
-      const mediaFiles = makeMediaFiles();
+    it('sweeps on the delete timestamp, not on expiry — an expired story is an archive', async () => {
       const stories = makeStories();
-      await makeService(
-        stories,
-        makeAudience(),
-        makeDirectory(),
-        makeMedia(),
-        mediaFiles,
-      ).purgeDeleted();
-      // The sweep asks only about `deletedAt` now; nothing here reaches for `expiresAt`.
-      expect(stories.findDeletedPurgeable).toHaveBeenCalled();
-      expect(mediaFiles.deleteAssets).not.toHaveBeenCalled();
+      const before = Date.now();
+      await makeService(stories).purgeDeleted();
+
+      // The cutoff is `deletedAt < now - 24h`. Were this still driven by `expiresAt`, every
+      // archived story in the table would be inside the batch it deletes.
+      const [cutoff] = (stories.findDeletedPurgeable as jest.Mock).mock.calls[0] as [Date];
+      expect(before - cutoff.getTime()).toBeGreaterThanOrEqual(24 * 3600_000);
+      expect(before - cutoff.getTime()).toBeLessThan(24 * 3600_000 + 5_000);
     });
   });
 

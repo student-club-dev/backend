@@ -317,13 +317,7 @@ export class ChatMediaService {
     if (ids.length === 0) {
       return 0;
     }
-    for (const asset of await this.assets.findByIds(ids)) {
-      for (const key of [asset.storageKey, asset.thumbStorageKey]) {
-        if (key !== null) {
-          await this.storage.delete(key).catch(() => undefined);
-        }
-      }
-    }
+    await this.deleteBytesOf(ids);
     await this.assets.deleteMany(ids);
     return ids.length;
   }
@@ -339,6 +333,18 @@ export class ChatMediaService {
     if (ids.length === 0) {
       return 0;
     }
+    await this.deleteBytesOf(ids);
+    await this.assets.clearStorageKeys(ids);
+    return ids.length;
+  }
+
+  /**
+   * Removes the files behind these assets, leaving the rows to the caller.
+   *
+   * A missing file is not an error worth stopping for: the sweep that calls this has to get through
+   * its batch, and a key already gone is the state it was trying to reach anyway.
+   */
+  private async deleteBytesOf(ids: string[]): Promise<void> {
     for (const asset of await this.assets.findByIds(ids)) {
       for (const key of [asset.storageKey, asset.thumbStorageKey]) {
         if (key !== null) {
@@ -346,8 +352,6 @@ export class ChatMediaService {
         }
       }
     }
-    await this.assets.clearStorageKeys(ids);
-    return ids.length;
   }
 
   // ---- per-kind processing ----

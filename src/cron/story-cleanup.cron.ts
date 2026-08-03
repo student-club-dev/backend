@@ -39,7 +39,9 @@ export class StoryCleanupCron {
   async sweepArchive(): Promise<void> {
     const purged = await this.stories.purgeArchivedMedia();
     if (purged > 0) {
-      this.logger.log(`Reclaimed the files of ${purged} archived stor${purged === 1 ? 'y' : 'ies'}`);
+      this.logger.log(
+        `Reclaimed the files of ${purged} archived stor${purged === 1 ? 'y' : 'ies'}`,
+      );
     }
   }
 }

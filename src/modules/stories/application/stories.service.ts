@@ -66,8 +66,7 @@ export class StoriesService {
     config: ConfigService<Env, true>,
   ) {
     this.apiBase = `/${config.get('API_PREFIX', { infer: true })}`;
-    this.archiveRetentionMs =
-      config.get('STORY_ARCHIVE_RETENTION_DAYS', { infer: true }) * DAY_MS;
+    this.archiveRetentionMs = config.get('STORY_ARCHIVE_RETENTION_DAYS', { infer: true }) * DAY_MS;
   }
 
   /** Posts a story from an already-uploaded `STORY_IMAGE` / `STORY_VIDEO` asset. */
