@@ -184,6 +184,7 @@ function endedCall(overrides: Partial<Call> = {}): Call {
     callerId: 'A',
     calleeId: 'B',
     media: CallMedia.AUDIO,
+    relayOnly: false,
     status: CallStatus.ENDED,
     startedAt: new Date('2026-07-01T00:00:00.000Z'),
     answeredAt: new Date('2026-07-01T00:00:00.000Z'),

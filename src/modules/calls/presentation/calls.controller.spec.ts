@@ -4,6 +4,8 @@ import { CallEndReason } from '../domain/enums/call-end-reason.enum';
 import { CallMedia } from '../domain/enums/call-media.enum';
 import { CallParty } from '../domain/enums/call-party.enum';
 import { CallStatus } from '../domain/enums/call-status.enum';
+import { CallStat } from '../domain/entities/call-stat.entity';
+import { IceCandidateType } from '../domain/enums/ice-candidate-type.enum';
 import { CallsController, trackerOf } from './calls.controller';
 
 const ME = 'std_me';
@@ -17,6 +19,7 @@ const call = (overrides: Partial<Call> = {}): Call => ({
   callerId: ME,
   calleeId: PEER,
   media: CallMedia.AUDIO,
+  relayOnly: false,
   status: CallStatus.ENDED,
   startedAt: new Date('2026-08-01T10:00:00.000Z'),
   answeredAt: new Date('2026-08-01T10:00:10.000Z'),
@@ -26,10 +29,26 @@ const call = (overrides: Partial<Call> = {}): Call => ({
   ...overrides,
 });
 
+/** Byte counts sit above Int32 on purpose — they are `BigInt` in the row and must survive the DTO. */
+const recordedStat: CallStat = {
+  callId: 'call_1',
+  studentId: ME,
+  rttMs: 42,
+  jitterMs: 7,
+  packetsLost: 3,
+  packetsReceived: 9000,
+  bytesSent: 3_000_000_000,
+  bytesReceived: 2_500_000_000,
+  candidateType: IceCandidateType.RELAY,
+  createdAt: new Date('2026-08-01T10:03:15.000Z'),
+};
+
 describe('CallsController', () => {
   const calls = {
     listForStudent: jest.fn(async () => ({ items: [call()], total: 1 })),
   };
+
+  const stats = { record: jest.fn(async () => recordedStat) };
 
   const config = (env: Record<string, unknown>) => ({ get: (key: string) => env[key] }) as never;
 
@@ -38,6 +57,7 @@ describe('CallsController', () => {
   const controller = (env: Record<string, unknown> = {}): CallsController =>
     new CallsController(
       calls as never,
+      stats as never,
       config({ TURN_TTL_SECONDS: 3600, CALLS_ENABLED: 'true', ...env }),
     );
 
@@ -73,6 +93,40 @@ describe('CallsController', () => {
       expect(() => controller(env).iceServers(user)).toThrow(
         expect.objectContaining({ status: 503, code: ERROR_CODE.NOT_IMPLEMENTED }),
       );
+    });
+
+    describe('ICE_PROVIDER=metered', () => {
+      const metered = {
+        ICE_PROVIDER: 'metered',
+        METERED_TURN_USERNAME: 'm_user',
+        METERED_TURN_CREDENTIAL: 'm_pass',
+      };
+
+      it('serves Metered’s hosts with the configured credential verbatim', () => {
+        const result = controller(metered).iceServers(user);
+        expect(result.iceServers[1].urls).toContain(
+          'turns:global.relay.metered.ca:443?transport=tcp',
+        );
+        expect(result.iceServers[1].username).toBe('m_user');
+        expect(result.iceServers[1].credential).toBe('m_pass');
+      });
+
+      /**
+       * ⚠️ Selecting a provider must actually select it. A deployment pointed at Metered while
+       * coturn credentials happen to linger in its env would relay through the wrong provider —
+       * and the quota arithmetic would then be tracking an account nobody is spending against.
+       */
+      it('ignores coturn credentials that are also present', () => {
+        const result = controller({ ...configured, ...metered }).iceServers(user);
+        const urls = result.iceServers.flatMap((s) => s.urls);
+        expect(urls.every((u) => u.includes('metered.ca'))).toBe(true);
+      });
+
+      it('answers 503 when its credentials are missing', () => {
+        expect(() => controller({ ICE_PROVIDER: 'metered' }).iceServers(user)).toThrow(
+          expect.objectContaining({ status: 503, code: ERROR_CODE.NOT_IMPLEMENTED }),
+        );
+      });
     });
 
     // The master switch: CALLS_ENABLED must gate this endpoint regardless of TURN's own state.
@@ -156,6 +210,30 @@ describe('CallsController', () => {
         total: 1,
       });
       expect((await controller().list(user, { page: 1, size: 20 })).items[0].durationMs).toBe(0);
+    });
+  });
+
+  describe('POST /v1/calls/:callId/stats', () => {
+    const body = { candidateType: IceCandidateType.RELAY, bytesSent: 3_000_000_000 };
+
+    /**
+     * ⚠️ THE security property of this endpoint. Two participants share a call, and the row is keyed
+     * on `(callId, studentId)` — so a student id taken from anywhere but the token would let one of
+     * them overwrite the other's report, or file one against a stranger's call.
+     */
+    it('attributes the report to the token subject, never to the request', async () => {
+      await controller().recordStats(user, 'call_1', { ...body, studentId: PEER } as never);
+      expect(stats.record).toHaveBeenCalledWith(ME, 'call_1', expect.objectContaining(body));
+    });
+
+    // Byte counts are `BigInt` in the row and clear Int32 on any real video call. A DTO that
+    // narrowed them would silently corrupt the only numbers the bandwidth forecast is built on.
+    it('carries byte counts above Int32 through to the response', async () => {
+      const result = await controller().recordStats(user, 'call_1', body as never);
+      expect(result.bytesSent).toBe(3_000_000_000);
+      expect(result.bytesReceived).toBe(2_500_000_000);
+      expect(result.candidateType).toBe(IceCandidateType.RELAY);
+      expect(result.recordedAt).toBe('2026-08-01T10:03:15.000Z');
     });
   });
 });

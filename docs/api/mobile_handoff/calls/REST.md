@@ -1,4 +1,4 @@
-# REST — ikkita endpoint va o'zgargan `MessageDto`
+# REST — uchta endpoint va o'zgargan `MessageDto`
 
 Hammasi odatdagi `BaseResponse` konvertida:
 
@@ -70,6 +70,49 @@ coturn'ning `use-auth-secret` sxemasi, aynan siz so'raganidek.
 Hisobni keshlang va muddati tugashiga ~5 daqiqa qolganda yangilang. U **qo'ng'iroqqa bog'lanmagan** —
 qo'ng'iroq uni yangilamaydi.
 
+### ⚠️ Ro'yxatning shakli o'zgarishi mumkin — hech narsani qotirmang (2026-08-03)
+
+Yuqoridagi misol **bizning coturn'imiz** uchun. Backend endi ikkita TURN provayderini qo'llab-quvvatlaydi
+(`ICE_PROVIDER` env), va ular boshqacha ro'yxat qaytaradi:
+
+| | Yozuvlar | Hostlar | Portlar |
+|---|---|---|---|
+| coturn (`static`) | 2 (STUN + TURN) | bitta | 3478, 443 |
+| Metered (`metered`) | 2 (STUN + TURN) | **ikkita** — `stun.relay.metered.ca`, `global.relay.metered.ca` | **80, 443** |
+
+Metered javobi:
+
+```json
+{
+  "iceServers": [
+    { "urls": ["stun:stun.relay.metered.ca:80"] },
+    {
+      "urls": [
+        "turn:global.relay.metered.ca:80",
+        "turn:global.relay.metered.ca:80?transport=tcp",
+        "turn:global.relay.metered.ca:443",
+        "turns:global.relay.metered.ca:443?transport=tcp"
+      ],
+      "username": "…", "credential": "…"
+    }
+  ],
+  "ttlSeconds": 3600
+}
+```
+
+Shundan kelib chiqadigan **uchta qoida**:
+
+1. **URL sonini qotirmang.** coturn'da TURN yozuvida 3 ta URL, Metered'da 4 ta. `urls` massivini
+   qanday kelsa shundayligicha `RTCConfiguration` ga bering.
+2. **Host nomini qotirmang va tekshirmang.** Ular deploy'ga qarab o'zgaradi.
+3. **`ttlSeconds` ma'nosi provayderga qarab farq qiladi.** coturn'da bu credential'ning haqiqiy
+   umri. Metered'da credential **umuman muddatsiz** — u yerda `ttlSeconds` faqat «shu vaqtdan keyin
+   qayta so'ra» degan maslahat. Ikkala holatda ham xatti-harakatingiz bir xil bo'lsin: muddat
+   tugashiga yaqin qayta so'rang. Metered'da bu bizga credential'ni almashtirish oynasini beradi.
+
+Sizga qaysi provayder ishlayotganini bilish **shart emas** va biz uni aytmaymiz ham — javobni
+shunchaki uzatasiz.
+
 ### Xatolar
 
 | HTTP | `error.code` | Qachon |
@@ -130,7 +173,90 @@ Enum'ning sakkizala qiymatini ham qayta ishlang.
 
 ---
 
-## 3. `MessageDto` — yangi `call` maydoni
+## 3. `POST /v1/calls/{callId}/stats` — YANGI (2026-08-03)
+
+Qo'ng'iroq tugagach, **har bir ishtirokchi o'z** `RTCPeerConnection.getStats()` o'lchovini yuboradi.
+
+| | |
+|---|---|
+| Auth | Bearer, STUDENT |
+| Yo'l parametri | `callId` — **UUID v4** (`call:invite` javobidagi qiymat) |
+| Chastota chegarasi | **daqiqasiga 30 ta**, `studentId` bo'yicha → `429 RATE_LIMITED` |
+| Javob kodi | **200** (201 emas — takroran yuborish bir xil qatorni qayta yozadi) |
+
+### Nima uchun kerak
+
+Bu raqamlar TURN tarmoq kengligi byudjetini hal qiladi. **Yuborilmasa — bizda hech qanday ma'lumot
+yo'q**, va relay ulushi haqida faqat taxmin qoladi. Buni ixtiyoriy telemetriya deb hisoblamang.
+
+### So'rov tanasi
+
+| Maydon | Tur | Majburiy | Chek |
+|---|---|---|---|
+| `candidateType` | `String` | **ha** | `HOST` · `SRFLX` · `RELAY` |
+| `rttMs` | `Int?` | yo'q | 0–60 000 |
+| `jitterMs` | `Int?` | yo'q | 0–10 000 |
+| `packetsLost` | `Int?` | yo'q | 0–100 000 000 |
+| `packetsReceived` | `Int?` | yo'q | 0–100 000 000 |
+| `bytesSent` | `Long?` | yo'q | 0–1 TB |
+| `bytesReceived` | `Long?` | yo'q | 0–1 TB |
+
+⚠️ **`studentId` yubormang** — u tokendan olinadi. Yuborsangiz `forbidNonWhitelisted` uni
+**422 `VALIDATION_ERROR`** bilan rad etadi.
+
+⚠️ **`bytesSent` / `bytesReceived` — `Long`, `Int` emas.** Uzun video qo'ng'iroq Int32 ning ~2 GB
+chegarasidan oshadi. Kotlin'da `Long`, JSON'da oddiy son.
+
+### ⚠️ `candidateType` ni QAYERDAN olish — eng ko'p xato qilinadigan joy
+
+**Tanlangan juftlikdan oling, yig'ilgan nomzodlardan emas.**
+
+1. `getStats()` dan `RTCIceCandidatePairStats` larni oling
+2. `state == "succeeded"` **va** `nominated == true` bo'lganini toping — bu **tanlangan juftlik**
+3. Uning `localCandidateId` va `remoteCandidateId` si bo'yicha nomzod yozuvlarini toping
+4. **Ikkalasidan bittasi** `relay` bo'lsa → `RELAY`. Aks holda `srflx` bo'lsa → `SRFLX`, yo'qsa `HOST`
+
+`bytesSent` / `bytesReceived` ni ham **o'sha tanlangan juftlikdan** oling.
+
+> **Nega bu muhim:** «relay nomzod yig'ildimi?» deb qarasangiz, deyarli **har** qo'ng'iroq `RELAY`
+> chiqadi — relay nomzodlar doim yig'iladi, lekin ko'pincha ishlatilmaydi. U holda raqam butunlay
+> yaroqsiz bo'ladi va biz noto'g'ri xulosa chiqaramiz.
+
+### Qachon yuborish
+
+`call:ended` kelganda yoki o'zingiz tugatganingizda — **bir marta**. Tarmoq uzilib yuborilmasa,
+keyin qayta urinsangiz bo'ladi: bir xil `(callId, studentId)` uchun qator **qayta yoziladi**, ikkinchi
+qator paydo bo'lmaydi.
+
+### Javob — `CallStatDto`
+
+```json
+{
+  "callId": "b3f1c2d4-5e6a-4b7c-8d9e-0f1a2b3c4d5e",
+  "candidateType": "RELAY",
+  "rttMs": 42, "jitterMs": 7,
+  "packetsLost": 3, "packetsReceived": 9000,
+  "bytesSent": 3000000000, "bytesReceived": 2500000000,
+  "recordedAt": "2026-08-03T10:03:15.000Z"
+}
+```
+
+### Xatolar
+
+| HTTP | `error.code` | Qachon |
+|---|---|---|
+| 401 | `UNAUTHORIZED` / `TOKEN_EXPIRED` | token yo'q / muddati o'tgan |
+| 403 | `FORBIDDEN` | **siz bu qo'ng'iroqning ishtirokchisi emassiz** (404 emas — ataylab) |
+| 404 | `CALL_NOT_FOUND` | bunday `callId` yo'q |
+| **409** | **`INVALID_CALL_STATE`** | **qo'ng'iroq javobsiz qolgan** (`MISSED`/`DECLINED`/`CANCELED`) — media oqmagan, o'lchash uchun narsa yo'q |
+| 422 | `VALIDATION_ERROR` | `candidateType` yo'q/noto'g'ri, son chekdan tashqarida, yoki ortiqcha maydon |
+
+⚠️ **409 ni normal holat deb qabul qiling** — javobsiz qo'ng'iroqlar uchun stats **umuman
+yubormang**. Agar yuborib qo'ysangiz, 409 xato emas, kutilgan javob; foydalanuvchiga ko'rsatmang.
+
+---
+
+## 4. `MessageDto` — yangi `call` maydoni
 
 Qo'ng'iroq tugagach server suhbatga **avtomatik** `type: "CALL"` xabar yozadi (o'z `seq` i bilan).
 Sizning §14.2 dagi talab.

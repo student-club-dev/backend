@@ -203,6 +203,7 @@ export class CallsService {
         callerId,
         calleeId: input.calleeId,
         media: input.media,
+        relayOnly,
       });
       await this.timers.schedule('ring', callId, RING_TIMEOUT_MS);
     } catch (error) {

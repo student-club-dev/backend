@@ -348,6 +348,11 @@ urilmaydi; javob bermayotgan odamni qayta-qayta jiringlatish uriladi.
 ⚠️ **`GET /v1/calls/ice-servers` javobida u yo'q va bo'lmaydi** — u endpoint qo'ng'iroqdan oldin,
 peer kim ekani hali ma'lum bo'lmaganda chaqiriladi, `relayOnly` esa **juftlikka** bog'liq.
 
+Shundan kelib chiqadigan narsa: **`iceServers` ro'yxatida STUN yozuvi doim bo'ladi**, hatto keyingi
+qo'ng'iroq `relayOnly: true` chiqsa ham. Bu xato emas — endpoint buni oldindan bila olmaydi, va uni
+ro'yxatdan olib tashlash **tanish** juftliklarning P2P yo'lini ham buzardi. Cheklovni siz qo'yasiz:
+`iceTransportPolicy = "relay"`. Uni qo'ysangiz, ro'yxatdagi STUN baribir ishlatilmaydi.
+
 **Server qoidasi:** juftlik orasida avval **javob berilgan va tugagan** qo'ng'iroq bo'lmagan bo'lsa
 → `relayOnly: true`. Bir marta haqiqatan gaplashgandan keyin → `false`.
 

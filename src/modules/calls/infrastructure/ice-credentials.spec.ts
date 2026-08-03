@@ -1,5 +1,5 @@
 import { createHmac } from 'node:crypto';
-import { buildIceCredential, buildIceServers } from './ice-credentials';
+import { buildIceCredential } from './ice-credentials';
 
 describe('buildIceCredential', () => {
   const SECRET = 'test-secret';
@@ -29,27 +29,5 @@ describe('buildIceCredential', () => {
     const [expiry] = username.split(':');
     expect(Number.isInteger(Number(expiry))).toBe(true);
     expect(expiry).toBe(String(Math.floor(subSecondNow / 1000) + 3600));
-  });
-});
-
-describe('buildIceServers', () => {
-  const cred = { username: 'u', credential: 'c' };
-
-  it('offers STUN plus UDP, TCP and TLS TURN', () => {
-    const servers = buildIceServers('turn.elonuz.uz', cred);
-    const urls = servers.flatMap((s) => s.urls);
-    expect(urls).toContain('stun:turn.elonuz.uz:3478');
-    expect(urls).toContain('turn:turn.elonuz.uz:3478?transport=udp');
-    expect(urls).toContain('turn:turn.elonuz.uz:3478?transport=tcp');
-    // 443/TLS is not optional: students call from university Wi-Fi where only 443 is open, and
-    // without it a share of calls never connect at all.
-    expect(urls).toContain('turns:turn.elonuz.uz:443?transport=tcp');
-  });
-
-  it('attaches credentials only to the TURN entry', () => {
-    const [stun, turn] = buildIceServers('turn.elonuz.uz', cred);
-    expect(stun.username).toBeUndefined();
-    expect(turn.username).toBe('u');
-    expect(turn.credential).toBe('c');
   });
 });

@@ -12,6 +12,9 @@ export interface CreateCallInput {
   callerId: string;
   calleeId: string;
   media: CallMedia;
+  /** Required, not defaulted: `invite` has already computed it for `CallState.claim`, and a
+   * silent `false` here would understate forced relay in every stats query built on it. */
+  relayOnly: boolean;
 }
 
 export interface FinishCallInput {

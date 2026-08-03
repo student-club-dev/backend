@@ -17356,6 +17356,117 @@
           "hasNext"
         ]
       },
+      "CallStatDto": {
+        "type": "object",
+        "properties": {
+          "callId": {
+            "type": "string"
+          },
+          "candidateType": {
+            "type": "string",
+            "enum": [
+              "HOST",
+              "SRFLX",
+              "RELAY"
+            ]
+          },
+          "rttMs": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "jitterMs": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "packetsLost": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "packetsReceived": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "bytesSent": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "bytesReceived": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "recordedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "callId",
+          "candidateType",
+          "rttMs",
+          "jitterMs",
+          "packetsLost",
+          "packetsReceived",
+          "bytesSent",
+          "bytesReceived",
+          "recordedAt"
+        ]
+      },
+      "RecordCallStatsDto": {
+        "type": "object",
+        "properties": {
+          "candidateType": {
+            "type": "string",
+            "enum": [
+              "HOST",
+              "SRFLX",
+              "RELAY"
+            ],
+            "description": "Type of the SELECTED candidate pair — `RELAY` only when media actually went through TURN."
+          },
+          "rttMs": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0,
+            "maximum": 60000
+          },
+          "jitterMs": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "packetsLost": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "packetsReceived": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "bytesSent": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Bytes this participant sent. The TURN bandwidth forecast is built on this."
+          },
+          "bytesReceived": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "candidateType"
+        ]
+      },
       "ConversationTypeDto": {
         "type": "string",
         "enum": [

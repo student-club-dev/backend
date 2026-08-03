@@ -29,21 +29,5 @@ export function buildIceCredential(
   return { username, credential };
 }
 
-export function buildIceServers(
-  host: string,
-  cred: { username: string; credential: string },
-): IceServer[] {
-  return [
-    { urls: [`stun:${host}:3478`] },
-    {
-      urls: [
-        `turn:${host}:3478?transport=udp`,
-        `turn:${host}:3478?transport=tcp`,
-        // Restrictive networks (university Wi-Fi, corporate proxies) usually leave only 443 open.
-        `turns:${host}:443?transport=tcp`,
-      ],
-      username: cred.username,
-      credential: cred.credential,
-    },
-  ];
-}
+// The URL matrix moved to `ice-profile.ts` once a second provider (Metered) had to be supported:
+// it publishes different hosts and ports, so the list is per-provider data, not a constant.

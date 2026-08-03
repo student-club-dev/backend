@@ -1159,6 +1159,12 @@ model Call {
   callerId       String         @map("caller_id")
   calleeId       String         @map("callee_id")
   media          CallMedia
+  // Persisted because the relay share in `call_stats` cannot be acted on without it: it does not
+  // separate a relay we FORCED (unfamiliar pair, §9.2) from one NAT made unavoidable. Only the
+  // split answers the question the number is collected for — "how much would switching `relayOnly`
+  // off actually save?". Decided once in `CallsService.invite` and fixed for the call's lifetime,
+  // exactly like its `CallState` twin.
+  relayOnly      Boolean        @default(false) @map("relay_only")
   status         CallStatus     @default(RINGING)
   startedAt      DateTime       @default(now()) @map("started_at")
   answeredAt     DateTime?      @map("answered_at")
@@ -1192,6 +1198,12 @@ model CallStat {
   packetsLost     Int?             @map("packets_lost")
   packetsReceived Int?             @map("packets_received")
   jitterMs        Int?             @map("jitter_ms")
+  // BigInt, not Int: a long video call clears Int32's ~2 GB ceiling, and these are the only numbers
+  // the TURN quota forecast can be built on — every other field here describes quality, not volume.
+  // Serialized to Number in JSON like all BigInt money fields (CLAUDE.md); byte counts stay far
+  // below 2^53, so no precision is lost.
+  bytesSent       BigInt?          @map("bytes_sent")
+  bytesReceived   BigInt?          @map("bytes_received")
   candidateType   IceCandidateType @map("candidate_type")
   createdAt       DateTime         @default(now()) @map("created_at")
 

@@ -25,6 +25,7 @@ export class CallPrismaRepository implements CallRepository {
         callerId: input.callerId,
         calleeId: input.calleeId,
         media: input.media,
+        relayOnly: input.relayOnly,
         status: CallStatus.RINGING,
       },
     });
@@ -133,6 +134,7 @@ function fromSnakeCase(row: Record<string, unknown>): PrismaCall {
     callerId: row.caller_id as PrismaCall['callerId'],
     calleeId: row.callee_id as PrismaCall['calleeId'],
     media: row.media as PrismaCall['media'],
+    relayOnly: row.relay_only as PrismaCall['relayOnly'],
     status: row.status as PrismaCall['status'],
     startedAt: row.started_at as PrismaCall['startedAt'],
     answeredAt: row.answered_at as PrismaCall['answeredAt'],

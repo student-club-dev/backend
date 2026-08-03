@@ -9782,6 +9782,300 @@
         ]
       }
     },
+    "/v1/calls/{callId}/stats": {
+      "post": {
+        "operationId": "CallsController_recordStats",
+        "summary": "Tugagan qo‘ng‘iroq sifati",
+        "description": "One participant’s `getStats()` reading, posted once the call is over. Report `candidateType` from the SELECTED candidate pair, not from the candidates that were merely gathered. Re-posting overwrites the previous report for the same call and student.",
+        "parameters": [
+          {
+            "name": "callId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecordCallStatsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "$ref": "#/components/schemas/CallStatDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (`UNAUTHORIZED`), or expired (`TOKEN_EXPIRED`) — refresh and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 401
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Avtorizatsiyadan o‘tilmagan"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UNAUTHORIZED",
+                            "message": "Avtorizatsiyadan o‘tilmagan",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not a STUDENT account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 403
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Ruxsat yo‘q"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "FORBIDDEN",
+                            "message": "Ruxsat yo‘q",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Qo‘ng‘iroq topilmadi",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 404
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Topilmadi"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "CALL_NOT_FOUND",
+                            "message": "Topilmadi",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The call was never answered, so no media flowed and there is nothing to measure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 409
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Bu qo‘ng‘iroq ulanmagan — o‘lchov uchun ma’lumot yo‘q"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "INVALID_CALL_STATE",
+                            "message": "Bu qo‘ng‘iroq ulanmagan — o‘lchov uchun ma’lumot yo‘q",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation failed — see `error.fields`.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 422
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Ma’lumotlar noto‘g‘ri"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "VALIDATION_ERROR",
+                            "message": "Ma’lumotlar noto‘g‘ri",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Calls"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/v1/conversations": {
       "post": {
         "operationId": "ConversationsController_open",
@@ -22786,6 +23080,117 @@
           "size",
           "total",
           "hasNext"
+        ]
+      },
+      "CallStatDto": {
+        "type": "object",
+        "properties": {
+          "callId": {
+            "type": "string"
+          },
+          "candidateType": {
+            "type": "string",
+            "enum": [
+              "HOST",
+              "SRFLX",
+              "RELAY"
+            ]
+          },
+          "rttMs": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "jitterMs": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "packetsLost": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "packetsReceived": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "bytesSent": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "bytesReceived": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "recordedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "callId",
+          "candidateType",
+          "rttMs",
+          "jitterMs",
+          "packetsLost",
+          "packetsReceived",
+          "bytesSent",
+          "bytesReceived",
+          "recordedAt"
+        ]
+      },
+      "RecordCallStatsDto": {
+        "type": "object",
+        "properties": {
+          "candidateType": {
+            "type": "string",
+            "enum": [
+              "HOST",
+              "SRFLX",
+              "RELAY"
+            ],
+            "description": "Type of the SELECTED candidate pair — `RELAY` only when media actually went through TURN."
+          },
+          "rttMs": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0,
+            "maximum": 60000
+          },
+          "jitterMs": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "packetsLost": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "packetsReceived": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "bytesSent": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Bytes this participant sent. The TURN bandwidth forecast is built on this."
+          },
+          "bytesReceived": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "candidateType"
         ]
       },
       "ConversationTypeDto": {
