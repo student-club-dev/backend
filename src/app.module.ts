@@ -26,6 +26,7 @@ import { GifsModule } from './modules/gifs/gifs.module';
 import { MediaModule } from './modules/media/media.module';
 import { StickersModule } from './modules/stickers/stickers.module';
 import { StoriesModule } from './modules/stories/stories.module';
+import { StudentListingsModule } from './modules/student-listings/student-listings.module';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { ProfileModule } from './modules/profiles/profile.module';
 import { RedemptionsModule } from './modules/redemptions/redemptions.module';
@@ -72,6 +73,7 @@ import { TradeCentersModule } from './modules/trade-centers/trade-centers.module
     BranchesModule,
     TradeCentersModule,
     ListingsModule,
+    StudentListingsModule,
     RedemptionsModule,
     ConnectionsModule,
     CallsModule,

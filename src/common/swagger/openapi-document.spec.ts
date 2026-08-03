@@ -1,4 +1,5 @@
 import { NestFactory } from '@nestjs/core';
+import { DocumentBuilder, SwaggerModule, type OpenAPIObject } from '@nestjs/swagger';
 import { AppModule } from '../../app.module';
 import { AppDocuments, buildAppDocuments } from './openapi-document';
 
@@ -75,10 +76,16 @@ function findOffenders(node: unknown, path: string, out: Offender[]): void {
  */
 describe('OpenAPI type quality (§19)', () => {
   let docs: AppDocuments;
+  /** The unfiltered path set, so the split can be checked for anything it dropped entirely. */
+  let fullPaths: OpenAPIObject['paths'];
 
   beforeAll(async () => {
     const app = await NestFactory.create(AppModule, { preview: true, logger: false });
     docs = buildAppDocuments(app, 'v1', 'docs');
+    fullPaths = SwaggerModule.createDocument(
+      app,
+      new DocumentBuilder().setTitle('full').setVersion('v1').build(),
+    ).paths;
     await app.close();
   }, 60_000);
 
@@ -103,5 +110,49 @@ describe('OpenAPI type quality (§19)', () => {
     expect(Object.keys(docs.student.paths)).toEqual(
       expect.arrayContaining(['/calls', '/calls/ice-servers']),
     );
+  });
+
+  it('serves the student listing endpoints in the student document', () => {
+    expect(Object.keys(docs.student.paths)).toEqual(
+      expect.arrayContaining([
+        '/student-listings',
+        '/student-listings/mine',
+        '/student-listings/{id}',
+        '/student-listings/{id}/submit',
+        '/student-listings/{id}/status',
+      ]),
+    );
+  });
+
+  /**
+   * The general form of the trap above: rather than remembering to add a case per feature, assert
+   * that every operation reaches at least one client document. Only genuinely server-side tags are
+   * exempt — anything else missing here is a feature the mobile clients cannot call.
+   */
+  it('leaves no operation out of both documents', () => {
+    // The admin panel and the liveness probe are not mobile surface, so they belong in neither
+    // client document. Everything else reaching neither is a feature the apps cannot call.
+    const isInternalOnly = (tag: string): boolean => tag.startsWith('Admin') || tag === 'Health';
+
+    const published = new Set([
+      ...Object.keys(docs.business.paths),
+      ...Object.keys(docs.student.paths),
+    ]);
+
+    const orphaned = Object.entries(fullPaths)
+      .filter(([path, item]) => {
+        if (published.has(path)) {
+          return false;
+        }
+        const tags = Object.values(item ?? {}).flatMap((operation) =>
+          typeof operation === 'object' && operation !== null && 'tags' in operation
+            ? ((operation as { tags?: string[] }).tags ?? [])
+            : [],
+        );
+        return tags.length > 0 && !tags.every(isInternalOnly);
+      })
+      .map(([path]) => path);
+
+    expect(orphaned).toEqual([]);
   });
 });

@@ -6550,6 +6550,1558 @@
         ]
       }
     },
+    "/v1/student-listings/search": {
+      "post": {
+        "operationId": "StudentListingSearchController_search",
+        "summary": "E’lonlarni qidirish",
+        "description": "`kind` majburiy — turlar aralashmaydi. Turga tegishli bo‘lmagan filtr jimgina e’tiborsiz qoldiriladi. Joylashuv berilmasa butun O‘zbekiston bo‘yicha qidiriladi.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchListingsDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "$ref": "#/components/schemas/ListingSearchPageDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (`UNAUTHORIZED`), or expired (`TOKEN_EXPIRED`) — refresh and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 401
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Avtorizatsiyadan o‘tilmagan"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UNAUTHORIZED",
+                            "message": "Avtorizatsiyadan o‘tilmagan",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The cursor belongs to a different filter or sort — restart from the first page.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 422
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Ro‘yxat yangilandi — boshidan boshlang"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "PAGE_CURSOR_INVALID",
+                            "message": "Ro‘yxat yangilandi — boshidan boshlang",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Student listings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/student-listings": {
+      "get": {
+        "operationId": "StudentListingSearchController_list",
+        "summary": "E’lonlar ro‘yxati (query-parametrlar bilan)",
+        "description": "POST /search bilan bir xil mantiq; deep-link va tab almashish uchun qulay.",
+        "parameters": [
+          {
+            "name": "kind",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "RENTAL",
+                "SERVICE",
+                "JOB",
+                "TASK"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "query",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "lat",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "lng",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "radiusMeters",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "regionIds",
+            "required": false,
+            "in": "query",
+            "description": "Vergul bilan: TOSHKENT_SHAHRI,ANDIJON",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "districtIds",
+            "required": false,
+            "in": "query",
+            "description": "Vergul bilan: CHILONZOR,UCHTEPA",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "minPrice",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "maxPrice",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "gender",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "MALE",
+                "FEMALE",
+                "ANY"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "propertyType",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "APARTMENT",
+                "ROOM",
+                "HOUSE",
+                "DORMITORY",
+                "BED_SPACE"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "minRooms",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "onlyAvailable",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "serviceType",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "TUTOR",
+                "PRINTING",
+                "IT_DEV",
+                "DESIGN",
+                "PHOTO_VIDEO",
+                "TRANSLATION",
+                "REPAIR",
+                "BEAUTY",
+                "TRANSPORT",
+                "EVENT",
+                "CLEANING",
+                "OTHER"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "serviceFormat",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "OFFLINE",
+                "ONLINE",
+                "HYBRID"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "onlyFreeTrial",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "employment",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "DAILY",
+                "PERMANENT"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "jobCategoryKey",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "shift",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "MORNING",
+                "DAY",
+                "EVENING",
+                "NIGHT",
+                "SHIFT_2_2",
+                "SHIFT_1_2",
+                "FLEXIBLE"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "noExperienceOnly",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "taskCategory",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "WRITTEN",
+                "PRESENTATION",
+                "EXACT",
+                "IT",
+                "DRAWING",
+                "HANDWRITING",
+                "TRANSLATION",
+                "CALC"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "taskTypeKey",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "taskFormat",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "ONLINE",
+                "IN_PERSON",
+                "ANY"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "onlyOpenDeadline",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "sort",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "enum": [
+                "RELEVANCE",
+                "NEWEST",
+                "PRICE_ASC",
+                "PRICE_DESC",
+                "NEAREST",
+                "DEADLINE"
+              ],
+              "type": "string"
+            }
+          },
+          {
+            "name": "size",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "cursor",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "$ref": "#/components/schemas/ListingSearchPageDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (`UNAUTHORIZED`), or expired (`TOKEN_EXPIRED`) — refresh and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 401
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Avtorizatsiyadan o‘tilmagan"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UNAUTHORIZED",
+                            "message": "Avtorizatsiyadan o‘tilmagan",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Student listings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "post": {
+        "operationId": "StudentListingsController_create",
+        "summary": "E’lon yaratish",
+        "description": "`submit: true` — to‘liq validatsiyadan o‘tsa darrov ACTIVE (yoki `validFrom` kelajakda bo‘lsa SCHEDULED) bo‘ladi; moderatsiya yo‘q. Aks holda validatsiyasiz DRAFT saqlanadi. `Idempotency-Key` sarlavhasi berilsa, takroriy so‘rov dublikat yaratmaydi.",
+        "parameters": [
+          {
+            "name": "idempotency-key",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateStudentListingDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "$ref": "#/components/schemas/StudentListingDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (`UNAUTHORIZED`), or expired (`TOKEN_EXPIRED`) — refresh and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 401
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Avtorizatsiyadan o‘tilmagan"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UNAUTHORIZED",
+                            "message": "Avtorizatsiyadan o‘tilmagan",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Publish validation failed — `error.fields` maps a `ListingField` key to an Uzbek message.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 422
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "E’lonni tekshiring"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "LISTING_VALIDATION_FAILED",
+                            "message": "E’lonni tekshiring",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Active-listing or daily-publish limit reached (§6).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 429
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "E’lon limiti tugadi"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "LISTING_LIMIT_REACHED",
+                            "message": "E’lon limiti tugadi",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Student listings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/student-listings/mine": {
+      "get": {
+        "operationId": "StudentListingsController_mine",
+        "summary": "O‘z e’lonlarim",
+        "description": "Barcha status va turlar, `updatedAt DESC`. Faqat egasiga ko‘rinadi.",
+        "parameters": [
+          {
+            "name": "size",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "maximum": 50,
+              "default": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "$ref": "#/components/schemas/StudentListingPageDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (`UNAUTHORIZED`), or expired (`TOKEN_EXPIRED`) — refresh and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 401
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Avtorizatsiyadan o‘tilmagan"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UNAUTHORIZED",
+                            "message": "Avtorizatsiyadan o‘tilmagan",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Student listings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/student-listings/{id}": {
+      "get": {
+        "operationId": "StudentListingsController_findOne",
+        "summary": "Bitta e’lon",
+        "description": "Ko‘rish soni oshadi (egasi ochganda emas). ACTIVE bo‘lmagan e’lon egasidan boshqasiga 404 qaytaradi — begona odam e’lon borligini ham bilmasligi kerak.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "E’lon id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "$ref": "#/components/schemas/StudentListingDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (`UNAUTHORIZED`), or expired (`TOKEN_EXPIRED`) — refresh and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 401
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Avtorizatsiyadan o‘tilmagan"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UNAUTHORIZED",
+                            "message": "Avtorizatsiyadan o‘tilmagan",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Missing, deleted, or not visible to this viewer.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 404
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "E’lon topilmadi"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "LISTING_NOT_FOUND",
+                            "message": "E’lon topilmadi",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Student listings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "StudentListingsController_patch",
+        "summary": "E’lonni tahrirlash",
+        "description": "`kind` o‘zgarmaydi. ACTIVE e’lon tahrirlansa qayta validatsiya qilinadi va ACTIVE bo‘lib qoladi; DRAFT esa validatsiyasiz saqlanadi.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "E’lon id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateStudentListingDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "$ref": "#/components/schemas/StudentListingDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (`UNAUTHORIZED`), or expired (`TOKEN_EXPIRED`) — refresh and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 401
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Avtorizatsiyadan o‘tilmagan"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UNAUTHORIZED",
+                            "message": "Avtorizatsiyadan o‘tilmagan",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The request tried to change `kind`, which is fixed at creation.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 409
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "E’lon turini o‘zgartirib bo‘lmaydi"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "LISTING_KIND_IMMUTABLE",
+                            "message": "E’lon turini o‘zgartirib bo‘lmaydi",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Student listings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      },
+      "delete": {
+        "operationId": "StudentListingsController_remove",
+        "summary": "E’lonni o‘chirish",
+        "description": "Soft delete — qayta tiklanmaydi.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "E’lon id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Missing or invalid access token (`UNAUTHORIZED`), or expired (`TOKEN_EXPIRED`) — refresh and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 401
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Avtorizatsiyadan o‘tilmagan"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UNAUTHORIZED",
+                            "message": "Avtorizatsiyadan o‘tilmagan",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Missing or already deleted.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 404
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "E’lon topilmadi"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "LISTING_NOT_FOUND",
+                            "message": "E’lon topilmadi",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Student listings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/student-listings/{id}/submit": {
+      "post": {
+        "operationId": "StudentListingsController_submit",
+        "summary": "E’lon qilish",
+        "description": "To‘liq validatsiya (§5) va anti-spam limitlari, so‘ng ACTIVE yoki SCHEDULED.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "E’lon id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "$ref": "#/components/schemas/StudentListingDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (`UNAUTHORIZED`), or expired (`TOKEN_EXPIRED`) — refresh and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 401
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Avtorizatsiyadan o‘tilmagan"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UNAUTHORIZED",
+                            "message": "Avtorizatsiyadan o‘tilmagan",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Publish validation failed — `error.fields` maps a `ListingField` key to an Uzbek message.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 422
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "E’lonni tekshiring"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "LISTING_VALIDATION_FAILED",
+                            "message": "E’lonni tekshiring",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Student listings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/student-listings/{id}/status": {
+      "post": {
+        "operationId": "StudentListingsController_setStatus",
+        "summary": "Statusni o‘zgartirish",
+        "description": "ACTIVE / PAUSED / ARCHIVED. ACTIVE ga qaytishda qayta validatsiya qilinadi.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "E’lon id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetListingStatusDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "$ref": "#/components/schemas/StudentListingDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (`UNAUTHORIZED`), or expired (`TOKEN_EXPIRED`) — refresh and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 401
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Avtorizatsiyadan o‘tilmagan"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UNAUTHORIZED",
+                            "message": "Avtorizatsiyadan o‘tilmagan",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The transition is not allowed from the listing’s current status (§6).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 409
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Bu holatda bunday amal mumkin emas"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "LISTING_STATUS_INVALID",
+                            "message": "Bu holatda bunday amal mumkin emas",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Student listings"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/v1/listings/{listingId}/redeem/start": {
       "post": {
         "operationId": "RedeemStartController_start",
@@ -15059,6 +16611,10 @@
       "description": "Student app: 24-hour stories, visible to connections only"
     },
     {
+      "name": "Student listings",
+      "description": "Student app: student-posted listings — tasks, rentals, services and jobs"
+    },
+    {
       "name": "Notifications",
       "description": "Student app: device-token registration for push"
     },
@@ -22157,6 +23713,777 @@
           "redemption",
           "validFrom",
           "validTo"
+        ]
+      },
+      "ListingBranchResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "lat": {
+            "type": "number",
+            "example": 41.2856
+          },
+          "lng": {
+            "type": "number",
+            "example": 69.2034
+          },
+          "address": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "landmark": {
+            "type": "string",
+            "nullable": true
+          },
+          "regionId": {
+            "type": "string",
+            "nullable": true
+          },
+          "districtId": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "lat",
+          "lng",
+          "address",
+          "name",
+          "landmark",
+          "regionId",
+          "districtId"
+        ]
+      },
+      "ListingOptionResponseDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "priceDelta": {
+            "type": "integer",
+            "description": "Butun so‘m; manfiy ham bo‘lishi mumkin"
+          },
+          "isAvailable": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "priceDelta",
+          "isAvailable"
+        ]
+      },
+      "ListingOptionGroupResponseDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "selectionType": {
+            "type": "string",
+            "enum": [
+              "SINGLE",
+              "MULTIPLE"
+            ]
+          },
+          "isRequired": {
+            "type": "boolean"
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ListingOptionResponseDto"
+            }
+          }
+        },
+        "required": [
+          "name",
+          "selectionType",
+          "isRequired",
+          "options"
+        ]
+      },
+      "StudentListingDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "ownerId": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "RENTAL",
+              "SERVICE",
+              "JOB",
+              "TASK"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "images": {
+            "description": "Birinchisi — muqova",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "priceUnit": {
+            "type": "string",
+            "enum": [
+              "PER_ITEM",
+              "PER_HOUR",
+              "PER_KG",
+              "PER_DAY",
+              "PER_MONTH",
+              "PER_COURSE",
+              "PER_LESSON",
+              "PER_TICKET",
+              "PER_PERSON",
+              "PER_SESSION",
+              "PER_PAGE"
+            ],
+            "nullable": true
+          },
+          "price": {
+            "type": "integer",
+            "description": "Butun so‘m, tiyinsiz"
+          },
+          "priceMax": {
+            "type": "integer",
+            "nullable": true
+          },
+          "currency": {
+            "type": "string",
+            "example": "UZS"
+          },
+          "isNegotiable": {
+            "type": "boolean"
+          },
+          "contactPhone": {
+            "type": "string",
+            "nullable": true,
+            "description": "Faqat ACTIVE e’londa qaytariladi; aks holda null (§7.2.0)"
+          },
+          "universityId": {
+            "type": "string",
+            "nullable": true
+          },
+          "audience": {
+            "type": "string",
+            "enum": [
+              "ALL",
+              "NEARBY_UNIVERSITIES",
+              "MY_UNIVERSITY"
+            ]
+          },
+          "branches": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ListingBranchResponseDto"
+            }
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "validTo": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "attributes": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "optionGroups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ListingOptionGroupResponseDto"
+            }
+          },
+          "details": {
+            "description": "Turga xos qism; `details.kind` tashqi `kind` bilan bir xil bo‘ladi (§4)",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TaskDetailsDto"
+              },
+              {
+                "$ref": "#/components/schemas/RentalDetailsDto"
+              },
+              {
+                "$ref": "#/components/schemas/ServiceDetailsDto"
+              },
+              {
+                "$ref": "#/components/schemas/JobDetailsDto"
+              }
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "PENDING_REVIEW",
+              "REJECTED",
+              "SCHEDULED",
+              "ACTIVE",
+              "PAUSED",
+              "EXPIRED",
+              "SOLD_OUT",
+              "ARCHIVED"
+            ]
+          },
+          "rejectionReason": {
+            "type": "string",
+            "nullable": true,
+            "description": "Phase 1 da moderatsiya yo‘q — doim null"
+          },
+          "viewsCount": {
+            "type": "integer"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "isMine": {
+            "type": "boolean",
+            "description": "So‘rovchi — e’lon egasimi (§7.2.0)"
+          },
+          "distanceMeters": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Qidiruv bilan keladi (Phase 1b); bu yerda doim null"
+          },
+          "isFavorite": {
+            "type": "boolean",
+            "description": "Sevimlilar Phase 2 da; hozircha doim false"
+          }
+        },
+        "required": [
+          "id",
+          "ownerId",
+          "kind",
+          "title",
+          "description",
+          "images",
+          "priceUnit",
+          "price",
+          "priceMax",
+          "currency",
+          "isNegotiable",
+          "contactPhone",
+          "universityId",
+          "audience",
+          "branches",
+          "validFrom",
+          "validTo",
+          "attributes",
+          "optionGroups",
+          "details",
+          "status",
+          "rejectionReason",
+          "viewsCount",
+          "createdAt",
+          "updatedAt",
+          "isMine",
+          "distanceMeters",
+          "isFavorite"
+        ]
+      },
+      "ListingSearchPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StudentListingDto"
+            }
+          },
+          "size": {
+            "type": "integer"
+          },
+          "hasNext": {
+            "type": "boolean"
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "Kursorli rejimda keyingi sahifa uchun; oxirgi sahifada yoki sahifa raqamli rejimda null"
+          },
+          "page": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Sahifa raqamli rejimda"
+          },
+          "total": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Sahifa raqamli rejimda"
+          }
+        },
+        "required": [
+          "items",
+          "size",
+          "hasNext",
+          "nextCursor",
+          "page",
+          "total"
+        ]
+      },
+      "SearchListingsDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "RENTAL",
+              "SERVICE",
+              "JOB",
+              "TASK"
+            ],
+            "description": "MAJBURIY — turlar aralashmaydi"
+          },
+          "query": {
+            "type": "string",
+            "example": "Chilonzor"
+          },
+          "geo": {
+            "$ref": "#/components/schemas/SearchGeoDto"
+          },
+          "minPrice": {
+            "type": "integer"
+          },
+          "maxPrice": {
+            "type": "integer",
+            "example": 2000000
+          },
+          "filter": {
+            "$ref": "#/components/schemas/SearchFilterDto"
+          },
+          "sort": {
+            "type": "string",
+            "enum": [
+              "RELEVANCE",
+              "NEWEST",
+              "PRICE_ASC",
+              "PRICE_DESC",
+              "NEAREST",
+              "DEADLINE"
+            ],
+            "default": "NEWEST"
+          },
+          "page": {
+            "$ref": "#/components/schemas/SearchPageDto"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "ListingBranchDto": {
+        "type": "object",
+        "properties": {
+          "lat": {
+            "type": "number",
+            "example": 41.2856,
+            "minimum": 37,
+            "maximum": 46
+          },
+          "lng": {
+            "type": "number",
+            "example": 69.2034,
+            "minimum": 55,
+            "maximum": 74
+          },
+          "address": {
+            "type": "string",
+            "example": "Chilonzor 9-kvartal, 42-uy"
+          },
+          "name": {
+            "type": "string",
+            "example": "Chilonzor filiali"
+          },
+          "landmark": {
+            "type": "string",
+            "example": "Korzinka ro‘parasida"
+          },
+          "regionId": {
+            "type": "string",
+            "example": "TOSHKENT_SHAHRI"
+          },
+          "districtId": {
+            "type": "string",
+            "example": "CHILONZOR"
+          }
+        },
+        "required": [
+          "lat",
+          "lng",
+          "address"
+        ]
+      },
+      "ListingOptionDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "90 daqiqa"
+          },
+          "priceDelta": {
+            "type": "number",
+            "example": 30000,
+            "description": "Butun so‘m; manfiy ham bo‘lishi mumkin"
+          },
+          "isAvailable": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "ListingOptionGroupDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Dars davomiyligi"
+          },
+          "selectionType": {
+            "type": "string",
+            "enum": [
+              "SINGLE",
+              "MULTIPLE"
+            ]
+          },
+          "isRequired": {
+            "type": "boolean",
+            "default": false
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ListingOptionDto"
+            }
+          }
+        },
+        "required": [
+          "name",
+          "selectionType",
+          "options"
+        ]
+      },
+      "CreateStudentListingDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "RENTAL",
+              "SERVICE",
+              "JOB",
+              "TASK"
+            ]
+          },
+          "submit": {
+            "type": "boolean",
+            "default": false,
+            "description": "true — darrov e’lon qilinadi; aks holda DRAFT bo‘lib qoladi"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "images": {
+            "description": "Birinchisi — muqova",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "priceUnit": {
+            "type": "string",
+            "enum": [
+              "PER_ITEM",
+              "PER_HOUR",
+              "PER_KG",
+              "PER_DAY",
+              "PER_MONTH",
+              "PER_COURSE",
+              "PER_LESSON",
+              "PER_TICKET",
+              "PER_PERSON",
+              "PER_SESSION",
+              "PER_PAGE"
+            ]
+          },
+          "price": {
+            "type": "number",
+            "example": 1500000,
+            "description": "Butun so‘m, tiyinsiz"
+          },
+          "priceMax": {
+            "type": "number",
+            "description": "Oraliqning yuqori chegarasi; `price` dan katta bo‘lsin"
+          },
+          "isNegotiable": {
+            "type": "boolean",
+            "default": false
+          },
+          "contactPhone": {
+            "type": "string",
+            "example": "+998901234567"
+          },
+          "universityId": {
+            "type": "string",
+            "description": "Phase 1: saqlanadi, tekshirilmaydi"
+          },
+          "audience": {
+            "type": "string",
+            "enum": [
+              "ALL",
+              "NEARBY_UNIVERSITIES",
+              "MY_UNIVERSITY"
+            ],
+            "default": "ALL"
+          },
+          "branches": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ListingBranchDto"
+            }
+          },
+          "validFrom": {
+            "type": "string",
+            "example": "2026-08-01T00:00:00Z"
+          },
+          "validTo": {
+            "type": "string",
+            "example": "2026-09-01T00:00:00Z"
+          },
+          "attributes": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "optionGroups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ListingOptionGroupDto"
+            }
+          },
+          "details": {
+            "description": "Turga xos qism; `details.kind` tashqi `kind` bilan bir xil bo‘lsin",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TaskDetailsDto"
+              },
+              {
+                "$ref": "#/components/schemas/RentalDetailsDto"
+              },
+              {
+                "$ref": "#/components/schemas/ServiceDetailsDto"
+              },
+              {
+                "$ref": "#/components/schemas/JobDetailsDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "details"
+        ]
+      },
+      "StudentListingPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StudentListingDto"
+            }
+          },
+          "page": {
+            "type": "integer"
+          },
+          "size": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "hasNext": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "size",
+          "total",
+          "hasNext"
+        ]
+      },
+      "UpdateStudentListingDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "RENTAL",
+              "SERVICE",
+              "JOB",
+              "TASK"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "images": {
+            "description": "Birinchisi — muqova",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "priceUnit": {
+            "type": "string",
+            "enum": [
+              "PER_ITEM",
+              "PER_HOUR",
+              "PER_KG",
+              "PER_DAY",
+              "PER_MONTH",
+              "PER_COURSE",
+              "PER_LESSON",
+              "PER_TICKET",
+              "PER_PERSON",
+              "PER_SESSION",
+              "PER_PAGE"
+            ]
+          },
+          "price": {
+            "type": "number",
+            "example": 1500000,
+            "description": "Butun so‘m, tiyinsiz"
+          },
+          "priceMax": {
+            "type": "number",
+            "description": "Oraliqning yuqori chegarasi; `price` dan katta bo‘lsin"
+          },
+          "isNegotiable": {
+            "type": "boolean",
+            "default": false
+          },
+          "contactPhone": {
+            "type": "string",
+            "example": "+998901234567"
+          },
+          "universityId": {
+            "type": "string",
+            "description": "Phase 1: saqlanadi, tekshirilmaydi"
+          },
+          "audience": {
+            "type": "string",
+            "enum": [
+              "ALL",
+              "NEARBY_UNIVERSITIES",
+              "MY_UNIVERSITY"
+            ],
+            "default": "ALL"
+          },
+          "branches": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ListingBranchDto"
+            }
+          },
+          "validFrom": {
+            "type": "string",
+            "example": "2026-08-01T00:00:00Z"
+          },
+          "validTo": {
+            "type": "string",
+            "example": "2026-09-01T00:00:00Z"
+          },
+          "attributes": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "optionGroups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ListingOptionGroupDto"
+            }
+          },
+          "details": {
+            "description": "Turga xos qism; `details.kind` tashqi `kind` bilan bir xil bo‘lsin",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TaskDetailsDto"
+              },
+              {
+                "$ref": "#/components/schemas/RentalDetailsDto"
+              },
+              {
+                "$ref": "#/components/schemas/ServiceDetailsDto"
+              },
+              {
+                "$ref": "#/components/schemas/JobDetailsDto"
+              }
+            ]
+          }
+        }
+      },
+      "SetListingStatusDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "PAUSED",
+              "ARCHIVED"
+            ]
+          }
+        },
+        "required": [
+          "status"
         ]
       },
       "StartRedemptionResponseDto": {

@@ -114,6 +114,40 @@ enum SelectionType {
   MULTIPLE
 }
 
+/// Student-posted listing kinds. DISCOUNT (business) is deliberately absent — that is the separate
+/// `Listing` model. Wire values match ListingKindDto on the client.
+enum StudentListingKind {
+  RENTAL
+  SERVICE
+  JOB
+  TASK
+}
+
+/// Price units for student listings. Intentionally NOT the shared `PriceUnit`: adding PER_DAY and
+/// PER_PAGE there would silently widen the business listing contract, whose generated provider
+/// client would then be out of sync with what the server accepts. Wire strings are identical.
+enum StudentPriceUnit {
+  PER_ITEM
+  PER_HOUR
+  PER_KG
+  PER_DAY
+  PER_MONTH
+  PER_COURSE
+  PER_LESSON
+  PER_TICKET
+  PER_PERSON
+  PER_SESSION
+  PER_PAGE
+}
+
+/// Visibility scope of a student listing. Phase 1 stores it but always behaves as ALL; enforcement
+/// arrives with the universities work (STUDENT_LISTINGS_BACKEND.md §7.2.4).
+enum ListingAudience {
+  ALL
+  NEARBY_UNIVERSITIES
+  MY_UNIVERSITY
+}
+
 // Wire values are "1".."4","MASTER"; Prisma enum values can't start with a digit.
 enum CourseYear {
   YEAR_1 @map("1")
@@ -225,6 +259,10 @@ model Student {
   refreshTokens StudentRefreshToken[]
   redemptions   Redemption[]
   favorites     StudentFavorite[]
+
+  // Student-posted listings (STUDENT_LISTINGS_BACKEND.md). Virtual — emits no column.
+  studentListings     StudentListing[]
+  studentListingViews StudentListingView[]
 
   // Connections & social graph (chat gate)
   connectionRequestsSent     Connection[] @relation("ConnectionRequester")
@@ -1534,4 +1572,145 @@ model DeviceToken {
 
   @@index([studentId])
   @@map("device_tokens")
+}
+
+// ============================================================================
+// STUDENT LISTINGS (STUDENT_LISTINGS_BACKEND.md)
+//
+// A listing posted by a STUDENT, not a business — four kinds (RENTAL/SERVICE/JOB/TASK). Entirely
+// separate from the business `Listing` above: different owner, lifecycle, search and validation.
+// The two share only the `ListingStatus` enum, whose nine values already match this contract.
+//
+// Kind-specific data lives in the `details` JSONB column (source of truth); the mapper also writes
+// the flat `rental*`/`service*`/`job*`/`task*` columns below so search can filter and sort on an
+// index instead of probing jsonb on every row — the same trade-off `Listing.isDiscount` makes.
+// ============================================================================
+
+model StudentListing {
+  id      String             @id @default(cuid())
+  ownerId String             @map("owner_id")
+  kind    StudentListingKind
+
+  // Nullable where a DRAFT may legitimately leave them blank: a half-filled form must save
+  // (§6.1), and publish-time validation is what enforces presence.
+  title        String            @default("")
+  description  String?
+  images       String[]          @default([])
+  priceUnit    StudentPriceUnit? @map("price_unit")
+  price        BigInt            @default(0)
+  priceMax     BigInt?           @map("price_max")
+  currency     String            @default("UZS")
+  isNegotiable Boolean           @default(false) @map("is_negotiable")
+  contactPhone String?           @map("contact_phone")
+
+  // §7.2.4. Phase 1 stores both but enforces neither — no universities table exists yet.
+  universityId String?         @map("university_id")
+  audience     ListingAudience @default(ALL)
+
+  validFrom DateTime? @map("valid_from")
+  validTo   DateTime? @map("valid_to")
+
+  attributes   Json @default("{}")
+  optionGroups Json @default("[]") @map("option_groups")
+  // Polymorphic, discriminated by an inner "kind" that must equal this row's `kind`. JSONB so a new
+  // listing kind needs no migration — the client stores it the same way.
+  details      Json
+
+  status          ListingStatus @default(DRAFT)
+  // Kept for contract parity with the client's ListingStatus; Phase 1 never writes REJECTED, so
+  // this stays null. Moderation was dropped as a product decision — submit publishes immediately.
+  rejectionReason String?       @map("rejection_reason")
+  viewsCount      Int           @default(0) @map("views_count")
+
+  // Haystack built by the service; `searchVector` is derived from it by a DB trigger, like Listing.
+  searchText   String?                  @map("search_text")
+  searchVector Unsupported("tsvector")? @map("search_vector")
+
+  // Replay guard for POST /v1/student-listings (§7.1). NULLs are distinct in Postgres, so rows
+  // without a key never collide on the unique index below.
+  idempotencyKey String?   @map("idempotency_key")
+  publishedAt    DateTime? @map("published_at")
+  deletedAt      DateTime? @map("deleted_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  // Denormalised out of `details` by the mapper — filter and sort keys only, never read as truth.
+  rentalGender        String?   @map("rental_gender")
+  rentalPropertyType  String?   @map("rental_property_type")
+  rentalRoomCount     Int?      @map("rental_room_count")
+  rentalNeededTenants Int?      @map("rental_needed_tenants")
+  serviceType         String?   @map("service_type")
+  serviceFormat       String?   @map("service_format")
+  serviceHasFreeTrial Boolean?  @map("service_has_free_trial")
+  jobEmployment       String?   @map("job_employment")
+  jobCategoryKey      String?   @map("job_category_key")
+  jobShift            String?   @map("job_shift")
+  jobExperience       String?   @map("job_experience")
+  taskCategory        String?   @map("task_category")
+  taskTypeKey         String?   @map("task_type_key")
+  taskFormat          String?   @map("task_format")
+  taskDeadline        DateTime? @map("task_deadline")
+
+  owner    Student                @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  branches StudentListingBranch[]
+  views    StudentListingView[]
+
+  @@unique([ownerId, idempotencyKey])
+  @@index([kind, status, validTo])
+  @@index([ownerId, updatedAt])
+  @@index([status, validTo])
+  @@index([kind, status, rentalGender])
+  @@index([kind, status, serviceType])
+  @@index([kind, status, jobCategoryKey])
+  @@index([kind, status, taskCategory])
+  @@index([kind, status, taskDeadline])
+  @@index([details(ops: JsonbPathOps)], type: Gin, map: "student_listings_details_gin")
+  @@index([searchVector], type: Gin, map: "student_listings_search_vector_gin") // keep modelled so migrate dev doesn't DROP it
+  @@map("student_listings")
+}
+
+/// A map pin on a student listing. NOT a join table like the business `ListingBranch` — a student
+/// picks a point on the map, so the address exists only for its listing and dies with it.
+///
+/// `regionId`/`districtId` are plain columns, not FKs: the seeded district set (210) and the
+/// client's GeoCatalog (193) have not been reconciled yet, and a hard FK would reject a legitimate
+/// pin the moment the two lists drift. The service validates them against the tables instead.
+model StudentListingBranch {
+  id        String @id @default(cuid())
+  listingId String @map("listing_id")
+
+  lat      Float
+  lng      Float
+  // Populated from lat/lng by a raw-SQL trigger, exactly like Branch.geoPoint.
+  geoPoint Unsupported("geography(Point, 4326)")? @map("geo_point")
+
+  address    String
+  name       String?
+  landmark   String?
+  regionId   String? @map("region_id")
+  districtId String? @map("district_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  listing StudentListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@index([listingId])
+  @@index([geoPoint], type: Gist, map: "student_listing_branches_geo_point_gist") // PostGIS proximity index; keep modelled
+  @@map("student_listing_branches")
+}
+
+/// One student's view of one listing, kept so `viewsCount` counts a person once per 24 hours
+/// (§7.2.0) instead of once per screen open. Only the latest view per pair is retained — the row is
+/// upserted — because nothing here is analytics, it is purely a rate limit on the counter.
+model StudentListingView {
+  listingId String   @map("listing_id")
+  viewerId  String   @map("viewer_id")
+  viewedAt  DateTime @default(now()) @map("viewed_at")
+
+  listing StudentListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  viewer  Student        @relation(fields: [viewerId], references: [id], onDelete: Cascade)
+
+  @@id([listingId, viewerId])
+  @@index([viewedAt])
+  @@map("student_listing_views")
 }

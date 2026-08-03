@@ -16433,6 +16433,777 @@
           "validTo"
         ]
       },
+      "ListingBranchResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "lat": {
+            "type": "number",
+            "example": 41.2856
+          },
+          "lng": {
+            "type": "number",
+            "example": 69.2034
+          },
+          "address": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "landmark": {
+            "type": "string",
+            "nullable": true
+          },
+          "regionId": {
+            "type": "string",
+            "nullable": true
+          },
+          "districtId": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "lat",
+          "lng",
+          "address",
+          "name",
+          "landmark",
+          "regionId",
+          "districtId"
+        ]
+      },
+      "ListingOptionResponseDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "priceDelta": {
+            "type": "integer",
+            "description": "Butun so‘m; manfiy ham bo‘lishi mumkin"
+          },
+          "isAvailable": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "priceDelta",
+          "isAvailable"
+        ]
+      },
+      "ListingOptionGroupResponseDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "selectionType": {
+            "type": "string",
+            "enum": [
+              "SINGLE",
+              "MULTIPLE"
+            ]
+          },
+          "isRequired": {
+            "type": "boolean"
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ListingOptionResponseDto"
+            }
+          }
+        },
+        "required": [
+          "name",
+          "selectionType",
+          "isRequired",
+          "options"
+        ]
+      },
+      "StudentListingDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "ownerId": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "RENTAL",
+              "SERVICE",
+              "JOB",
+              "TASK"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "images": {
+            "description": "Birinchisi — muqova",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "priceUnit": {
+            "type": "string",
+            "enum": [
+              "PER_ITEM",
+              "PER_HOUR",
+              "PER_KG",
+              "PER_DAY",
+              "PER_MONTH",
+              "PER_COURSE",
+              "PER_LESSON",
+              "PER_TICKET",
+              "PER_PERSON",
+              "PER_SESSION",
+              "PER_PAGE"
+            ],
+            "nullable": true
+          },
+          "price": {
+            "type": "integer",
+            "description": "Butun so‘m, tiyinsiz"
+          },
+          "priceMax": {
+            "type": "integer",
+            "nullable": true
+          },
+          "currency": {
+            "type": "string",
+            "example": "UZS"
+          },
+          "isNegotiable": {
+            "type": "boolean"
+          },
+          "contactPhone": {
+            "type": "string",
+            "nullable": true,
+            "description": "Faqat ACTIVE e’londa qaytariladi; aks holda null (§7.2.0)"
+          },
+          "universityId": {
+            "type": "string",
+            "nullable": true
+          },
+          "audience": {
+            "type": "string",
+            "enum": [
+              "ALL",
+              "NEARBY_UNIVERSITIES",
+              "MY_UNIVERSITY"
+            ]
+          },
+          "branches": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ListingBranchResponseDto"
+            }
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "validTo": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "attributes": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "optionGroups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ListingOptionGroupResponseDto"
+            }
+          },
+          "details": {
+            "description": "Turga xos qism; `details.kind` tashqi `kind` bilan bir xil bo‘ladi (§4)",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TaskDetailsDto"
+              },
+              {
+                "$ref": "#/components/schemas/RentalDetailsDto"
+              },
+              {
+                "$ref": "#/components/schemas/ServiceDetailsDto"
+              },
+              {
+                "$ref": "#/components/schemas/JobDetailsDto"
+              }
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "PENDING_REVIEW",
+              "REJECTED",
+              "SCHEDULED",
+              "ACTIVE",
+              "PAUSED",
+              "EXPIRED",
+              "SOLD_OUT",
+              "ARCHIVED"
+            ]
+          },
+          "rejectionReason": {
+            "type": "string",
+            "nullable": true,
+            "description": "Phase 1 da moderatsiya yo‘q — doim null"
+          },
+          "viewsCount": {
+            "type": "integer"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "isMine": {
+            "type": "boolean",
+            "description": "So‘rovchi — e’lon egasimi (§7.2.0)"
+          },
+          "distanceMeters": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Qidiruv bilan keladi (Phase 1b); bu yerda doim null"
+          },
+          "isFavorite": {
+            "type": "boolean",
+            "description": "Sevimlilar Phase 2 da; hozircha doim false"
+          }
+        },
+        "required": [
+          "id",
+          "ownerId",
+          "kind",
+          "title",
+          "description",
+          "images",
+          "priceUnit",
+          "price",
+          "priceMax",
+          "currency",
+          "isNegotiable",
+          "contactPhone",
+          "universityId",
+          "audience",
+          "branches",
+          "validFrom",
+          "validTo",
+          "attributes",
+          "optionGroups",
+          "details",
+          "status",
+          "rejectionReason",
+          "viewsCount",
+          "createdAt",
+          "updatedAt",
+          "isMine",
+          "distanceMeters",
+          "isFavorite"
+        ]
+      },
+      "ListingSearchPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StudentListingDto"
+            }
+          },
+          "size": {
+            "type": "integer"
+          },
+          "hasNext": {
+            "type": "boolean"
+          },
+          "nextCursor": {
+            "type": "string",
+            "nullable": true,
+            "description": "Kursorli rejimda keyingi sahifa uchun; oxirgi sahifada yoki sahifa raqamli rejimda null"
+          },
+          "page": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Sahifa raqamli rejimda"
+          },
+          "total": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Sahifa raqamli rejimda"
+          }
+        },
+        "required": [
+          "items",
+          "size",
+          "hasNext",
+          "nextCursor",
+          "page",
+          "total"
+        ]
+      },
+      "SearchListingsDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "RENTAL",
+              "SERVICE",
+              "JOB",
+              "TASK"
+            ],
+            "description": "MAJBURIY — turlar aralashmaydi"
+          },
+          "query": {
+            "type": "string",
+            "example": "Chilonzor"
+          },
+          "geo": {
+            "$ref": "#/components/schemas/SearchGeoDto"
+          },
+          "minPrice": {
+            "type": "integer"
+          },
+          "maxPrice": {
+            "type": "integer",
+            "example": 2000000
+          },
+          "filter": {
+            "$ref": "#/components/schemas/SearchFilterDto"
+          },
+          "sort": {
+            "type": "string",
+            "enum": [
+              "RELEVANCE",
+              "NEWEST",
+              "PRICE_ASC",
+              "PRICE_DESC",
+              "NEAREST",
+              "DEADLINE"
+            ],
+            "default": "NEWEST"
+          },
+          "page": {
+            "$ref": "#/components/schemas/SearchPageDto"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "ListingBranchDto": {
+        "type": "object",
+        "properties": {
+          "lat": {
+            "type": "number",
+            "example": 41.2856,
+            "minimum": 37,
+            "maximum": 46
+          },
+          "lng": {
+            "type": "number",
+            "example": 69.2034,
+            "minimum": 55,
+            "maximum": 74
+          },
+          "address": {
+            "type": "string",
+            "example": "Chilonzor 9-kvartal, 42-uy"
+          },
+          "name": {
+            "type": "string",
+            "example": "Chilonzor filiali"
+          },
+          "landmark": {
+            "type": "string",
+            "example": "Korzinka ro‘parasida"
+          },
+          "regionId": {
+            "type": "string",
+            "example": "TOSHKENT_SHAHRI"
+          },
+          "districtId": {
+            "type": "string",
+            "example": "CHILONZOR"
+          }
+        },
+        "required": [
+          "lat",
+          "lng",
+          "address"
+        ]
+      },
+      "ListingOptionDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "90 daqiqa"
+          },
+          "priceDelta": {
+            "type": "number",
+            "example": 30000,
+            "description": "Butun so‘m; manfiy ham bo‘lishi mumkin"
+          },
+          "isAvailable": {
+            "type": "boolean",
+            "default": true
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "ListingOptionGroupDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "example": "Dars davomiyligi"
+          },
+          "selectionType": {
+            "type": "string",
+            "enum": [
+              "SINGLE",
+              "MULTIPLE"
+            ]
+          },
+          "isRequired": {
+            "type": "boolean",
+            "default": false
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ListingOptionDto"
+            }
+          }
+        },
+        "required": [
+          "name",
+          "selectionType",
+          "options"
+        ]
+      },
+      "CreateStudentListingDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "RENTAL",
+              "SERVICE",
+              "JOB",
+              "TASK"
+            ]
+          },
+          "submit": {
+            "type": "boolean",
+            "default": false,
+            "description": "true — darrov e’lon qilinadi; aks holda DRAFT bo‘lib qoladi"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "images": {
+            "description": "Birinchisi — muqova",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "priceUnit": {
+            "type": "string",
+            "enum": [
+              "PER_ITEM",
+              "PER_HOUR",
+              "PER_KG",
+              "PER_DAY",
+              "PER_MONTH",
+              "PER_COURSE",
+              "PER_LESSON",
+              "PER_TICKET",
+              "PER_PERSON",
+              "PER_SESSION",
+              "PER_PAGE"
+            ]
+          },
+          "price": {
+            "type": "number",
+            "example": 1500000,
+            "description": "Butun so‘m, tiyinsiz"
+          },
+          "priceMax": {
+            "type": "number",
+            "description": "Oraliqning yuqori chegarasi; `price` dan katta bo‘lsin"
+          },
+          "isNegotiable": {
+            "type": "boolean",
+            "default": false
+          },
+          "contactPhone": {
+            "type": "string",
+            "example": "+998901234567"
+          },
+          "universityId": {
+            "type": "string",
+            "description": "Phase 1: saqlanadi, tekshirilmaydi"
+          },
+          "audience": {
+            "type": "string",
+            "enum": [
+              "ALL",
+              "NEARBY_UNIVERSITIES",
+              "MY_UNIVERSITY"
+            ],
+            "default": "ALL"
+          },
+          "branches": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ListingBranchDto"
+            }
+          },
+          "validFrom": {
+            "type": "string",
+            "example": "2026-08-01T00:00:00Z"
+          },
+          "validTo": {
+            "type": "string",
+            "example": "2026-09-01T00:00:00Z"
+          },
+          "attributes": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "optionGroups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ListingOptionGroupDto"
+            }
+          },
+          "details": {
+            "description": "Turga xos qism; `details.kind` tashqi `kind` bilan bir xil bo‘lsin",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TaskDetailsDto"
+              },
+              {
+                "$ref": "#/components/schemas/RentalDetailsDto"
+              },
+              {
+                "$ref": "#/components/schemas/ServiceDetailsDto"
+              },
+              {
+                "$ref": "#/components/schemas/JobDetailsDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "kind",
+          "details"
+        ]
+      },
+      "StudentListingPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StudentListingDto"
+            }
+          },
+          "page": {
+            "type": "integer"
+          },
+          "size": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "hasNext": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "size",
+          "total",
+          "hasNext"
+        ]
+      },
+      "UpdateStudentListingDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "RENTAL",
+              "SERVICE",
+              "JOB",
+              "TASK"
+            ]
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "description": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "images": {
+            "description": "Birinchisi — muqova",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "priceUnit": {
+            "type": "string",
+            "enum": [
+              "PER_ITEM",
+              "PER_HOUR",
+              "PER_KG",
+              "PER_DAY",
+              "PER_MONTH",
+              "PER_COURSE",
+              "PER_LESSON",
+              "PER_TICKET",
+              "PER_PERSON",
+              "PER_SESSION",
+              "PER_PAGE"
+            ]
+          },
+          "price": {
+            "type": "number",
+            "example": 1500000,
+            "description": "Butun so‘m, tiyinsiz"
+          },
+          "priceMax": {
+            "type": "number",
+            "description": "Oraliqning yuqori chegarasi; `price` dan katta bo‘lsin"
+          },
+          "isNegotiable": {
+            "type": "boolean",
+            "default": false
+          },
+          "contactPhone": {
+            "type": "string",
+            "example": "+998901234567"
+          },
+          "universityId": {
+            "type": "string",
+            "description": "Phase 1: saqlanadi, tekshirilmaydi"
+          },
+          "audience": {
+            "type": "string",
+            "enum": [
+              "ALL",
+              "NEARBY_UNIVERSITIES",
+              "MY_UNIVERSITY"
+            ],
+            "default": "ALL"
+          },
+          "branches": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ListingBranchDto"
+            }
+          },
+          "validFrom": {
+            "type": "string",
+            "example": "2026-08-01T00:00:00Z"
+          },
+          "validTo": {
+            "type": "string",
+            "example": "2026-09-01T00:00:00Z"
+          },
+          "attributes": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "optionGroups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ListingOptionGroupDto"
+            }
+          },
+          "details": {
+            "description": "Turga xos qism; `details.kind` tashqi `kind` bilan bir xil bo‘lsin",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TaskDetailsDto"
+              },
+              {
+                "$ref": "#/components/schemas/RentalDetailsDto"
+              },
+              {
+                "$ref": "#/components/schemas/ServiceDetailsDto"
+              },
+              {
+                "$ref": "#/components/schemas/JobDetailsDto"
+              }
+            ]
+          }
+        }
+      },
+      "SetListingStatusDto": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ACTIVE",
+              "PAUSED",
+              "ARCHIVED"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
       "StartRedemptionResponseDto": {
         "type": "object",
         "properties": {

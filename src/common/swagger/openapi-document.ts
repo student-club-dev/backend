@@ -33,6 +33,7 @@ export const STUDENT_DOC_TAGS = [
   'Chat',
   'Calls',
   'Stories',
+  'Student listings',
   'Notifications',
   'Profiles',
   'Geo',
@@ -107,6 +108,10 @@ export function buildAppDocuments(
     .addTag('Chat', 'Student app: conversations, messages and real-time chat (`/chat` WS)')
     .addTag('Calls', 'Student app: call history and TURN credentials (signalling is `/calls` WS)')
     .addTag('Stories', 'Student app: 24-hour stories, visible to connections only')
+    .addTag(
+      'Student listings',
+      'Student app: student-posted listings — tasks, rentals, services and jobs',
+    )
     .addTag('Notifications', 'Student app: device-token registration for push')
     .addTag('Branches', 'Branches of a business: location, working hours, delivery')
     .addTag('Trade Centers', 'Trade centres a branch can be placed in')
