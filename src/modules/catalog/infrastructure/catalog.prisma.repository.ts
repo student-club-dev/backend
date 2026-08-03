@@ -6,6 +6,7 @@ import { AttributeSpec } from '../domain/entities/attribute-spec.entity';
 import { BusinessType } from '../domain/entities/business-type.entity';
 import { CatalogGroup } from '../domain/entities/catalog-group.entity';
 import { Category } from '../domain/entities/category.entity';
+import { TypeAttributeSchema } from '../domain/entities/type-attribute-schema.entity';
 import { TypeCountRow, typeCountQuery } from './catalog-count.sql';
 import { CatalogMapper } from './catalog.mapper';
 
@@ -123,6 +124,17 @@ export class CatalogPrismaRepository implements CatalogRepository {
       orderBy: { sortOrder: 'asc' },
     });
     return rows.map((row) => CatalogMapper.toAttributeSpec(row));
+  }
+
+  async findTypeAttributeSchema(businessType: string): Promise<TypeAttributeSchema | null> {
+    if (!(await this.typeExists(businessType))) {
+      return null;
+    }
+    const rows = await this.prisma.attributeSpec.findMany({
+      where: { businessType },
+      orderBy: { sortOrder: 'asc' },
+    });
+    return CatalogMapper.toTypeAttributeSchema(businessType, rows);
   }
 
   async typeExists(type: string): Promise<boolean> {

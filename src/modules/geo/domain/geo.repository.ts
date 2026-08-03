@@ -1,4 +1,5 @@
 import { District } from './entities/district.entity';
+import { MetroStation } from './entities/metro-station.entity';
 import { Region } from './entities/region.entity';
 
 /** Injection token for the geo repository port (bound to the Prisma impl in the module). */
@@ -20,4 +21,7 @@ export interface GeoRepository {
 
   /** Whether a region with this id exists. */
   regionExists(regionId: string): Promise<boolean>;
+
+  /** All metro stations, ordered by line then position along it. Tashkent-only. */
+  findMetroStations(): Promise<MetroStation[]>;
 }

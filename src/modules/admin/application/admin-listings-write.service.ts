@@ -22,4 +22,20 @@ export class AdminListingsWriteService {
     await this.listings.adminUpdate(id, input);
     return this.reads.getById(id);
   }
+
+  /**
+   * Approves a listing awaiting review (§6.2) — ACTIVE, or SCHEDULED when `validFrom` is still in
+   * the future. 404 `LISTING_NOT_FOUND` for an unknown or archived id; 409
+   * `INVALID_STATUS_TRANSITION` when it is not PENDING_REVIEW.
+   */
+  async approve(id: string): Promise<AdminListing> {
+    await this.listings.adminApprove(id);
+    return this.reads.getById(id);
+  }
+
+  /** Rejects a listing awaiting review (§6.2), recording the verdict. Same errors as {@link approve}. */
+  async reject(id: string, reason: string): Promise<AdminListing> {
+    await this.listings.adminReject(id, reason);
+    return this.reads.getById(id);
+  }
 }

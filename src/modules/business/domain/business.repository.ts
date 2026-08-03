@@ -47,4 +47,15 @@ export interface BusinessRepository {
   update(id: string, data: UpdateBusinessData): Promise<Business>;
   /** Soft-delete: set the business to ARCHIVED and cascade all its listings to ARCHIVED. */
   archive(id: string): Promise<void>;
+
+  /**
+   * Sets the status and `rejectionReason` together (owner submit, admin approve, admin reject).
+   * The service decides and validates the target status; the repository only persists it. The two
+   * always move as a pair — an approval that left a stale reason behind would keep showing the old
+   * verdict on a live business.
+   */
+  setStatus(id: string, status: BusinessStatus, rejectionReason: string | null): Promise<Business>;
+
+  /** How many non-archived businesses this owner has (the §6.4 cap of 5). */
+  countByOwner(ownerId: string): Promise<number>;
 }

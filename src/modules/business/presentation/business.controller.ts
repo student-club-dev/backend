@@ -15,6 +15,7 @@ import { ERROR_CODE } from '../../../common/errors/error-code';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
 import {
   ApiCreatedEnvelope,
+  ApiErrorEnvelope,
   ApiForbiddenEnvelope,
   ApiNotFoundEnvelope,
   ApiOkEnvelope,
@@ -105,6 +106,36 @@ export class BusinessController {
     @Body() dto: UpdateBusinessDto,
   ): Promise<BusinessDto> {
     const business = await this.businessService.update(user, id, dto.toInput());
+    return BusinessDto.fromDomain(business);
+  }
+
+  @Post(':id/submit')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Submit a business for review (owner only)',
+    description:
+      'DRAFT | REJECTED → PENDING_REVIEW, clearing any previous `rejectionReason`. When ' +
+      'moderation is switched off there is no queue to enter, so it lands on APPROVED directly — ' +
+      'read the returned `status` rather than assuming either.',
+  })
+  @ApiParam({ name: 'id', description: 'Business id' })
+  @ApiOkEnvelope(BusinessDto)
+  @ApiNotFoundEnvelope(
+    ERROR_CODE.BUSINESS_NOT_FOUND,
+    'No business with this id.',
+    'Biznes topilmadi',
+  )
+  @ApiErrorEnvelope(
+    409,
+    ERROR_CODE.INVALID_STATUS_TRANSITION,
+    'The business is not DRAFT or REJECTED.',
+    'Bu biznesni ko‘rib chiqishga yuborish mumkin emas',
+  )
+  async submit(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('id') id: string,
+  ): Promise<BusinessDto> {
+    const business = await this.businessService.submit(user, id);
     return BusinessDto.fromDomain(business);
   }
 

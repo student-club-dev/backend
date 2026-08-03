@@ -4,9 +4,17 @@ import { AppException } from '../../../common/exceptions/app.exception';
 import { isWithinUzbekistan } from '../../../common/geo/uzbekistan-bounds';
 import { haversineMeters } from '../../../common/utils/geo-distance.util';
 import { District } from '../domain/entities/district.entity';
+import { MetroStation } from '../domain/entities/metro-station.entity';
 import { GEO_REPOSITORY, GeoRepository } from '../domain/geo.repository';
 import { GEOCODER, GeocoderPort } from '../domain/geocoder.port';
 import { GeocodeResult, ReverseGeocodeResult } from './geocoding.io';
+
+/**
+ * Past this a station stops being a useful landmark and becomes a misleading one. Tashkent's
+ * stations sit roughly 1–2 km apart, so 3 km still names a station for anywhere genuinely "near
+ * the metro" without labelling half the country.
+ */
+const NEAREST_METRO_MAX_METERS = 3_000;
 
 /**
  * Geocoding use-cases — forward/reverse address lookup. Talks to the external provider through
@@ -48,7 +56,8 @@ export class GeocodingService {
 
   /**
    * Reverse geocode coordinates. Rejects points outside Uzbekistan (422 LOCATION_OUT_OF_BOUNDS)
-   * before any provider call; resolves region/district from our data; nearestMetro is null (Level-1).
+   * before any provider call, resolves region/district from our own data, and reports the nearest
+   * metro station when one is close enough to serve as a landmark.
    */
   async reverseGeocode(lat: number, lng: number): Promise<ReverseGeocodeResult> {
     if (!isWithinUzbekistan(lat, lng)) {
@@ -60,13 +69,32 @@ export class GeocodingService {
     }
     const districts = await this.geoRepository.findDistricts();
     const resolved = this.nearestDistrict(lat, lng, districts);
+    const stations = await this.geoRepository.findMetroStations();
     const { address } = await this.geocoder.reverseGeocode(lat, lng);
     return {
       regionId: resolved.regionId,
       districtId: resolved.districtId,
       address,
-      nearestMetro: null,
+      nearestMetro: this.nearestMetro(lat, lng, stations),
     };
+  }
+
+  /**
+   * The closest station within {@link NEAREST_METRO_MAX_METERS}, or null when there is none — no
+   * stations loaded, or none near enough. The cap matters: without it a branch in Samarkand would
+   * be described by a Tashkent station, which is worse than saying nothing.
+   */
+  private nearestMetro(lat: number, lng: number, stations: MetroStation[]): string | null {
+    let nearest: MetroStation | null = null;
+    let best = Infinity;
+    for (const station of stations) {
+      const distance = haversineMeters(lat, lng, station.lat, station.lng);
+      if (distance < best) {
+        best = distance;
+        nearest = station;
+      }
+    }
+    return nearest !== null && best <= NEAREST_METRO_MAX_METERS ? nearest.nameUz : null;
   }
 
   /** Validates `regionId` (if given) and returns the query prefixed with the region name to bias it. */

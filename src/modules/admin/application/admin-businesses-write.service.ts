@@ -25,4 +25,19 @@ export class AdminBusinessesWriteService {
     await this.businesses.adminUpdate(id, input);
     return this.reads.getById(id);
   }
+
+  /**
+   * Approves a business awaiting review (§6.2). 404 `BUSINESS_NOT_FOUND` when the id is unknown or
+   * archived; 409 `INVALID_STATUS_TRANSITION` when it is not PENDING_REVIEW.
+   */
+  async approve(id: string): Promise<AdminBusiness> {
+    await this.businesses.adminApprove(id);
+    return this.reads.getById(id);
+  }
+
+  /** Rejects a business awaiting review (§6.2), recording the verdict. Same errors as {@link approve}. */
+  async reject(id: string, reason: string): Promise<AdminBusiness> {
+    await this.businesses.adminReject(id, reason);
+    return this.reads.getById(id);
+  }
 }

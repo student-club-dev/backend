@@ -128,9 +128,23 @@ uchun bularni keyin ulash kerak:
 - `POST /listings/{id}/pause` · `/activate` · `/duplicate` · `/withdraw`
 - `GET /listings/{id}/stats` · `/redemptions`
 - `POST /listings/{id}/redeem/verify` · `/redeem/confirm` (kassir QR/promo)
-- `POST /business/{id}/submit` (biznesни moderatsiyaga)
-- `GET /business/types/{type}/attributes-schema` (dinamik `attributes` uchun JSON Schema)
-- `GET /geo/regions` · `GET /geo/regions/{id}/districts`
+
+### ✅ Qurildi (`DISCOUNTS_BUSINESS_API_RESPONSE.md`)
+
+- [x] **`POST /business/{id}/submit`** → `BusinessDto`. `DRAFT | REJECTED → PENDING_REVIEW`;
+      moderatsiya o'chirilgan bo'lsa darrov `APPROVED`.
+- [x] **`GET /business/types/{type}/attributes-schema`** → `AttributesSchemaDto`
+      (`{ businessType, common[], byCategory[] }`). JSON Schema emas — `AttributeFieldDto`,
+      ya'ni `…/categories` qaytaradigan o'sha format.
+- [x] **`GET /geo/regions`** · **`GET /geo/regions/{regionId}/districts`** — kontrakt yo'llari.
+      Mavjud `/regions` va `/districts` ham ishlashda davom etadi (admin panel ularni chaqiradi).
+- [x] **`GET /geo/metro-stations`** → `MetroStationDto[]` — Toshkent metrosi, 50 bekat / 4 liniya.
+      ⚠️ `elon-uz.json` da yo'q — spec'ga qo'shish kerakmi, javob kutilmoqda.
+- [x] **Moderatsiya (admin panel):** `POST /admin/businesses/{id}/approve` · `/reject` va
+      `POST /admin/listings/{id}/approve` · `/reject`. `MODERATION_ENABLED` bayrog'i bilan
+      boshqariladi — hozir **o'chirilgan**, shuning uchun `submit` avvalgidek darrov chop etadi.
+- [x] **§6.4 limitlar:** 5 biznes/foydalanuvchi · 100 faol e'lon/biznes · 50 `submit`/kun.
+      (`POST /media/upload` 100/soat avvaldan bor edi.)
 
 ## Ishlatilmaydi
 

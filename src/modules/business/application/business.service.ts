@@ -1,7 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { ERROR_CODE } from '../../../common/errors/error-code';
 import { AppException } from '../../../common/exceptions/app.exception';
 import type { AuthenticatedUser } from '../../../common/types/authenticated-user';
+import type { Env } from '../../../config/env';
 import { CATALOG_REPOSITORY, CatalogRepository } from '../../catalog/domain/catalog.repository';
 import {
   BUSINESS_OWNER_REPOSITORY,
@@ -11,6 +13,9 @@ import { BUSINESS_REPOSITORY, BusinessRepository } from '../domain/business.repo
 import { Business } from '../domain/entities/business.entity';
 import { BusinessStatus } from '../domain/enums/business-status.enum';
 import { CreateBusinessInput, UpdateBusinessInput } from './business.io';
+
+/** DISCOUNTS_BUSINESS_API §6.4 — "Bir foydalanuvchidagi biznes: 5". */
+export const MAX_BUSINESSES_PER_OWNER = 5;
 
 /**
  * Business use-cases for a business-owner account. The BUSINESS-account gate lives in
@@ -24,15 +29,16 @@ export class BusinessService {
     @Inject(BUSINESS_REPOSITORY) private readonly businesses: BusinessRepository,
     @Inject(BUSINESS_OWNER_REPOSITORY) private readonly owners: BusinessOwnerRepository,
     @Inject(CATALOG_REPOSITORY) private readonly catalog: CatalogRepository,
+    private readonly config: ConfigService<Env, true>,
   ) {}
 
   /**
-   * Creates a business owned by the caller. Rejects an unknown `type` (422) and — per the
-   * D1 phone-verification gate — an owner whose phone is not verified (403).
+   * Creates a business owned by the caller. Rejects an unknown `type` (422), an owner whose phone
+   * is not verified (403, the D1 gate), and an owner already at the §6.4 cap of five (429).
    *
-   * MVP: new businesses are created APPROVED so owners can publish listings without waiting for
-   * moderation. TODO(post-MVP): create as DRAFT and add the submit → admin approve/reject flow
-   * (Level 2); changing APPROVED back to DRAFT below re-enables the BUSINESS_NOT_APPROVED gate.
+   * Lands on DRAFT when MODERATION_ENABLED — the owner then calls `submit` — and on APPROVED
+   * otherwise, which is the MVP behaviour that lets an owner publish without waiting for a
+   * moderator who does not yet exist.
    */
   async create(user: AuthenticatedUser, input: CreateBusinessInput): Promise<Business> {
     if (!(await this.catalog.typeExists(input.type))) {
@@ -41,9 +47,16 @@ export class BusinessService {
       });
     }
     await this.assertPhoneVerified(user.id);
+    if ((await this.businesses.countByOwner(user.id)) >= MAX_BUSINESSES_PER_OWNER) {
+      throw new AppException(
+        ERROR_CODE.RATE_LIMITED,
+        429,
+        `Bitta hisobda ${MAX_BUSINESSES_PER_OWNER} tadan ko‘p biznes bo‘lmaydi`,
+      );
+    }
     return this.businesses.create({
       ownerId: user.id,
-      status: BusinessStatus.APPROVED, // MVP auto-approve — see the TODO(post-MVP) above.
+      status: this.moderationEnabled() ? BusinessStatus.DRAFT : BusinessStatus.APPROVED,
       type: input.type,
       name: input.name,
       phone: input.phone,
@@ -112,6 +125,46 @@ export class BusinessService {
     });
   }
 
+  /**
+   * Submits a business for review (§5.2). DRAFT | REJECTED → PENDING_REVIEW, clearing any previous
+   * `rejectionReason` so a resubmission does not keep showing the old verdict.
+   *
+   * With moderation off there is no queue to enter, so it lands on APPROVED directly — otherwise
+   * this endpoint would be a dead end leaving the business permanently unable to publish.
+   */
+  async submit(user: AuthenticatedUser, id: string): Promise<Business> {
+    const current = await this.loadOwned(user, id);
+    if (current.status !== BusinessStatus.DRAFT && current.status !== BusinessStatus.REJECTED) {
+      throw AppException.conflict(
+        ERROR_CODE.INVALID_STATUS_TRANSITION,
+        'Bu biznesni ko‘rib chiqishga yuborish mumkin emas',
+      );
+    }
+    const target = this.moderationEnabled()
+      ? BusinessStatus.PENDING_REVIEW
+      : BusinessStatus.APPROVED;
+    return this.businesses.setStatus(current.id, target, null);
+  }
+
+  /**
+   * Admin: approves a business under review (§6.2). PENDING_REVIEW → APPROVED, clearing the stored
+   * verdict — an approval that left a stale `rejectionReason` behind would keep showing the old
+   * rejection on a business that is now live.
+   *
+   * A moderation decision, deliberately separate from {@link adminUpdate}: a moderator approving
+   * must not be able to rewrite the record in the same breath.
+   */
+  async adminApprove(id: string): Promise<Business> {
+    const current = await this.loadUnderReview(id);
+    return this.businesses.setStatus(current.id, BusinessStatus.APPROVED, null);
+  }
+
+  /** Admin: rejects a business under review (§6.2), recording the verdict the owner will see. */
+  async adminReject(id: string, reason: string): Promise<Business> {
+    const current = await this.loadUnderReview(id);
+    return this.businesses.setStatus(current.id, BusinessStatus.REJECTED, reason);
+  }
+
   /** Soft-deletes a business the caller owns (ARCHIVED) and cascades its listings to ARCHIVED. */
   async archive(user: AuthenticatedUser, id: string): Promise<void> {
     const current = await this.loadOwned(user, id);
@@ -134,6 +187,23 @@ export class BusinessService {
       throw AppException.notFound(ERROR_CODE.BUSINESS_NOT_FOUND, 'Biznes topilmadi');
     }
     return business;
+  }
+
+  /** Loads a business that is awaiting a moderator: 404 unknown/archived, 409 any other status. */
+  private async loadUnderReview(id: string): Promise<Business> {
+    const business = await this.loadById(id);
+    if (business.status !== BusinessStatus.PENDING_REVIEW) {
+      throw AppException.conflict(
+        ERROR_CODE.INVALID_STATUS_TRANSITION,
+        'Bu biznes ko‘rib chiqilmoqda emas',
+      );
+    }
+    return business;
+  }
+
+  /** The moderation queue's master switch (DISCOUNTS_BUSINESS_API §6.2). */
+  private moderationEnabled(): boolean {
+    return this.config.get('MODERATION_ENABLED', { infer: true }) === 'true';
   }
 
   private async assertPhoneVerified(ownerId: string): Promise<void> {

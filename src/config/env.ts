@@ -158,6 +158,17 @@ export const envSchema = z
     // clients send `call:auth` to refresh a socket's token in place, enforcing this tears down
     // every call longer than ~16 minutes — strictly worse than the pre-existing gap it closes.
     CALLS_ENFORCE_TOKEN_EXPIRY: z.enum(['true', 'false']).default('false'),
+
+    // Master switch for the moderation queue (DISCOUNTS_BUSINESS_API §6.2). While false a created
+    // business is APPROVED at once and a submitted listing publishes straight to ACTIVE — today's
+    // MVP behaviour, which every shipped client depends on. Flipping it to true routes both
+    // through PENDING_REVIEW and an admin decision (POST /admin/{businesses,listings}/:id/approve),
+    // and lets an edit to a published listing send it back to the queue (§6.3).
+    //
+    // It changes only WHERE a transition lands: every publish gate — business approved, active
+    // branch, images, price, window, category, attributes, §6.4 caps — runs identically either way.
+    // Do not flip it on until the admin panel can work the queue, or nothing reaches the feed.
+    MODERATION_ENABLED: z.enum(['true', 'false']).default('false'),
   })
   .superRefine((env, ctx) => {
     if (env.NODE_ENV === 'production') {

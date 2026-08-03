@@ -125,6 +125,7 @@ function makeCatalog(overrides: Partial<CatalogRepository> = {}): CatalogReposit
     deleteType: jest.fn(),
     countBusinessesOfType: jest.fn().mockResolvedValue(0),
     countCategoriesOfType: jest.fn().mockResolvedValue(0),
+    findTypeAttributeSchema: jest.fn().mockResolvedValue(null),
     ...overrides,
   };
 }

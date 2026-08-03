@@ -187,3 +187,29 @@ describe('validateEnv — CALLS_ENABLED gates the TURN requirement', () => {
     }
   });
 });
+
+/**
+ * The moderation queue's master switch. Default OFF is load-bearing: while false a created
+ * business is APPROVED at once and a submitted listing publishes straight to ACTIVE, which is the
+ * behaviour every existing client depends on.
+ */
+describe('validateEnv — MODERATION_ENABLED', () => {
+  it('defaults to false', () => {
+    const env = validateEnv({});
+    expect(env.MODERATION_ENABLED).toBe('false');
+  });
+
+  it('accepts true', () => {
+    const env = validateEnv({ MODERATION_ENABLED: 'true' });
+    expect(env.MODERATION_ENABLED).toBe('true');
+  });
+
+  it('rejects a non-boolean string', () => {
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      expect(() => validateEnv({ MODERATION_ENABLED: 'yes' })).toThrow();
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
+  });
+});

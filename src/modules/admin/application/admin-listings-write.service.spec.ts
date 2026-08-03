@@ -20,6 +20,8 @@ function makeReads(overrides: Partial<AdminListingsService> = {}): AdminListings
 function makeListingsService(overrides: Partial<ListingsService> = {}): ListingsService {
   return {
     adminUpdate: jest.fn().mockResolvedValue(undefined),
+    adminApprove: jest.fn().mockResolvedValue(undefined),
+    adminReject: jest.fn().mockResolvedValue(undefined),
     ...overrides,
   } as ListingsService;
 }
@@ -80,6 +82,49 @@ describe('AdminListingsWriteService', () => {
         status: 404,
       });
       expect(reads.getById).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('approve', () => {
+    it('delegates the decision and returns the re-fetched admin record', async () => {
+      const reads = makeReads();
+      const listings = makeListingsService();
+      const service = new AdminListingsWriteService(reads, listings);
+
+      const result = await service.approve('lst-1');
+
+      expect(listings.adminApprove).toHaveBeenCalledWith('lst-1');
+      expect(reads.getById).toHaveBeenCalledWith('lst-1');
+      expect(result).toBe(LISTING);
+    });
+
+    it('propagates 409 INVALID_STATUS_TRANSITION and does not re-fetch', async () => {
+      const reads = makeReads();
+      const listings = makeListingsService({
+        adminApprove: jest
+          .fn()
+          .mockRejectedValue({ code: ERROR_CODE.INVALID_STATUS_TRANSITION, status: 409 }),
+      });
+      const service = new AdminListingsWriteService(reads, listings);
+
+      await expect(service.approve('lst-1')).rejects.toMatchObject({
+        code: ERROR_CODE.INVALID_STATUS_TRANSITION,
+        status: 409,
+      });
+      expect(reads.getById).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('reject', () => {
+    it('passes the verdict through and returns the re-fetched admin record', async () => {
+      const reads = makeReads();
+      const listings = makeListingsService();
+      const service = new AdminListingsWriteService(reads, listings);
+
+      const result = await service.reject('lst-1', 'POOR_IMAGE');
+
+      expect(listings.adminReject).toHaveBeenCalledWith('lst-1', 'POOR_IMAGE');
+      expect(result).toBe(LISTING);
     });
   });
 });

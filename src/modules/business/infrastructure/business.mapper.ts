@@ -3,7 +3,7 @@ import {
   BusinessStatus as PrismaBusinessStatus,
   type Business as BusinessRow,
 } from '@prisma/client';
-import { CreateBusinessData, UpdateBusinessData } from '../domain/business.repository';
+import type { CreateBusinessData, UpdateBusinessData } from '../domain/business.repository';
 import { Business, BusinessContacts } from '../domain/entities/business.entity';
 import { BusinessStatus } from '../domain/enums/business-status.enum';
 
@@ -51,6 +51,14 @@ export class BusinessMapper {
       contacts: contactsToJson(data.contacts),
       isOnlineOnly: data.isOnlineOnly,
     };
+  }
+
+  /** Status and verdict always move together — an approval must clear a stale rejection reason. */
+  static toStatusData(
+    status: BusinessStatus,
+    rejectionReason: string | null,
+  ): Prisma.BusinessUpdateInput {
+    return { status: PrismaBusinessStatus[status], rejectionReason };
   }
 
   static toUpdateData(data: UpdateBusinessData): Prisma.BusinessUpdateInput {

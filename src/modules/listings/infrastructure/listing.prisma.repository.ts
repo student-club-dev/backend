@@ -85,7 +85,13 @@ export class ListingPrismaRepository implements ListingRepository {
       }
       return tx.listing.update({
         where: { id },
-        data: { status: PrismaListingStatus[data.status] },
+        data: {
+          status: PrismaListingStatus[data.status],
+          submittedAt: data.submittedAt,
+          // A resubmission starts clean: keeping the old verdict would show the owner why the
+          // listing was once refused while it sits waiting to be judged again.
+          rejectionReason: null,
+        },
         include: LISTING_INCLUDE,
       });
     });
@@ -116,11 +122,40 @@ export class ListingPrismaRepository implements ListingRepository {
     });
   }
 
+  async countActiveByBusiness(businessId: string): Promise<number> {
+    return this.prisma.listing.count({
+      where: {
+        businessId,
+        status: { in: [PrismaListingStatus.ACTIVE, PrismaListingStatus.PENDING_REVIEW] },
+      },
+    });
+  }
+
+  /** Owner-scoped via the business relation — the §6.4 daily cap follows the owner, not one business. */
+  async countSubmittedByOwnerSince(ownerId: string, since: Date): Promise<number> {
+    return this.prisma.listing.count({
+      where: { business: { ownerId }, submittedAt: { gte: since } },
+    });
+  }
+
   /** Sets the listing's status (pause/activate/withdraw) and returns the updated aggregate. */
   async setStatus(id: string, status: ListingStatus): Promise<Listing> {
     const row = await this.prisma.listing.update({
       where: { id },
       data: { status: PrismaListingStatus[status] },
+      include: LISTING_INCLUDE,
+    });
+    return ListingMapper.toDomain(row);
+  }
+
+  async setRejection(
+    id: string,
+    status: ListingStatus,
+    rejectionReason: string | null,
+  ): Promise<Listing> {
+    const row = await this.prisma.listing.update({
+      where: { id },
+      data: { status: PrismaListingStatus[status], rejectionReason },
       include: LISTING_INCLUDE,
     });
     return ListingMapper.toDomain(row);

@@ -169,6 +169,8 @@ export class ListingMapper {
         deleteMany: {},
         create: optionGroupsCreate(data.optionGroups),
       },
+      // Only the §6.3 re-moderation path sets this; every other edit leaves the lifecycle alone.
+      ...(data.status === undefined ? {} : { status: PrismaListingStatus[data.status] }),
     };
   }
 

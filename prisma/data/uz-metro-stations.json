@@ -1,0 +1,402 @@
+[
+  {
+    "id": "BUYUK_IPAK_YOLI",
+    "nameUz": "Buyuk Ipak Yoʻli",
+    "nameRu": "Буюк Ипак Йули",
+    "line": "CHILONZOR",
+    "lat": 41.32611,
+    "lng": 69.32856
+  },
+  {
+    "id": "PUSHKIN",
+    "nameUz": "Pushkin",
+    "nameRu": "Пушкин",
+    "line": "CHILONZOR",
+    "lat": 41.32195,
+    "lng": 69.3111
+  },
+  {
+    "id": "HAMID_OLIMJON",
+    "nameUz": "Hamid Olimjon",
+    "nameRu": "Хамид Алимджан",
+    "line": "CHILONZOR",
+    "lat": 41.31816,
+    "lng": 69.29574
+  },
+  {
+    "id": "AMIR_TEMUR_XIYOBONI",
+    "nameUz": "Amir Temur xiyoboni",
+    "nameRu": "Сквер Амира Тимура",
+    "line": "CHILONZOR",
+    "lat": 41.31267,
+    "lng": 69.28327
+  },
+  {
+    "id": "MUSTAQILLIK_MAYDONI",
+    "nameUz": "Mustaqillik maydoni",
+    "nameRu": "Мустакиллик майдони",
+    "line": "CHILONZOR",
+    "lat": 41.31495,
+    "lng": 69.27106
+  },
+  {
+    "id": "PAXTAKOR",
+    "nameUz": "Paxtakor",
+    "nameRu": "Пахтакор",
+    "line": "CHILONZOR",
+    "lat": 41.31779,
+    "lng": 69.25509
+  },
+  {
+    "id": "XALQLAR_DOSTLIGI",
+    "nameUz": "Xalqlar doʻstligi",
+    "nameRu": "Дружба Народов",
+    "line": "CHILONZOR",
+    "lat": 41.3119,
+    "lng": 69.2431
+  },
+  {
+    "id": "MILLIY_BOG",
+    "nameUz": "Milliy bogʻ",
+    "nameRu": "Миллий Бог",
+    "line": "CHILONZOR",
+    "lat": 41.30339,
+    "lng": 69.23567
+  },
+  {
+    "id": "NOVZA",
+    "nameUz": "Novza",
+    "nameRu": "Новза",
+    "line": "CHILONZOR",
+    "lat": 41.29187,
+    "lng": 69.22362
+  },
+  {
+    "id": "MIRZO_ULUGBEK",
+    "nameUz": "Mirzo Ulugʻbek",
+    "nameRu": "Мирзо Улугбек",
+    "line": "CHILONZOR",
+    "lat": 41.28203,
+    "lng": 69.21258
+  },
+  {
+    "id": "CHILONZOR",
+    "nameUz": "Chilonzor",
+    "nameRu": "Чиланзар",
+    "line": "CHILONZOR",
+    "lat": 41.27436,
+    "lng": 69.20497
+  },
+  {
+    "id": "OLMAZOR",
+    "nameUz": "Olmazor",
+    "nameRu": "Алмазар",
+    "line": "CHILONZOR",
+    "lat": 41.25667,
+    "lng": 69.1961
+  },
+  {
+    "id": "CHOSHTEPA",
+    "nameUz": "Choshtepa",
+    "nameRu": "Чаштепа",
+    "line": "CHILONZOR",
+    "lat": 41.23825,
+    "lng": 69.19603
+  },
+  {
+    "id": "OZGARISH",
+    "nameUz": "O‘zgarish",
+    "nameRu": "Узгариш",
+    "line": "CHILONZOR",
+    "lat": 41.22734,
+    "lng": 69.20397
+  },
+  {
+    "id": "SIRGALI",
+    "nameUz": "Sirgʻali",
+    "nameRu": "Сергели",
+    "line": "CHILONZOR",
+    "lat": 41.22065,
+    "lng": 69.20887
+  },
+  {
+    "id": "YANGIHAYOT",
+    "nameUz": "Yangihayot",
+    "nameRu": "Янгихаёт",
+    "line": "CHILONZOR",
+    "lat": 41.21351,
+    "lng": 69.21402
+  },
+  {
+    "id": "CHINOR",
+    "nameUz": "Chinor",
+    "nameRu": "Чинара",
+    "line": "CHILONZOR",
+    "lat": 41.2067,
+    "lng": 69.21896
+  },
+  {
+    "id": "BERUNIY",
+    "nameUz": "Beruniy",
+    "nameRu": "Беруни",
+    "line": "OZBEKISTON",
+    "lat": 41.34462,
+    "lng": 69.2062
+  },
+  {
+    "id": "TINCHLIK",
+    "nameUz": "Tinchlik",
+    "nameRu": "Тинчлик",
+    "line": "OZBEKISTON",
+    "lat": 41.3323,
+    "lng": 69.21912
+  },
+  {
+    "id": "CHORSU",
+    "nameUz": "Chorsu",
+    "nameRu": "Чорсу",
+    "line": "OZBEKISTON",
+    "lat": 41.32586,
+    "lng": 69.23682
+  },
+  {
+    "id": "GAFUR_GULOM",
+    "nameUz": "G'afur G'ulom",
+    "nameRu": "Гафур Гулям",
+    "line": "OZBEKISTON",
+    "lat": 41.32788,
+    "lng": 69.24583
+  },
+  {
+    "id": "ALISHER_NAVOIY",
+    "nameUz": "Alisher Navoiy",
+    "nameRu": "Алишер Навои",
+    "line": "OZBEKISTON",
+    "lat": 41.31892,
+    "lng": 69.2543
+  },
+  {
+    "id": "OZBEKISTON",
+    "nameUz": "Oʻzbekiston",
+    "nameRu": "Узбекистан",
+    "line": "OZBEKISTON",
+    "lat": 41.31194,
+    "lng": 69.25341
+  },
+  {
+    "id": "KOSMONAVTLAR",
+    "nameUz": "Kosmonavtlar",
+    "nameRu": "Космонавтов",
+    "line": "OZBEKISTON",
+    "lat": 41.30516,
+    "lng": 69.26472
+  },
+  {
+    "id": "OYBEK",
+    "nameUz": "Oybek",
+    "nameRu": "Айбек",
+    "line": "OZBEKISTON",
+    "lat": 41.29801,
+    "lng": 69.27405
+  },
+  {
+    "id": "TOSHKENT",
+    "nameUz": "Toshkent",
+    "nameRu": "Ташкент",
+    "line": "OZBEKISTON",
+    "lat": 41.29329,
+    "lng": 69.28772
+  },
+  {
+    "id": "MASHINASOZLAR",
+    "nameUz": "Mashinasozlar",
+    "nameRu": "Машиносозлар",
+    "line": "OZBEKISTON",
+    "lat": 41.29898,
+    "lng": 69.30513
+  },
+  {
+    "id": "DOSTLIK",
+    "nameUz": "Do'stlik",
+    "nameRu": "Дустлик",
+    "line": "OZBEKISTON",
+    "lat": 41.29364,
+    "lng": 69.32224
+  },
+  {
+    "id": "TURKISTON",
+    "nameUz": "Turkiston",
+    "nameRu": "Туркистан",
+    "line": "YUNUSOBOD",
+    "lat": 41.37752,
+    "lng": 69.29602
+  },
+  {
+    "id": "YUNUSOBOD",
+    "nameUz": "Yunusobod",
+    "nameRu": "Юнусабад",
+    "line": "YUNUSOBOD",
+    "lat": 41.36684,
+    "lng": 69.2923
+  },
+  {
+    "id": "SHAHRISTON",
+    "nameUz": "Shahriston",
+    "nameRu": "Шахристан",
+    "line": "YUNUSOBOD",
+    "lat": 41.35312,
+    "lng": 69.28811
+  },
+  {
+    "id": "BODOMZOR",
+    "nameUz": "Bodomzor",
+    "nameRu": "Бадамзар",
+    "line": "YUNUSOBOD",
+    "lat": 41.33717,
+    "lng": 69.28457
+  },
+  {
+    "id": "MINOR",
+    "nameUz": "Minor",
+    "nameRu": "Минор",
+    "line": "YUNUSOBOD",
+    "lat": 41.32689,
+    "lng": 69.28342
+  },
+  {
+    "id": "ABDULLA_QODIRIY",
+    "nameUz": "Abdulla Qodiriy",
+    "nameRu": "Абдулла Кадыри",
+    "line": "YUNUSOBOD",
+    "lat": 41.32019,
+    "lng": 69.28176
+  },
+  {
+    "id": "YUNUS_RAJABIY",
+    "nameUz": "Yunus Rajabiy",
+    "nameRu": "Юнyc Раджаби",
+    "line": "YUNUSOBOD",
+    "lat": 41.31389,
+    "lng": 69.28351
+  },
+  {
+    "id": "MINGORIK",
+    "nameUz": "Mingoʻrik",
+    "nameRu": "Минг Урик",
+    "line": "YUNUSOBOD",
+    "lat": 41.29966,
+    "lng": 69.27441
+  },
+  {
+    "id": "TEXNOPARK",
+    "nameUz": "Texnopark",
+    "nameRu": "Технопарк",
+    "line": "HALQA",
+    "lat": 41.29463,
+    "lng": 69.32319
+  },
+  {
+    "id": "YASHNOBOD",
+    "nameUz": "Yashnobod",
+    "nameRu": "Яшнабад",
+    "line": "HALQA",
+    "lat": 41.29759,
+    "lng": 69.34978
+  },
+  {
+    "id": "TUZEL",
+    "nameUz": "Tuzel",
+    "nameRu": "Тузель",
+    "line": "HALQA",
+    "lat": 41.29201,
+    "lng": 69.35618
+  },
+  {
+    "id": "OLMOS",
+    "nameUz": "Olmos",
+    "nameRu": "Алмас",
+    "line": "HALQA",
+    "lat": 41.28171,
+    "lng": 69.36033
+  },
+  {
+    "id": "ROHAT",
+    "nameUz": "Rohat",
+    "nameRu": "Рахат",
+    "line": "HALQA",
+    "lat": 41.26529,
+    "lng": 69.36475
+  },
+  {
+    "id": "YANGIOBOD",
+    "nameUz": "Yangiobod",
+    "nameRu": "Янгиабад",
+    "line": "HALQA",
+    "lat": 41.25651,
+    "lng": 69.35872
+  },
+  {
+    "id": "QOYLIQ",
+    "nameUz": "Qo‘yliq",
+    "nameRu": "Куйлюк",
+    "line": "HALQA",
+    "lat": 41.23746,
+    "lng": 69.327
+  },
+  {
+    "id": "MATONAT",
+    "nameUz": "Matonat",
+    "nameRu": "Матонат",
+    "line": "HALQA",
+    "lat": 41.24447,
+    "lng": 69.30832
+  },
+  {
+    "id": "QIYOT",
+    "nameUz": "Qiyot",
+    "nameRu": "Киёт",
+    "line": "HALQA",
+    "lat": 41.24448,
+    "lng": 69.29973
+  },
+  {
+    "id": "TOLARIK",
+    "nameUz": "Tolarik",
+    "nameRu": "Таларык",
+    "line": "HALQA",
+    "lat": 41.24451,
+    "lng": 69.28496
+  },
+  {
+    "id": "XONOBOD",
+    "nameUz": "Xonobod",
+    "nameRu": "Ханабад",
+    "line": "HALQA",
+    "lat": 41.23001,
+    "lng": 69.27044
+  },
+  {
+    "id": "QURUVCHILAR",
+    "nameUz": "Quruvchilar",
+    "nameRu": "Курувчилар",
+    "line": "HALQA",
+    "lat": 41.22164,
+    "lng": 69.2605
+  },
+  {
+    "id": "TURON",
+    "nameUz": "Turon",
+    "nameRu": "Туран",
+    "line": "HALQA",
+    "lat": 41.21068,
+    "lng": 69.23415
+  },
+  {
+    "id": "QIPCHOK",
+    "nameUz": "Qipchok",
+    "nameRu": "Кипчак",
+    "line": "HALQA",
+    "lat": 41.20542,
+    "lng": 69.22141
+  }
+]

@@ -157,6 +157,15 @@ interface RawDistrict {
   name_ru?: string;
 }
 
+interface RawMetroStation {
+  id: string;
+  nameUz: string;
+  nameRu: string | null;
+  line: string;
+  lat: number;
+  lng: number;
+}
+
 interface CatalogSeed {
   version: string;
   constants: Record<string, string>;
@@ -244,6 +253,24 @@ function loadGeo(): {
   return { regions, districts };
 }
 
+/**
+ * Tashkent metro stations, already in running order per line in the JSON — the array index becomes
+ * `sortOrder`, so a client can render a line without re-sorting by geography.
+ */
+function loadMetroStations(): Prisma.MetroStationCreateManyInput[] {
+  const raw = readJsonBom<RawMetroStation[]>(join(__dirname, 'data', 'uz-metro-stations.json'));
+  assertUniqueSlugs('metro station', raw.map((s) => s.id));
+  return raw.map((s, index) => ({
+    id: s.id,
+    nameUz: s.nameUz,
+    nameRu: s.nameRu,
+    line: s.line,
+    lat: s.lat,
+    lng: s.lng,
+    sortOrder: index,
+  }));
+}
+
 // ---------------------------------------------------------------------------
 async function main(): Promise<void> {
   const seed = loadSeed();
@@ -321,6 +348,7 @@ async function main(): Promise<void> {
   );
 
   const geo = loadGeo();
+  const metroStations = loadMetroStations();
 
   await prisma.$transaction(async (tx) => {
     // 0. Catalog groups — upsert by `key` (referenced by BusinessTypeInfo.groupKey FK).
@@ -400,6 +428,11 @@ async function main(): Promise<void> {
       };
       await tx.district.upsert({ where: { id: d.id }, create: { id: d.id, ...data }, update: data });
     }
+    // 4b. Metro stations — nothing FKs to them (Branch.metroStation is free text), so unlike
+    //     regions/districts these can be replaced wholesale rather than upserted.
+    await tx.metroStation.deleteMany();
+    await tx.metroStation.createMany({ data: metroStations });
+
     // 5. Trade centers — upsert center by slug (array index = sortOrder), then replace its
     //    fields wholesale so re-running never duplicates (field array index = sortOrder).
     for (const [i, tc] of TRADE_CENTERS.entries()) {
@@ -437,6 +470,7 @@ async function main(): Promise<void> {
   console.log(`  attribute specs:       ${attributeRows.length} (type-level ${typeLevelAttrCount}, category-level ${categoryLevelAttrCount})`);
   console.log(`  regions:               ${geo.regions.length}`);
   console.log(`  districts:             ${geo.districts.length}`);
+  console.log(`  metro stations:        ${metroStations.length}`);
   const tradeCenterFieldCount = TRADE_CENTERS.reduce((n, tc) => n + tc.fields.length, 0);
   console.log(`  trade centers:         ${TRADE_CENTERS.length} (fields ${tradeCenterFieldCount})`);
 }

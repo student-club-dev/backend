@@ -1,6 +1,8 @@
+import { ConfigService } from '@nestjs/config';
 import { AccountType } from '../../../common/enums/account-type.enum';
 import { ERROR_CODE } from '../../../common/errors/error-code';
 import type { AuthenticatedUser } from '../../../common/types/authenticated-user';
+import type { Env } from '../../../config/env';
 import { BranchRepository } from '../../branches/domain/branches.repository';
 import {
   BusinessReadRepository,
@@ -129,6 +131,9 @@ function makeListings(): ListingRepository {
     duplicate: jest.fn(),
     stats: jest.fn(),
     applyStatusTransitions: jest.fn(),
+    countActiveByBusiness: jest.fn().mockResolvedValue(0),
+    countSubmittedByOwnerSince: jest.fn().mockResolvedValue(0),
+    setRejection: jest.fn(),
   };
 }
 
@@ -196,6 +201,9 @@ function makeSubmitListings(listing: Listing | null): ListingRepository {
     duplicate: jest.fn(),
     stats: jest.fn(),
     applyStatusTransitions: jest.fn(),
+    countActiveByBusiness: jest.fn().mockResolvedValue(0),
+    countSubmittedByOwnerSince: jest.fn().mockResolvedValue(0),
+    setRejection: jest.fn(),
   };
 }
 
@@ -210,6 +218,8 @@ function makeByIdListings(listing: Listing | null): ListingRepository {
       ...(listing as Listing),
       title: data.title,
       discount: data.discount,
+      // §6.3 rides the status along with the content, so the echo must honour it.
+      status: data.status ?? (listing as Listing).status,
     })),
     archive: jest.fn().mockResolvedValue(undefined),
     setStatus: jest.fn(async (_id: string, status: ListingStatus) => ({
@@ -229,6 +239,9 @@ function makeByIdListings(listing: Listing | null): ListingRepository {
       totalRevenue: 0,
     }),
     applyStatusTransitions: jest.fn().mockResolvedValue({ expired: 0, activated: 0, soldOut: 0 }),
+    countActiveByBusiness: jest.fn().mockResolvedValue(0),
+    countSubmittedByOwnerSince: jest.fn().mockResolvedValue(0),
+    setRejection: jest.fn(),
   };
 }
 
@@ -289,6 +302,7 @@ function makeCatalog(
     deleteType: jest.fn(),
     countBusinessesOfType: jest.fn().mockResolvedValue(0),
     countCategoriesOfType: jest.fn().mockResolvedValue(0),
+    findTypeAttributeSchema: jest.fn().mockResolvedValue(null),
     findGroups: jest.fn().mockResolvedValue([]),
     findBusinessTypesByGroups: jest.fn().mockResolvedValue([]),
     groupExists: jest.fn().mockResolvedValue(true),
@@ -313,6 +327,15 @@ interface Overrides {
   businesses?: BusinessReadRepository;
   catalog?: CatalogRepository;
   branches?: BranchRepository;
+  /** Defaults to off, so every pre-existing test keeps asserting today's auto-publish behaviour. */
+  moderation?: 'true' | 'false';
+}
+
+/** Only MODERATION_ENABLED is ever read from config here, so the stub answers that and nothing else. */
+function makeConfig(moderation: 'true' | 'false'): ConfigService<Env, true> {
+  return {
+    get: jest.fn((key: string) => (key === 'MODERATION_ENABLED' ? moderation : undefined)),
+  } as unknown as ConfigService<Env, true>;
 }
 
 function makeService(overrides: Overrides = {}): ListingsService {
@@ -321,6 +344,7 @@ function makeService(overrides: Overrides = {}): ListingsService {
     overrides.businesses ?? makeBusinesses('owner-1'),
     overrides.catalog ?? makeCatalog(),
     overrides.branches ?? makeBranches(),
+    makeConfig(overrides.moderation ?? 'false'),
   );
 }
 
@@ -795,6 +819,7 @@ describe('ListingsService', () => {
       expect(listings.submitTransition).toHaveBeenCalledWith('lst-1', {
         branchIds: undefined,
         status: ListingStatus.ACTIVE,
+        submittedAt: expect.any(Date),
       });
       expect(result.status).toBe(ListingStatus.ACTIVE);
     });
@@ -829,6 +854,159 @@ describe('ListingsService', () => {
       });
 
       expect((await service.submit(owner, 'lst-1')).status).toBe(ListingStatus.ACTIVE);
+    });
+  });
+
+  describe('submit — moderation flag', () => {
+    it('stops at PENDING_REVIEW when moderation is on', async () => {
+      const listings = makeSubmitListings(draftListing({ branchIds: ['br-1'] }));
+      const service = makeService({
+        listings,
+        businesses: makeSubmitBusiness(),
+        branches: makeActiveBranches([{ id: 'br-1', isActive: true }]),
+        moderation: 'true',
+      });
+
+      const result = await service.submit(owner, 'lst-1');
+
+      expect(listings.submitTransition).toHaveBeenCalledWith(
+        'lst-1',
+        expect.objectContaining({ status: ListingStatus.PENDING_REVIEW }),
+      );
+      expect(result.status).toBe(ListingStatus.PENDING_REVIEW);
+    });
+
+    it('queues a forward-dated listing too — SCHEDULED is decided at approval, not submit', async () => {
+      const listings = makeSubmitListings(
+        draftListing({
+          branchIds: ['br-1'],
+          validFrom: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        }),
+      );
+      const service = makeService({
+        listings,
+        businesses: makeSubmitBusiness(),
+        branches: makeActiveBranches([{ id: 'br-1', isActive: true }]),
+        moderation: 'true',
+      });
+
+      expect((await service.submit(owner, 'lst-1')).status).toBe(ListingStatus.PENDING_REVIEW);
+    });
+
+    it('accepts a REJECTED listing the owner has fixed — a rejection must not be a dead end', async () => {
+      const listings = makeSubmitListings(
+        draftListing({ branchIds: ['br-1'], status: ListingStatus.REJECTED }),
+      );
+      const service = makeService({
+        listings,
+        businesses: makeSubmitBusiness(),
+        branches: makeActiveBranches([{ id: 'br-1', isActive: true }]),
+        moderation: 'true',
+      });
+
+      await service.submit(owner, 'lst-1');
+
+      // Nothing else moves a REJECTED listing back to DRAFT, so if submit refused it the owner
+      // could never act on the moderator's feedback (spec §3.8: REJECTED is editable).
+      expect(listings.submitTransition).toHaveBeenCalledWith(
+        'lst-1',
+        expect.objectContaining({ status: ListingStatus.PENDING_REVIEW }),
+      );
+    });
+
+    it('still refuses a listing that is already live', async () => {
+      const listings = makeSubmitListings(
+        draftListing({ branchIds: ['br-1'], status: ListingStatus.ACTIVE }),
+      );
+      const service = makeService({
+        listings,
+        businesses: makeSubmitBusiness(),
+        branches: makeActiveBranches([{ id: 'br-1', isActive: true }]),
+        moderation: 'true',
+      });
+
+      await expect(service.submit(owner, 'lst-1')).rejects.toMatchObject({
+        code: ERROR_CODE.INVALID_STATUS_TRANSITION,
+        status: 409,
+      });
+    });
+
+    it('still runs every publish gate — an imageless draft is refused before the queue', async () => {
+      const listings = makeSubmitListings(draftListing({ branchIds: ['br-1'], images: [] }));
+      const service = makeService({
+        listings,
+        businesses: makeSubmitBusiness(),
+        branches: makeActiveBranches([{ id: 'br-1', isActive: true }]),
+        moderation: 'true',
+      });
+
+      await expect(service.submit(owner, 'lst-1')).rejects.toMatchObject({ status: 422 });
+      expect(listings.submitTransition).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('submit — §6.4 account limits', () => {
+    it('rejects when the business is at its 100-active-listing cap', async () => {
+      const listings = makeSubmitListings(draftListing({ branchIds: ['br-1'] }));
+      listings.countActiveByBusiness = jest.fn().mockResolvedValue(100);
+      const service = makeService({
+        listings,
+        businesses: makeSubmitBusiness(),
+        branches: makeActiveBranches([{ id: 'br-1', isActive: true }]),
+      });
+
+      await expect(service.submit(owner, 'lst-1')).rejects.toMatchObject({
+        code: ERROR_CODE.LISTING_LIMIT_REACHED,
+        status: 429,
+      });
+      expect(listings.submitTransition).not.toHaveBeenCalled();
+    });
+
+    it('rejects when the owner has hit 50 submits in the last day', async () => {
+      const listings = makeSubmitListings(draftListing({ branchIds: ['br-1'] }));
+      listings.countSubmittedByOwnerSince = jest.fn().mockResolvedValue(50);
+      const service = makeService({
+        listings,
+        businesses: makeSubmitBusiness(),
+        branches: makeActiveBranches([{ id: 'br-1', isActive: true }]),
+      });
+
+      await expect(service.submit(owner, 'lst-1')).rejects.toMatchObject({
+        code: ERROR_CODE.RATE_LIMITED,
+        status: 429,
+      });
+      expect(listings.submitTransition).not.toHaveBeenCalled();
+    });
+
+    it('counts the daily quota against the business owner, not the caller', async () => {
+      const listings = makeSubmitListings(draftListing({ branchIds: ['br-1'] }));
+      const service = makeService({
+        listings,
+        businesses: makeSubmitBusiness({ ownerId: 'owner-1' }),
+        branches: makeActiveBranches([{ id: 'br-1', isActive: true }]),
+      });
+
+      await service.submit(owner, 'lst-1');
+
+      expect(listings.countActiveByBusiness).toHaveBeenCalledWith(BUSINESS_ID);
+      expect(listings.countSubmittedByOwnerSince).toHaveBeenCalledWith('owner-1', expect.any(Date));
+    });
+
+    it('stamps submittedAt so the quota and the queue have a clock', async () => {
+      const listings = makeSubmitListings(draftListing({ branchIds: ['br-1'] }));
+      const service = makeService({
+        listings,
+        businesses: makeSubmitBusiness(),
+        branches: makeActiveBranches([{ id: 'br-1', isActive: true }]),
+        moderation: 'true',
+      });
+
+      await service.submit(owner, 'lst-1');
+
+      expect(listings.submitTransition).toHaveBeenCalledWith(
+        'lst-1',
+        expect.objectContaining({ submittedAt: expect.any(Date) }),
+      );
     });
   });
 
@@ -927,6 +1105,7 @@ describe('ListingsService', () => {
       expect(listings.submitTransition).toHaveBeenCalledWith('lst-1', {
         branchIds: ['br-1', 'br-3'],
         status: ListingStatus.ACTIVE,
+        submittedAt: expect.any(Date),
       });
       expect(result.status).toBe(ListingStatus.ACTIVE);
       expect(result.branchIds).toEqual(['br-1', 'br-3']);
@@ -947,6 +1126,7 @@ describe('ListingsService', () => {
       expect(listings.submitTransition).toHaveBeenCalledWith('lst-1', {
         branchIds: undefined,
         status: ListingStatus.ACTIVE,
+        submittedAt: expect.any(Date),
       });
       expect(branches.findManyByBusiness).not.toHaveBeenCalled();
     });
@@ -1126,6 +1306,96 @@ describe('ListingsService', () => {
     });
   });
 
+  describe('adminApprove / adminReject', () => {
+    /** A listing repo whose `setRejection` echoes the transition back, like `setStatus` does. */
+    function makeModerationListings(listing: Listing | null): ListingRepository {
+      const repo = makeByIdListings(listing);
+      repo.setRejection = jest.fn(
+        async (_id: string, status: ListingStatus, rejectionReason: string | null) => ({
+          ...(listing as Listing),
+          status,
+          rejectionReason,
+        }),
+      );
+      return repo;
+    }
+
+    it('activates a listing under review whose window is already open', async () => {
+      const listings = makeModerationListings(
+        draftListing({
+          status: ListingStatus.PENDING_REVIEW,
+          validFrom: new Date(Date.now() - 86_400_000),
+        }),
+      );
+      const service = makeService({ listings, moderation: 'true' });
+
+      const result = await service.adminApprove('lst-1');
+
+      expect(listings.setRejection).toHaveBeenCalledWith('lst-1', ListingStatus.ACTIVE, null);
+      expect(result.status).toBe(ListingStatus.ACTIVE);
+    });
+
+    it('schedules a forward-dated listing instead of starting it early', async () => {
+      const listings = makeModerationListings(
+        draftListing({
+          status: ListingStatus.PENDING_REVIEW,
+          validFrom: new Date(Date.now() + 7 * 86_400_000),
+        }),
+      );
+      const service = makeService({ listings, moderation: 'true' });
+
+      await service.adminApprove('lst-1');
+
+      expect(listings.setRejection).toHaveBeenCalledWith('lst-1', ListingStatus.SCHEDULED, null);
+    });
+
+    it('clears a stale verdict on approval', async () => {
+      const listings = makeModerationListings(
+        draftListing({ status: ListingStatus.PENDING_REVIEW, rejectionReason: 'POOR_IMAGE' }),
+      );
+      const service = makeService({ listings, moderation: 'true' });
+
+      const result = await service.adminApprove('lst-1');
+
+      expect(result.rejectionReason).toBeNull();
+    });
+
+    it('rejects a listing under review, recording the verdict', async () => {
+      const listings = makeModerationListings(
+        draftListing({ status: ListingStatus.PENDING_REVIEW }),
+      );
+      const service = makeService({ listings, moderation: 'true' });
+
+      await service.adminReject('lst-1', 'FAKE_DISCOUNT');
+
+      expect(listings.setRejection).toHaveBeenCalledWith(
+        'lst-1',
+        ListingStatus.REJECTED,
+        'FAKE_DISCOUNT',
+      );
+    });
+
+    it('409s a listing that is not awaiting a decision', async () => {
+      const listings = makeModerationListings(draftListing({ status: ListingStatus.ACTIVE }));
+      const service = makeService({ listings, moderation: 'true' });
+
+      await expect(service.adminApprove('lst-1')).rejects.toMatchObject({
+        code: ERROR_CODE.INVALID_STATUS_TRANSITION,
+        status: 409,
+      });
+      expect(listings.setRejection).not.toHaveBeenCalled();
+    });
+
+    it('404s an unknown listing', async () => {
+      const service = makeService({ listings: makeModerationListings(null), moderation: 'true' });
+
+      await expect(service.adminApprove('nope')).rejects.toMatchObject({
+        code: ERROR_CODE.LISTING_NOT_FOUND,
+        status: 404,
+      });
+    });
+  });
+
   describe('update', () => {
     it('re-validates and persists the edit for a listing the caller owns, recomputing finalPrice', async () => {
       const listings = makeByIdListings(draftListing());
@@ -1161,6 +1431,89 @@ describe('ListingsService', () => {
       await expect(service.update(owner, 'lst-1', createInput())).rejects.toMatchObject({
         code: ERROR_CODE.LISTING_NOT_FOUND,
         status: 404,
+      });
+    });
+
+    describe('§6.3 re-moderation', () => {
+      it('sends an ACTIVE listing back to PENDING_REVIEW when the title changes', async () => {
+        const listings = makeByIdListings(
+          draftListing({ status: ListingStatus.ACTIVE, title: 'Eski sarlavha' }),
+        );
+        const service = makeService({ listings, moderation: 'true' });
+
+        const result = await service.update(
+          owner,
+          'lst-1',
+          createInput({ title: 'Yangi sarlavha' }),
+        );
+
+        // One write, not two: the status rides along with the content so a failure between them
+        // cannot leave the new, unreviewed version live.
+        expect(listings.setStatus).not.toHaveBeenCalled();
+        expect(listings.update).toHaveBeenCalledWith(
+          'lst-1',
+          expect.objectContaining({ status: ListingStatus.PENDING_REVIEW }),
+        );
+        expect(result.status).toBe(ListingStatus.PENDING_REVIEW);
+      });
+
+      it('leaves an ACTIVE listing live when only validTo is extended', async () => {
+        const listings = makeByIdListings(draftListing({ status: ListingStatus.ACTIVE }));
+        const service = makeService({ listings, moderation: 'true' });
+
+        await service.update(
+          owner,
+          'lst-1',
+          createInput({ validTo: new Date('2026-10-01T00:00:00Z') }),
+        );
+
+        // The payload must not carry a status at all on a non-material edit.
+        const [, data] = (listings.update as jest.Mock).mock.calls[0];
+        expect(data).not.toHaveProperty('status');
+      });
+
+      it('does not re-moderate while the flag is off', async () => {
+        const listings = makeByIdListings(
+          draftListing({ status: ListingStatus.ACTIVE, title: 'Eski sarlavha' }),
+        );
+        const service = makeService({ listings, moderation: 'false' });
+
+        await service.update(owner, 'lst-1', createInput({ title: 'Yangi sarlavha' }));
+
+        expect(listings.setStatus).not.toHaveBeenCalled();
+      });
+
+      it('leaves a DRAFT alone — it has not been reviewed yet', async () => {
+        const listings = makeByIdListings(
+          draftListing({ status: ListingStatus.DRAFT, title: 'Eski sarlavha' }),
+        );
+        const service = makeService({ listings, moderation: 'true' });
+
+        await service.update(owner, 'lst-1', createInput({ title: 'Yangi sarlavha' }));
+
+        expect(listings.setStatus).not.toHaveBeenCalled();
+      });
+
+      it('leaves a PAUSED listing alone — it is not publicly visible', async () => {
+        const listings = makeByIdListings(
+          draftListing({ status: ListingStatus.PAUSED, title: 'Eski sarlavha' }),
+        );
+        const service = makeService({ listings, moderation: 'true' });
+
+        await service.update(owner, 'lst-1', createInput({ title: 'Yangi sarlavha' }));
+
+        expect(listings.setStatus).not.toHaveBeenCalled();
+      });
+
+      it('does not re-moderate an admin edit — the admin is the moderator', async () => {
+        const listings = makeByIdListings(
+          draftListing({ status: ListingStatus.ACTIVE, title: 'Eski sarlavha' }),
+        );
+        const service = makeService({ listings, moderation: 'true' });
+
+        await service.adminUpdate('lst-1', createInput({ title: 'Yangi sarlavha' }));
+
+        expect(listings.setStatus).not.toHaveBeenCalled();
       });
     });
 

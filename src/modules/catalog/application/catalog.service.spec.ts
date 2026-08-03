@@ -1,7 +1,9 @@
+import { ERROR_CODE } from '../../../common/errors/error-code';
 import { AppException } from '../../../common/exceptions/app.exception';
 import { CatalogRepository } from '../domain/catalog.repository';
 import { BusinessType } from '../domain/entities/business-type.entity';
 import { Category } from '../domain/entities/category.entity';
+import { TypeAttributeSchema } from '../domain/entities/type-attribute-schema.entity';
 import { Gender } from '../domain/enums/gender.enum';
 import { PriceUnit } from '../domain/enums/price-unit.enum';
 import { CatalogService } from './catalog.service';
@@ -63,6 +65,7 @@ function makeRepository(overrides: Partial<CatalogRepository> = {}): CatalogRepo
     groupExists: jest.fn().mockResolvedValue(true),
     countVisibleListingsByType: jest.fn().mockResolvedValue(new Map<string, number>()),
     countCategoriesByType: jest.fn().mockResolvedValue(new Map<string, number>()),
+    findTypeAttributeSchema: jest.fn().mockResolvedValue(null),
     ...overrides,
   };
 }
@@ -126,6 +129,48 @@ describe('CatalogService', () => {
       const service = new CatalogService(repository);
       const result = await service.getCategories('CLOTHING', Gender.MALE);
       expect(result.map((item) => item.key)).toEqual(['ALL', 'MEN_SHIRTS']);
+    });
+  });
+
+  describe('getAttributesSchema', () => {
+    const schema: TypeAttributeSchema = {
+      businessType: 'PLAYSTATION',
+      common: [],
+      byCategory: [{ categoryKey: 'PS5', fields: [] }],
+    };
+
+    it('returns the schema for a known type', async () => {
+      const repository = makeRepository({
+        findTypeAttributeSchema: jest.fn().mockResolvedValue(schema),
+      });
+      const service = new CatalogService(repository);
+
+      await expect(service.getAttributesSchema('PLAYSTATION')).resolves.toBe(schema);
+      expect(repository.findTypeAttributeSchema).toHaveBeenCalledWith('PLAYSTATION');
+    });
+
+    it('404s an unknown type', async () => {
+      const service = new CatalogService(makeRepository());
+
+      await expect(service.getAttributesSchema('NOPE')).rejects.toMatchObject({
+        code: ERROR_CODE.NOT_FOUND,
+        status: 404,
+      });
+    });
+
+    it('distinguishes a type with no attributes from an unknown one', async () => {
+      const empty: TypeAttributeSchema = {
+        businessType: 'LIBRARY',
+        common: [],
+        byCategory: [],
+      };
+      const repository = makeRepository({
+        findTypeAttributeSchema: jest.fn().mockResolvedValue(empty),
+      });
+      const service = new CatalogService(repository);
+
+      // An empty schema is a 200 with empty lists, never a 404 — the type does exist.
+      await expect(service.getAttributesSchema('LIBRARY')).resolves.toBe(empty);
     });
   });
 });

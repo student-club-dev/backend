@@ -527,6 +527,30 @@ model District {
   @@map("districts")
 }
 
+/// Tashkent metro stations — reference data behind `GET /v1/geo/metro-stations`. It feeds the
+/// branch form's `metroStation` autocomplete and the `nearestMetro` hint in reverse-geocoding.
+///
+/// `Branch.metroStation` stays free text on purpose: an FK would turn a station this table has not
+/// caught up with into a failed branch write, and the field is a landmark, not a key.
+model MetroStation {
+  id        String   @id // e.g. "CHILONZOR" — a readable slug, like Region/District
+  nameUz    String   @map("name_uz")
+  nameRu    String?  @map("name_ru")
+  /// Line slug, so a client can group without string-matching a display name.
+  line      String
+  lat       Float
+  lng       Float
+  /// Position along the line, in seed order.
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // No index on (line, sortOrder) on purpose: the only query reads every row and sorts it, and at
+  // ~50 rows the planner seq-scans regardless (verified with EXPLAIN ANALYZE). An index nothing
+  // uses is write cost with no read benefit.
+  @@map("metro_stations")
+}
+
 // ============================================================================
 // CORE (BACKEND_PROMPT §4)
 // ============================================================================
@@ -663,6 +687,10 @@ model Listing {
   status          ListingStatus @default(DRAFT)
   rejectionReason String?       @map("rejection_reason")
   viewsCount      Int           @default(0) @map("views_count")
+  // When the owner last submitted this listing for review. Drives the §6.4 daily submit quota and
+  // orders the moderation queue oldest-first (§6.2, 24h SLA). NULL = never submitted, which is
+  // correct for every row written before this column existed.
+  submittedAt     DateTime?     @map("submitted_at")
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @updatedAt @map("updated_at")
 
@@ -681,6 +709,9 @@ model Listing {
   @@index([validFrom, validTo])
   @@index([isDiscount])
   @@index([businessId, isDiscount, status])
+  // The §6.4 daily quota counts an owner's submissions in a 24h window; the join to business is
+  // what makes it owner-scoped, so this index carries the range half of that query.
+  @@index([submittedAt])
   @@index([searchVector], type: Gin, map: "listings_search_vector_gin") // full-text search; keep modelled
   @@index([attributes(ops: JsonbPathOps)], type: Gin, map: "listings_attributes_gin") // JSONB attribute-filter index; keep modelled
   @@map("listings")

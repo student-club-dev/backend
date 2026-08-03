@@ -162,6 +162,99 @@
         ]
       }
     },
+    "/v1/business/types/{type}/attributes-schema": {
+      "get": {
+        "operationId": "CatalogController_getAttributesSchema",
+        "summary": "Attribute schema for a business type",
+        "description": "Every attribute field defined for the type, so the client builds the listing form dynamically — a new field needs no app release. `common` applies to all its listings; `byCategory` adds the selected category’s fields. Same `AttributeFieldDto` vocabulary the categories endpoint already returns.",
+        "parameters": [
+          {
+            "name": "type",
+            "required": true,
+            "in": "path",
+            "description": "Business type key",
+            "schema": {
+              "example": "PLAYSTATION",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "$ref": "#/components/schemas/AttributesSchemaDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No business type with this key.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 404
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Biznes turi topilmadi"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "NOT_FOUND",
+                            "message": "Biznes turi topilmadi",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Catalog"
+        ]
+      }
+    },
     "/v1/regions": {
       "get": {
         "operationId": "RegionsController_getRegions",
@@ -279,6 +372,178 @@
                             "code": "NOT_FOUND",
                             "message": "Viloyat topilmadi",
                             "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Geo"
+        ]
+      }
+    },
+    "/v1/geo/regions": {
+      "get": {
+        "operationId": "GeoRegionsController_getRegions",
+        "summary": "List regions (14 total)",
+        "description": "Contract-path alias of `GET /regions` — identical response.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/RegionDto"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Geo"
+        ]
+      }
+    },
+    "/v1/geo/regions/{regionId}/districts": {
+      "get": {
+        "operationId": "GeoRegionsController_getDistricts",
+        "summary": "List a region’s districts",
+        "description": "Contract-path alias of `GET /districts?regionId=` — identical response.",
+        "parameters": [
+          {
+            "name": "regionId",
+            "required": true,
+            "in": "path",
+            "description": "Region id",
+            "schema": {
+              "example": "TOSHKENT_SHAHRI",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/DistrictDto"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No region with this id.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 404
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Viloyat topilmadi"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "NOT_FOUND",
+                            "message": "Viloyat topilmadi",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Geo"
+        ]
+      }
+    },
+    "/v1/geo/metro-stations": {
+      "get": {
+        "operationId": "MetroStationsController_getMetroStations",
+        "summary": "List Tashkent metro stations",
+        "description": "All 50 stations across 4 lines, ordered by line then position along the line.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/MetroStationDto"
                           }
                         }
                       }
@@ -5010,6 +5275,244 @@
         ]
       }
     },
+    "/v1/business/{id}/submit": {
+      "post": {
+        "operationId": "BusinessController_submit",
+        "summary": "Submit a business for review (owner only)",
+        "description": "DRAFT | REJECTED → PENDING_REVIEW, clearing any previous `rejectionReason`. When moderation is switched off there is no queue to enter, so it lands on APPROVED directly — read the returned `status` rather than assuming either.",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Business id",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "$ref": "#/components/schemas/BusinessDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (`UNAUTHORIZED`), or expired (`TOKEN_EXPIRED`) — refresh and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 401
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Avtorizatsiyadan o‘tilmagan"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UNAUTHORIZED",
+                            "message": "Avtorizatsiyadan o‘tilmagan",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not a BUSINESS account, or the business belongs to another owner.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 403
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Ruxsat yo‘q"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "FORBIDDEN",
+                            "message": "Ruxsat yo‘q",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No business with this id.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 404
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Biznes topilmadi"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "BUSINESS_NOT_FOUND",
+                            "message": "Biznes topilmadi",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The business is not DRAFT or REJECTED.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 409
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Bu biznesni ko‘rib chiqishga yuborish mumkin emas"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "INVALID_STATUS_TRANSITION",
+                            "message": "Bu biznesni ko‘rib chiqishga yuborish mumkin emas",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Business"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
     "/v1/business/{businessId}/branches": {
       "get": {
         "operationId": "BranchesController_list",
@@ -9623,6 +10126,53 @@
           "fields"
         ]
       },
+      "CategoryAttributeFieldsDto": {
+        "type": "object",
+        "properties": {
+          "categoryKey": {
+            "type": "string",
+            "example": "PS5"
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AttributeFieldDto"
+            }
+          }
+        },
+        "required": [
+          "categoryKey",
+          "fields"
+        ]
+      },
+      "AttributesSchemaDto": {
+        "type": "object",
+        "properties": {
+          "businessType": {
+            "type": "string",
+            "example": "PLAYSTATION"
+          },
+          "common": {
+            "description": "Fields that apply to every listing of this business type",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AttributeFieldDto"
+            }
+          },
+          "byCategory": {
+            "description": "Additional fields per category, merged with `common` once one is selected",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CategoryAttributeFieldsDto"
+            }
+          }
+        },
+        "required": [
+          "businessType",
+          "common",
+          "byCategory"
+        ]
+      },
       "CatalogGroupDto": {
         "type": "object",
         "properties": {
@@ -12290,6 +12840,44 @@
           "nameUz"
         ]
       },
+      "MetroStationDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "CHILONZOR"
+          },
+          "nameUz": {
+            "type": "string",
+            "example": "Chilonzor"
+          },
+          "nameRu": {
+            "type": "string",
+            "nullable": true,
+            "example": "Чиланзар"
+          },
+          "line": {
+            "type": "string",
+            "example": "CHILONZOR",
+            "description": "Line key (CHILONZOR | OZBEKISTON | YUNUSOBOD | HALQA) — group by this, not by name"
+          },
+          "lat": {
+            "type": "number",
+            "example": 41.27436
+          },
+          "lng": {
+            "type": "number",
+            "example": 69.20497
+          }
+        },
+        "required": [
+          "id",
+          "nameUz",
+          "line",
+          "lat",
+          "lng"
+        ]
+      },
       "GeocodeResultDto": {
         "type": "object",
         "properties": {
@@ -13695,6 +14283,21 @@
             "nullable": true
           }
         }
+      },
+      "AdminRejectDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "example": "FAKE_DISCOUNT — narx sun’iy oshirilgan",
+            "minLength": 2,
+            "maxLength": 500,
+            "description": "Rejection reason shown to the owner (spec §6.2)"
+          }
+        },
+        "required": [
+          "reason"
+        ]
       },
       "AdminBranchSummaryDto": {
         "type": "object",

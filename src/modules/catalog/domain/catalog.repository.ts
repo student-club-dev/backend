@@ -3,6 +3,7 @@ import { AttributeSpec } from './entities/attribute-spec.entity';
 import { BusinessType } from './entities/business-type.entity';
 import { CatalogGroup } from './entities/catalog-group.entity';
 import { Category } from './entities/category.entity';
+import { TypeAttributeSchema } from './entities/type-attribute-schema.entity';
 import { Gender } from './enums/gender.enum';
 import { PriceUnit } from './enums/price-unit.enum';
 
@@ -65,6 +66,13 @@ export interface CatalogRepository {
    * (LISTINGS.md §6).
    */
   findAttributeSpecs(businessType: string, categoryKey: string): Promise<AttributeSpec[]>;
+
+  /**
+   * Every attribute field of a business type, split into the type-level set and per-category
+   * groups. Returns `null` when the type does not exist — which distinguishes an unknown type (404)
+   * from a real type that simply has no attributes yet (empty lists).
+   */
+  findTypeAttributeSchema(businessType: string): Promise<TypeAttributeSchema | null>;
 
   /** Whether a business type with this `type` key exists. */
   typeExists(type: string): Promise<boolean>;

@@ -41,6 +41,8 @@ function makeReads(overrides: Partial<AdminBusinessesService> = {}): AdminBusine
 function makeBusinessService(overrides: Partial<BusinessService> = {}): BusinessService {
   return {
     adminUpdate: jest.fn().mockResolvedValue(undefined),
+    adminApprove: jest.fn().mockResolvedValue(undefined),
+    adminReject: jest.fn().mockResolvedValue(undefined),
     ...overrides,
   } as BusinessService;
 }
@@ -92,6 +94,49 @@ describe('AdminBusinessesWriteService', () => {
         { code: ERROR_CODE.BUSINESS_TYPE_IMMUTABLE, status: 422 },
       );
       expect(reads.getById).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('approve', () => {
+    it('delegates the decision and returns the re-fetched admin record', async () => {
+      const reads = makeReads();
+      const businesses = makeBusinessService();
+      const service = new AdminBusinessesWriteService(reads, businesses);
+
+      const result = await service.approve('biz-1');
+
+      expect(businesses.adminApprove).toHaveBeenCalledWith('biz-1');
+      expect(reads.getById).toHaveBeenCalledWith('biz-1');
+      expect(result).toBe(BUSINESS);
+    });
+
+    it('propagates 409 INVALID_STATUS_TRANSITION and does not re-fetch', async () => {
+      const reads = makeReads();
+      const businesses = makeBusinessService({
+        adminApprove: jest
+          .fn()
+          .mockRejectedValue({ code: ERROR_CODE.INVALID_STATUS_TRANSITION, status: 409 }),
+      });
+      const service = new AdminBusinessesWriteService(reads, businesses);
+
+      await expect(service.approve('biz-1')).rejects.toMatchObject({
+        code: ERROR_CODE.INVALID_STATUS_TRANSITION,
+        status: 409,
+      });
+      expect(reads.getById).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('reject', () => {
+    it('passes the verdict through and returns the re-fetched admin record', async () => {
+      const reads = makeReads();
+      const businesses = makeBusinessService();
+      const service = new AdminBusinessesWriteService(reads, businesses);
+
+      const result = await service.reject('biz-1', 'FAKE_DISCOUNT');
+
+      expect(businesses.adminReject).toHaveBeenCalledWith('biz-1', 'FAKE_DISCOUNT');
+      expect(result).toBe(BUSINESS);
     });
   });
 });

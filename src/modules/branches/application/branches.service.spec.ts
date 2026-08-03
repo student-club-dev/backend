@@ -105,6 +105,7 @@ function makeGeo(districts: District[] = [district()]): GeoRepository {
     findDistricts: jest.fn().mockResolvedValue([]),
     findDistrictsByRegion: jest.fn().mockResolvedValue(districts),
     regionExists: jest.fn().mockResolvedValue(true),
+    findMetroStations: jest.fn().mockResolvedValue([]),
   };
 }
 

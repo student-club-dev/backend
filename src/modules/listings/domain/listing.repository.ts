@@ -63,6 +63,11 @@ export interface CreateListingData {
 export interface SubmitTransitionData {
   branchIds?: string[];
   status: ListingStatus;
+  /**
+   * Stamped on every submit. The §6.4 daily quota counts these, and §6.2 orders the moderation
+   * queue by them (oldest first, against the 24h SLA).
+   */
+  submittedAt: Date;
 }
 
 /**
@@ -89,6 +94,15 @@ export interface UpdateListingData {
   optionGroups: CreateOptionGroupData[];
   /** Search haystack rebuilt by the service (STUDENT_FEED.md §7); the DB derives `search_vector`. */
   searchText: string;
+  /**
+   * Set ONLY by the §6.3 re-moderation path, which sends an edited ACTIVE listing back to
+   * PENDING_REVIEW. Absent on every other edit, which must leave the lifecycle alone.
+   *
+   * It rides along with the content rather than being a second call, so an edit and the review
+   * flag it triggers land in one transaction — otherwise a failure between them would leave the
+   * new, unreviewed content live.
+   */
+  status?: ListingStatus;
 }
 
 /**
@@ -164,6 +178,13 @@ export interface ListingRepository {
   setStatus(id: string, status: ListingStatus): Promise<Listing>;
 
   /**
+   * Sets the status together with a `rejectionReason` — the moderator's decision (§6.2). Separate
+   * from {@link setStatus} because every other transition must leave the stored verdict alone,
+   * while approve must clear it and reject must write it.
+   */
+  setRejection(id: string, status: ListingStatus, rejectionReason: string | null): Promise<Listing>;
+
+  /**
    * Clones the listing's content (scalars + branches + option groups) into a fresh DRAFT and returns
    * the new aggregate. Counters (`usedCount`, `viewsCount`) reset to 0; `search_text` is copied so
    * the DB re-derives `search_vector`.
@@ -172,6 +193,12 @@ export interface ListingRepository {
 
   /** Owner analytics for the listing (views, favourites, confirmed redemptions and their revenue). */
   stats(id: string): Promise<ListingStats>;
+
+  /** Listings of this business occupying an active slot: ACTIVE + PENDING_REVIEW (§6.4 cap of 100). */
+  countActiveByBusiness(businessId: string): Promise<number>;
+
+  /** How many of this owner's listings were submitted at or after `since` (§6.4 daily quota of 50). */
+  countSubmittedByOwnerSince(ownerId: string, since: Date): Promise<number>;
 
   /**
    * Applies the time/limit-driven status transitions in one pass (BACKEND_PROMPT §7), as of `now`:

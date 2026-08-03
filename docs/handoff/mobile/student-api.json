@@ -1031,6 +1031,178 @@
         ]
       }
     },
+    "/v1/geo/regions": {
+      "get": {
+        "operationId": "GeoRegionsController_getRegions",
+        "summary": "List regions (14 total)",
+        "description": "Contract-path alias of `GET /regions` — identical response.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/RegionDto"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Geo"
+        ]
+      }
+    },
+    "/v1/geo/regions/{regionId}/districts": {
+      "get": {
+        "operationId": "GeoRegionsController_getDistricts",
+        "summary": "List a region’s districts",
+        "description": "Contract-path alias of `GET /districts?regionId=` — identical response.",
+        "parameters": [
+          {
+            "name": "regionId",
+            "required": true,
+            "in": "path",
+            "description": "Region id",
+            "schema": {
+              "example": "TOSHKENT_SHAHRI",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/DistrictDto"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No region with this id.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 404
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Viloyat topilmadi"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "NOT_FOUND",
+                            "message": "Viloyat topilmadi",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Geo"
+        ]
+      }
+    },
+    "/v1/geo/metro-stations": {
+      "get": {
+        "operationId": "MetroStationsController_getMetroStations",
+        "summary": "List Tashkent metro stations",
+        "description": "All 50 stations across 4 lines, ordered by line then position along the line.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/MetroStationDto"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Geo"
+        ]
+      }
+    },
     "/v1/geo/geocode": {
       "post": {
         "operationId": "GeocodeController_geocode",
@@ -16905,6 +17077,53 @@
           "fields"
         ]
       },
+      "CategoryAttributeFieldsDto": {
+        "type": "object",
+        "properties": {
+          "categoryKey": {
+            "type": "string",
+            "example": "PS5"
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AttributeFieldDto"
+            }
+          }
+        },
+        "required": [
+          "categoryKey",
+          "fields"
+        ]
+      },
+      "AttributesSchemaDto": {
+        "type": "object",
+        "properties": {
+          "businessType": {
+            "type": "string",
+            "example": "PLAYSTATION"
+          },
+          "common": {
+            "description": "Fields that apply to every listing of this business type",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AttributeFieldDto"
+            }
+          },
+          "byCategory": {
+            "description": "Additional fields per category, merged with `common` once one is selected",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CategoryAttributeFieldsDto"
+            }
+          }
+        },
+        "required": [
+          "businessType",
+          "common",
+          "byCategory"
+        ]
+      },
       "CatalogGroupDto": {
         "type": "object",
         "properties": {
@@ -19572,6 +19791,44 @@
           "nameUz"
         ]
       },
+      "MetroStationDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "CHILONZOR"
+          },
+          "nameUz": {
+            "type": "string",
+            "example": "Chilonzor"
+          },
+          "nameRu": {
+            "type": "string",
+            "nullable": true,
+            "example": "Чиланзар"
+          },
+          "line": {
+            "type": "string",
+            "example": "CHILONZOR",
+            "description": "Line key (CHILONZOR | OZBEKISTON | YUNUSOBOD | HALQA) — group by this, not by name"
+          },
+          "lat": {
+            "type": "number",
+            "example": 41.27436
+          },
+          "lng": {
+            "type": "number",
+            "example": 69.20497
+          }
+        },
+        "required": [
+          "id",
+          "nameUz",
+          "line",
+          "lat",
+          "lng"
+        ]
+      },
       "GeocodeResultDto": {
         "type": "object",
         "properties": {
@@ -20977,6 +21234,21 @@
             "nullable": true
           }
         }
+      },
+      "AdminRejectDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "example": "FAKE_DISCOUNT — narx sun’iy oshirilgan",
+            "minLength": 2,
+            "maxLength": 500,
+            "description": "Rejection reason shown to the owner (spec §6.2)"
+          }
+        },
+        "required": [
+          "reason"
+        ]
       },
       "AdminBranchSummaryDto": {
         "type": "object",

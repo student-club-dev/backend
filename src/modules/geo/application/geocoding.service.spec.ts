@@ -1,6 +1,7 @@
 import { ERROR_CODE } from '../../../common/errors/error-code';
 import { AppException } from '../../../common/exceptions/app.exception';
 import { District } from '../domain/entities/district.entity';
+import { MetroStation } from '../domain/entities/metro-station.entity';
 import { Region } from '../domain/entities/region.entity';
 import { GeoRepository } from '../domain/geo.repository';
 import { GeocoderMatch, GeocoderPort } from '../domain/geocoder.port';
@@ -52,6 +53,7 @@ function makeRepo(overrides: Partial<GeoRepository> = {}): GeoRepository {
     findDistricts: jest.fn().mockResolvedValue(DISTRICTS),
     findDistrictsByRegion: jest.fn().mockResolvedValue([]),
     regionExists: jest.fn().mockResolvedValue(true),
+    findMetroStations: jest.fn().mockResolvedValue([]),
     ...overrides,
   };
 }
@@ -127,7 +129,62 @@ describe('GeocodingService', () => {
         regionId: 'TOSHKENT_SHAHRI',
         districtId: 'CHILONZOR',
         address: 'Chilonzor 42',
+        // No stations seeded in this repo stub — the nearestMetro cases are covered below.
         nearestMetro: null,
+      });
+    });
+
+    describe('nearestMetro', () => {
+      /** Two real stations ~5 km apart, so "closest" is unambiguous from the Chilonzor point. */
+      const STATIONS: MetroStation[] = [
+        {
+          id: 'CHILONZOR',
+          nameUz: 'Chilonzor',
+          nameRu: 'Чиланзар',
+          line: 'CHILONZOR',
+          lat: 41.27436,
+          lng: 69.20497,
+        },
+        {
+          id: 'BUYUK_IPAK_YOLI',
+          nameUz: 'Buyuk Ipak Yoʻli',
+          nameRu: 'Буюк Ипак Йули',
+          line: 'CHILONZOR',
+          lat: 41.32611,
+          lng: 69.32856,
+        },
+      ];
+
+      function serviceWith(stations: MetroStation[]): GeocodingService {
+        return new GeocodingService(
+          makeGeocoder({ reverseGeocode: jest.fn().mockResolvedValue({ address: 'X' }) }),
+          makeRepo({ findMetroStations: jest.fn().mockResolvedValue(stations) }),
+        );
+      }
+
+      it('reports the closest station', async () => {
+        const service = serviceWith(STATIONS);
+
+        // TASHKENT_POINT is ~1.3 km from Chilonzor and ~11 km from Buyuk Ipak Yoʻli.
+        const result = await service.reverseGeocode(TASHKENT_POINT.lat, TASHKENT_POINT.lng);
+
+        expect(result.nearestMetro).toBe('Chilonzor');
+      });
+
+      it('is null when no station is seeded', async () => {
+        const service = serviceWith([]);
+
+        const result = await service.reverseGeocode(TASHKENT_POINT.lat, TASHKENT_POINT.lng);
+
+        expect(result.nearestMetro).toBeNull();
+      });
+
+      it('is null for a point nowhere near the network — a Tashkent station is no landmark in Samarkand', async () => {
+        const service = serviceWith(STATIONS);
+
+        const result = await service.reverseGeocode(SAMARQAND_POINT.lat, SAMARQAND_POINT.lng);
+
+        expect(result.nearestMetro).toBeNull();
       });
     });
 

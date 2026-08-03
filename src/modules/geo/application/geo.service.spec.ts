@@ -1,5 +1,6 @@
 import { AppException } from '../../../common/exceptions/app.exception';
 import { District } from '../domain/entities/district.entity';
+import { MetroStation } from '../domain/entities/metro-station.entity';
 import { Region } from '../domain/entities/region.entity';
 import { GeoRepository } from '../domain/geo.repository';
 import { GeoService } from './geo.service';
@@ -25,6 +26,7 @@ function makeRepository(overrides: Partial<GeoRepository> = {}): GeoRepository {
     findDistricts: jest.fn().mockResolvedValue(ALL_DISTRICTS),
     findDistrictsByRegion: jest.fn().mockResolvedValue(TASHKENT_DISTRICTS),
     regionExists: jest.fn().mockResolvedValue(true),
+    findMetroStations: jest.fn().mockResolvedValue([]),
     ...overrides,
   };
 }
@@ -60,6 +62,34 @@ describe('GeoService', () => {
       const service = new GeoService(repository);
       await expect(service.getDistricts('NOPE')).rejects.toBeInstanceOf(AppException);
       expect(repository.findDistrictsByRegion).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getMetroStations', () => {
+    const STATIONS: MetroStation[] = [
+      {
+        id: 'CHILONZOR',
+        nameUz: 'Chilonzor',
+        nameRu: 'Чиланзар',
+        line: 'CHILONZOR',
+        lat: 41.27436,
+        lng: 69.20497,
+      },
+    ];
+
+    it('returns the stations the repository provides, unfiltered', async () => {
+      const repository = makeRepository({
+        findMetroStations: jest.fn().mockResolvedValue(STATIONS),
+      });
+      const service = new GeoService(repository);
+
+      await expect(service.getMetroStations()).resolves.toBe(STATIONS);
+    });
+
+    it('returns an empty list rather than throwing when nothing is seeded', async () => {
+      const service = new GeoService(makeRepository());
+
+      await expect(service.getMetroStations()).resolves.toEqual([]);
     });
   });
 });

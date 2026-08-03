@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { ERROR_CODE } from '../../../common/errors/error-code';
 import { AppException } from '../../../common/exceptions/app.exception';
 import { District } from '../domain/entities/district.entity';
+import { MetroStation } from '../domain/entities/metro-station.entity';
 import { Region } from '../domain/entities/region.entity';
 import { GEO_REPOSITORY, GeoRepository } from '../domain/geo.repository';
 
@@ -31,5 +32,10 @@ export class GeoService {
       throw AppException.notFound(ERROR_CODE.NOT_FOUND, 'Viloyat topilmadi');
     }
     return this.geoRepository.findDistrictsByRegion(regionId);
+  }
+
+  /** All metro stations (Tashkent only), ordered by line then position along it. */
+  async getMetroStations(): Promise<MetroStation[]> {
+    return this.geoRepository.findMetroStations();
   }
 }

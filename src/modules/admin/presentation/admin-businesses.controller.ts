@@ -1,4 +1,14 @@
-import { Body, Controller, Get, Param, Put, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Param,
+  Post,
+  Put,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { ERROR_CODE } from '../../../common/errors/error-code';
 import {
@@ -13,6 +23,7 @@ import { AdminBusinessesWriteService } from '../application/admin-businesses-wri
 import { AdminBusinessesService } from '../application/admin-businesses.service';
 import { AdminBusinessListQueryDto } from './dto/admin-business-list-query.dto';
 import { AdminBusinessDto, AdminBusinessPageDto } from './dto/admin-business.dto';
+import { AdminRejectDto } from './dto/admin-reject.dto';
 import { AdminJwtGuard } from './guards/admin-jwt.guard';
 
 /**
@@ -86,6 +97,57 @@ export class AdminBusinessesController {
     @Body() body: UpdateBusinessDto,
   ): Promise<AdminBusinessDto> {
     const business = await this.adminBusinessesWriteService.update(id, body.toInput());
+    return AdminBusinessDto.fromDomain(business);
+  }
+
+  @Post(':id/approve')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Approve a business under review (ADMIN or MODERATOR)',
+    description:
+      'PENDING_REVIEW → APPROVED, clearing `rejectionReason`. A decision, not an edit — it cannot ' +
+      'change any other field.',
+  })
+  @ApiParam({ name: 'id', description: 'Business id' })
+  @ApiOkEnvelope(AdminBusinessDto)
+  @ApiNotFoundEnvelope(
+    ERROR_CODE.BUSINESS_NOT_FOUND,
+    'No business with this id.',
+    'Biznes topilmadi',
+  )
+  @ApiErrorEnvelope(
+    409,
+    ERROR_CODE.INVALID_STATUS_TRANSITION,
+    'The business is not PENDING_REVIEW.',
+    'Bu biznes ko‘rib chiqilmoqda emas',
+  )
+  async approve(@Param('id') id: string): Promise<AdminBusinessDto> {
+    const business = await this.adminBusinessesWriteService.approve(id);
+    return AdminBusinessDto.fromDomain(business);
+  }
+
+  @Post(':id/reject')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Reject a business under review (ADMIN or MODERATOR)',
+    description: 'PENDING_REVIEW → REJECTED, recording `rejectionReason` (spec §6.2).',
+  })
+  @ApiParam({ name: 'id', description: 'Business id' })
+  @ApiOkEnvelope(AdminBusinessDto)
+  @ApiValidationEnvelope()
+  @ApiNotFoundEnvelope(
+    ERROR_CODE.BUSINESS_NOT_FOUND,
+    'No business with this id.',
+    'Biznes topilmadi',
+  )
+  @ApiErrorEnvelope(
+    409,
+    ERROR_CODE.INVALID_STATUS_TRANSITION,
+    'The business is not PENDING_REVIEW.',
+    'Bu biznes ko‘rib chiqilmoqda emas',
+  )
+  async reject(@Param('id') id: string, @Body() body: AdminRejectDto): Promise<AdminBusinessDto> {
+    const business = await this.adminBusinessesWriteService.reject(id, body.toReason());
     return AdminBusinessDto.fromDomain(business);
   }
 }

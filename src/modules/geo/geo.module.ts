@@ -13,6 +13,8 @@ import { createGeocoder } from './infrastructure/geocoding/geocoder.factory';
 import { YandexGeocoderAdapter } from './infrastructure/geocoding/yandex-geocoder.adapter';
 import { DistrictsController } from './presentation/districts.controller';
 import { GeocodeController } from './presentation/geocode.controller';
+import { GeoRegionsController } from './presentation/geo-regions.controller';
+import { MetroStationsController } from './presentation/metro-stations.controller';
 import { RegionsController } from './presentation/regions.controller';
 
 /**
@@ -22,7 +24,13 @@ import { RegionsController } from './presentation/regions.controller';
  */
 @Module({
   imports: [PrismaModule, JwtModule.register({})],
-  controllers: [RegionsController, DistrictsController, GeocodeController],
+  controllers: [
+    RegionsController,
+    DistrictsController,
+    GeoRegionsController,
+    MetroStationsController,
+    GeocodeController,
+  ],
   providers: [
     GeoService,
     GeocodingService,

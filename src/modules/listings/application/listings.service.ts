@@ -1,7 +1,9 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { ERROR_CODE } from '../../../common/errors/error-code';
 import { AppException } from '../../../common/exceptions/app.exception';
 import type { AuthenticatedUser } from '../../../common/types/authenticated-user';
+import type { Env } from '../../../config/env';
 import { BRANCH_REPOSITORY, BranchRepository } from '../../branches/domain/branches.repository';
 import {
   BUSINESS_READ,
@@ -24,6 +26,7 @@ import {
   StatusTransitionCounts,
 } from '../domain/listing.repository';
 import { computeFinalPrice } from '../domain/pricing/final-price';
+import { requiresReModeration } from '../domain/re-moderation';
 import {
   REGULAR_KEY,
   REGULAR_VALUE,
@@ -37,6 +40,7 @@ import {
   RedemptionInput,
   UpdateListingInput,
 } from './listings.io';
+import { assertMaySubmit } from './submit-limits';
 
 const MIN_TITLE_LENGTH = 3;
 const MAX_TITLE_LENGTH = 120;
@@ -60,7 +64,13 @@ export class ListingsService {
     @Inject(BUSINESS_READ) private readonly businesses: BusinessReadRepository,
     @Inject(CATALOG_REPOSITORY) private readonly catalog: CatalogRepository,
     @Inject(BRANCH_REPOSITORY) private readonly branches: BranchRepository,
+    private readonly config: ConfigService<Env, true>,
   ) {}
+
+  /** The moderation queue's master switch (DISCOUNTS_BUSINESS_API §6.2). */
+  private moderationEnabled(): boolean {
+    return this.config.get('MODERATION_ENABLED', { infer: true }) === 'true';
+  }
 
   /** Creates a DRAFT listing under a business the caller owns (LISTINGS.md §10). */
   async create(
@@ -138,8 +148,21 @@ export class ListingsService {
     listingId: string,
     input: UpdateListingInput,
   ): Promise<Listing> {
-    const { summary } = await this.loadOwnedListing(user, listingId);
-    return this.applyUpdate(listingId, summary, input);
+    const { listing, summary } = await this.loadOwnedListing(user, listingId);
+
+    // §6.3 — an edit to what a moderator judged sends the listing back to the queue. Only from
+    // ACTIVE: a DRAFT has never been reviewed, and PAUSED/EXPIRED/SOLD_OUT are not publicly
+    // visible, so there is nothing live to re-check. Decided against the PRE-edit listing, and
+    // passed into the same write as the content — a second call could fail after the content
+    // landed, leaving the new, unreviewed version live.
+    const nextStatus =
+      this.moderationEnabled() &&
+      listing.status === ListingStatus.ACTIVE &&
+      requiresReModeration(listing, input)
+        ? ListingStatus.PENDING_REVIEW
+        : undefined;
+
+    return this.applyUpdate(listingId, summary, input, nextStatus);
   }
 
   /**
@@ -154,13 +177,17 @@ export class ListingsService {
 
   /**
    * Shared full-replace core for the owner ({@link update}) and admin ({@link adminUpdate}) paths:
-   * re-validates the payload exactly like create (recomputing `finalPrice`) and persists; `status`,
+   * re-validates the payload exactly like create (recomputing `finalPrice`) and persists;
    * `currency` and the counters are preserved.
+   *
+   * `nextStatus` is supplied only by the §6.3 re-moderation path — everywhere else the status is
+   * left exactly as it was, since an edit is not a lifecycle change.
    */
   private async applyUpdate(
     listingId: string,
     summary: BusinessSummary,
     input: UpdateListingInput,
+    nextStatus?: ListingStatus,
   ): Promise<Listing> {
     const { discount, optionGroups, searchText } = await this.validateAndResolve(summary, input);
     return this.listings.update(listingId, {
@@ -179,7 +206,42 @@ export class ListingsService {
       attributes: input.attributes,
       optionGroups,
       searchText,
+      // Omitted entirely on an ordinary edit, so the payload cannot even express a lifecycle change.
+      ...(nextStatus === undefined ? {} : { status: nextStatus }),
     });
+  }
+
+  /**
+   * Admin: approves a listing under review (§6.2). Lands on SCHEDULED when the owner dated it
+   * forward — approving must not start an offer early; the cron promotes it once `validFrom`
+   * arrives. Clears the stored verdict, so a previously rejected listing does not go live still
+   * showing why it was once refused.
+   *
+   * A decision, deliberately separate from {@link adminUpdate}: a moderator approving must not be
+   * able to rewrite the listing in the same breath.
+   */
+  async adminApprove(listingId: string): Promise<Listing> {
+    const listing = await this.loadUnderReview(listingId);
+    const target = listing.validFrom > new Date() ? ListingStatus.SCHEDULED : ListingStatus.ACTIVE;
+    return this.listings.setRejection(listingId, target, null);
+  }
+
+  /** Admin: rejects a listing under review (§6.2), recording the verdict the owner will see. */
+  async adminReject(listingId: string, reason: string): Promise<Listing> {
+    await this.loadUnderReview(listingId);
+    return this.listings.setRejection(listingId, ListingStatus.REJECTED, reason);
+  }
+
+  /** Loads a listing awaiting a moderator: 404 unknown/archived, 409 any other status. */
+  private async loadUnderReview(listingId: string): Promise<Listing> {
+    const { listing } = await this.loadListingWithBusiness(listingId);
+    if (listing.status !== ListingStatus.PENDING_REVIEW) {
+      throw AppException.conflict(
+        ERROR_CODE.INVALID_STATUS_TRANSITION,
+        'Bu e’lon ko‘rib chiqilmoqda emas',
+      );
+    }
+    return listing;
   }
 
   /** Soft-deletes (ARCHIVED) a listing the caller owns. */
@@ -355,8 +417,10 @@ export class ListingsService {
       throw AppException.forbidden();
     }
 
-    // 3. Status guard — only a DRAFT may be submitted.
-    if (listing.status !== ListingStatus.DRAFT) {
+    // 3. Status guard — a DRAFT, or a REJECTED listing the owner has since fixed. REJECTED must be
+    // accepted: a moderator's rejection would otherwise be a dead end, since nothing moves a
+    // REJECTED listing back to DRAFT and §3.8 explicitly says the owner may edit and retry.
+    if (listing.status !== ListingStatus.DRAFT && listing.status !== ListingStatus.REJECTED) {
       throw AppException.conflict(
         ERROR_CODE.INVALID_STATUS_TRANSITION,
         'Faqat qoralama e’lonni ko‘rib chiqishga yuborish mumkin',
@@ -385,23 +449,32 @@ export class ListingsService {
     // 4.7 attributes must still match the catalog schema.
     const specs = await this.catalog.findAttributeSpecs(summary.type, listing.categoryKey);
     validateAttributes(listing.attributes, specs);
+    // 4.8 §6.4 account-level caps — last, so a listing that is invalid anyway is rejected on its own
+    // merits rather than being blamed on a quota, and the two counts are only paid for once it isn't.
+    const now = new Date();
+    await assertMaySubmit(this.listings, listing.businessId, summary.ownerId, now);
 
-    // 5. Publish (persisting the branch snapshot when one was resolved).
+    // 5. Transition (persisting the branch snapshot when one was resolved).
     //
-    // TODO(post-MVP): route this through moderation — DRAFT → PENDING_REVIEW, and an admin
-    // approve/reject moves it on. For the MVP a submitted listing goes live immediately, exactly
-    // as businesses are auto-approved on create (commit 5315542). Without this the pipeline dead-
-    // ends: nothing else in the codebase ever sets ACTIVE, so no listing could reach the student
-    // feed, which only shows ACTIVE ones (STUDENT_FEED.md Q4).
+    // With moderation on the listing stops at PENDING_REVIEW and an admin decision moves it on
+    // (POST /admin/listings/:id/approve, which is where SCHEDULED-vs-ACTIVE is then decided).
     //
-    // SCHEDULED when the owner dated the listing forward — publishing must not start it early.
-    // NOTE: SCHEDULED → ACTIVE needs the cron from BACKEND_PROMPT §7, which does not exist yet.
-    const publishedStatus =
-      listing.validFrom > new Date() ? ListingStatus.SCHEDULED : ListingStatus.ACTIVE;
+    // With it off a submitted listing publishes immediately, exactly as businesses are approved on
+    // create. Without that the pipeline would dead-end: nothing else in the codebase sets ACTIVE,
+    // so no listing could reach the student feed, which shows only ACTIVE ones (STUDENT_FEED.md Q4).
+    //
+    // SCHEDULED when the owner dated the listing forward — publishing must not start it early; the
+    // cron promotes it once validFrom arrives (BACKEND_PROMPT §7).
+    const publishedStatus = this.moderationEnabled()
+      ? ListingStatus.PENDING_REVIEW
+      : listing.validFrom > new Date()
+        ? ListingStatus.SCHEDULED
+        : ListingStatus.ACTIVE;
 
     return this.listings.submitTransition(listingId, {
       branchIds: branchSnapshot,
       status: publishedStatus,
+      submittedAt: now,
     });
   }
 

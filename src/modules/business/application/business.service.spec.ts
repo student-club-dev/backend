@@ -1,6 +1,8 @@
+import { ConfigService } from '@nestjs/config';
 import { AccountType } from '../../../common/enums/account-type.enum';
 import { ERROR_CODE } from '../../../common/errors/error-code';
 import type { AuthenticatedUser } from '../../../common/types/authenticated-user';
+import type { Env } from '../../../config/env';
 import { CatalogRepository } from '../../catalog/domain/catalog.repository';
 import { BusinessOwnerRepository } from '../domain/business-owner.repository';
 import { BusinessRepository } from '../domain/business.repository';
@@ -60,6 +62,10 @@ function makeBusinesses(overrides: Partial<BusinessRepository> = {}): BusinessRe
     findManyByOwner: jest.fn().mockResolvedValue([]),
     update: jest.fn(async (id, data) => business({ id, ...data })),
     archive: jest.fn().mockResolvedValue(undefined),
+    setStatus: jest.fn(async (id, status, rejectionReason) =>
+      business({ id, status, rejectionReason }),
+    ),
+    countByOwner: jest.fn().mockResolvedValue(0),
     ...overrides,
   };
 }
@@ -72,12 +78,25 @@ function makeCatalog(typeExists: boolean): Pick<CatalogRepository, 'typeExists'>
   return { typeExists: jest.fn().mockResolvedValue(typeExists) };
 }
 
+/** Only MODERATION_ENABLED is ever read from config here, so the stub answers that and nothing else. */
+function makeConfig(moderation: 'true' | 'false'): ConfigService<Env, true> {
+  return {
+    get: jest.fn((key: string) => (key === 'MODERATION_ENABLED' ? moderation : undefined)),
+  } as unknown as ConfigService<Env, true>;
+}
+
 function makeService(
   businesses: BusinessRepository,
   owners: BusinessOwnerRepository,
   catalog: Pick<CatalogRepository, 'typeExists'>,
+  moderation: 'true' | 'false' = 'false',
 ): BusinessService {
-  return new BusinessService(businesses, owners, catalog as CatalogRepository);
+  return new BusinessService(
+    businesses,
+    owners,
+    catalog as CatalogRepository,
+    makeConfig(moderation),
+  );
 }
 
 describe('BusinessService', () => {
@@ -127,6 +146,183 @@ describe('BusinessService', () => {
       await expect(service.create(owner, createInput())).rejects.toMatchObject({
         code: ERROR_CODE.PHONE_NOT_VERIFIED,
         status: 403,
+      });
+    });
+
+    it('creates a DRAFT when moderation is on — the owner must submit it', async () => {
+      const businesses = makeBusinesses();
+      const service = makeService(businesses, makeOwners(true), makeCatalog(true), 'true');
+
+      const result = await service.create(owner, createInput());
+
+      expect(result.status).toBe(BusinessStatus.DRAFT);
+    });
+
+    it('rejects the sixth business with 429', async () => {
+      const businesses = makeBusinesses({ countByOwner: jest.fn().mockResolvedValue(5) });
+      const service = makeService(businesses, makeOwners(true), makeCatalog(true));
+
+      await expect(service.create(owner, createInput())).rejects.toMatchObject({
+        code: ERROR_CODE.RATE_LIMITED,
+        status: 429,
+      });
+      expect(businesses.create).not.toHaveBeenCalled();
+    });
+
+    it('allows the fifth business', async () => {
+      const businesses = makeBusinesses({ countByOwner: jest.fn().mockResolvedValue(4) });
+      const service = makeService(businesses, makeOwners(true), makeCatalog(true));
+
+      await expect(service.create(owner, createInput())).resolves.toMatchObject({
+        ownerId: 'owner-1',
+      });
+    });
+  });
+
+  describe('submit', () => {
+    it('moves a DRAFT to PENDING_REVIEW when moderation is on', async () => {
+      const businesses = makeBusinesses({
+        findById: jest.fn().mockResolvedValue(business({ status: BusinessStatus.DRAFT })),
+      });
+      const service = makeService(businesses, makeOwners(true), makeCatalog(true), 'true');
+
+      const result = await service.submit(owner, 'biz-1');
+
+      expect(businesses.setStatus).toHaveBeenCalledWith(
+        'biz-1',
+        BusinessStatus.PENDING_REVIEW,
+        null,
+      );
+      expect(result.status).toBe(BusinessStatus.PENDING_REVIEW);
+    });
+
+    it('approves directly when moderation is off — the endpoint is never a dead end', async () => {
+      const businesses = makeBusinesses({
+        findById: jest.fn().mockResolvedValue(business({ status: BusinessStatus.DRAFT })),
+      });
+      const service = makeService(businesses, makeOwners(true), makeCatalog(true));
+
+      await service.submit(owner, 'biz-1');
+
+      expect(businesses.setStatus).toHaveBeenCalledWith('biz-1', BusinessStatus.APPROVED, null);
+    });
+
+    it('clears a previous rejectionReason when a REJECTED business is resubmitted', async () => {
+      const businesses = makeBusinesses({
+        findById: jest
+          .fn()
+          .mockResolvedValue(
+            business({ status: BusinessStatus.REJECTED, rejectionReason: 'POOR_IMAGE' }),
+          ),
+      });
+      const service = makeService(businesses, makeOwners(true), makeCatalog(true), 'true');
+
+      await service.submit(owner, 'biz-1');
+
+      expect(businesses.setStatus).toHaveBeenCalledWith(
+        'biz-1',
+        BusinessStatus.PENDING_REVIEW,
+        null,
+      );
+    });
+
+    it('409s a business that is already APPROVED', async () => {
+      const businesses = makeBusinesses({
+        findById: jest.fn().mockResolvedValue(business({ status: BusinessStatus.APPROVED })),
+      });
+      const service = makeService(businesses, makeOwners(true), makeCatalog(true), 'true');
+
+      await expect(service.submit(owner, 'biz-1')).rejects.toMatchObject({
+        code: ERROR_CODE.INVALID_STATUS_TRANSITION,
+        status: 409,
+      });
+      expect(businesses.setStatus).not.toHaveBeenCalled();
+    });
+
+    it('403s someone else’s business', async () => {
+      const businesses = makeBusinesses({
+        findById: jest.fn().mockResolvedValue(business({ ownerId: 'other-owner' })),
+      });
+      const service = makeService(businesses, makeOwners(true), makeCatalog(true), 'true');
+
+      await expect(service.submit(owner, 'biz-1')).rejects.toMatchObject({ status: 403 });
+    });
+
+    it('404s an unknown id', async () => {
+      const service = makeService(makeBusinesses(), makeOwners(true), makeCatalog(true), 'true');
+
+      await expect(service.submit(owner, 'nope')).rejects.toMatchObject({
+        code: ERROR_CODE.BUSINESS_NOT_FOUND,
+        status: 404,
+      });
+    });
+  });
+
+  describe('adminApprove / adminReject', () => {
+    it('approves a business under review, clearing any stale verdict', async () => {
+      const businesses = makeBusinesses({
+        findById: jest
+          .fn()
+          .mockResolvedValue(
+            business({ status: BusinessStatus.PENDING_REVIEW, rejectionReason: 'POOR_IMAGE' }),
+          ),
+      });
+      const service = makeService(businesses, makeOwners(true), makeCatalog(true), 'true');
+
+      await service.adminApprove('biz-1');
+
+      expect(businesses.setStatus).toHaveBeenCalledWith('biz-1', BusinessStatus.APPROVED, null);
+    });
+
+    it('rejects a business under review, recording the verdict', async () => {
+      const businesses = makeBusinesses({
+        findById: jest.fn().mockResolvedValue(business({ status: BusinessStatus.PENDING_REVIEW })),
+      });
+      const service = makeService(businesses, makeOwners(true), makeCatalog(true), 'true');
+
+      await service.adminReject('biz-1', 'FAKE_DISCOUNT');
+
+      expect(businesses.setStatus).toHaveBeenCalledWith(
+        'biz-1',
+        BusinessStatus.REJECTED,
+        'FAKE_DISCOUNT',
+      );
+    });
+
+    it('409s a business that is not awaiting a decision', async () => {
+      const businesses = makeBusinesses({
+        findById: jest.fn().mockResolvedValue(business({ status: BusinessStatus.APPROVED })),
+      });
+      const service = makeService(businesses, makeOwners(true), makeCatalog(true), 'true');
+
+      await expect(service.adminApprove('biz-1')).rejects.toMatchObject({
+        code: ERROR_CODE.INVALID_STATUS_TRANSITION,
+        status: 409,
+      });
+      expect(businesses.setStatus).not.toHaveBeenCalled();
+    });
+
+    it('404s an unknown id', async () => {
+      const service = makeService(makeBusinesses(), makeOwners(true), makeCatalog(true), 'true');
+
+      await expect(service.adminApprove('nope')).rejects.toMatchObject({
+        code: ERROR_CODE.BUSINESS_NOT_FOUND,
+        status: 404,
+      });
+    });
+
+    it('does not require ownership — an admin acts on any business', async () => {
+      const businesses = makeBusinesses({
+        findById: jest
+          .fn()
+          .mockResolvedValue(
+            business({ ownerId: 'someone-else', status: BusinessStatus.PENDING_REVIEW }),
+          ),
+      });
+      const service = makeService(businesses, makeOwners(true), makeCatalog(true), 'true');
+
+      await expect(service.adminApprove('biz-1')).resolves.toMatchObject({
+        status: BusinessStatus.APPROVED,
       });
     });
   });

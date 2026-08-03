@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { District } from '../domain/entities/district.entity';
+import { MetroStation } from '../domain/entities/metro-station.entity';
 import { Region } from '../domain/entities/region.entity';
 import { GeoRepository } from '../domain/geo.repository';
 import { GeoMapper } from './geo.mapper';
@@ -34,5 +35,12 @@ export class GeoPrismaRepository implements GeoRepository {
       select: { id: true },
     });
     return row !== null;
+  }
+
+  async findMetroStations(): Promise<MetroStation[]> {
+    const rows = await this.prisma.metroStation.findMany({
+      orderBy: [{ line: 'asc' }, { sortOrder: 'asc' }],
+    });
+    return rows.map((row) => GeoMapper.toMetroStation(row));
   }
 }

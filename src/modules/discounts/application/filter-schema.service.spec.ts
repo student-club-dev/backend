@@ -41,6 +41,7 @@ function makeCatalog(overrides: Partial<CatalogRepository> = {}): CatalogReposit
     groupExists: jest.fn().mockResolvedValue(true),
     countVisibleListingsByType: jest.fn().mockResolvedValue(new Map<string, number>()),
     countCategoriesByType: jest.fn().mockResolvedValue(new Map<string, number>()),
+    findTypeAttributeSchema: jest.fn().mockResolvedValue(null),
     findCategoriesByType: jest.fn().mockResolvedValue([]),
     findAttributeSpecs: jest.fn().mockResolvedValue([]),
     typeExists: jest.fn().mockResolvedValue(true),

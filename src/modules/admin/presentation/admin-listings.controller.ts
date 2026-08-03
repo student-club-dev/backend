@@ -1,7 +1,18 @@
-import { Body, Controller, Get, Param, Put, Query, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Param,
+  Post,
+  Put,
+  Query,
+  UseGuards,
+} from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { ERROR_CODE } from '../../../common/errors/error-code';
 import {
+  ApiErrorEnvelope,
   ApiNotFoundEnvelope,
   ApiOkEnvelope,
   ApiUnauthorizedEnvelope,
@@ -13,6 +24,7 @@ import { AdminListingsWriteService } from '../application/admin-listings-write.s
 import { AdminListingsService } from '../application/admin-listings.service';
 import { AdminListingListQueryDto } from './dto/admin-listing-list-query.dto';
 import { AdminListingDto, AdminListingPageDto } from './dto/admin-listing.dto';
+import { AdminRejectDto } from './dto/admin-reject.dto';
 import { AdminJwtGuard } from './guards/admin-jwt.guard';
 
 /**
@@ -82,6 +94,49 @@ export class AdminListingsController {
     @Body() body: UpdateListingRequestDto,
   ): Promise<AdminListingDto> {
     const listing = await this.adminListingsWriteService.update(id, body.toInput());
+    return AdminListingDto.fromDomain(listing);
+  }
+
+  @Post(':id/approve')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Approve a listing under review (ADMIN or MODERATOR)',
+    description:
+      'PENDING_REVIEW → ACTIVE, or SCHEDULED when `validFrom` is still in the future (the cron ' +
+      'promotes it when the window opens). Clears `rejectionReason`. A decision, not an edit.',
+  })
+  @ApiParam({ name: 'id', description: 'Listing id' })
+  @ApiOkEnvelope(AdminListingDto)
+  @ApiNotFoundEnvelope(ERROR_CODE.LISTING_NOT_FOUND, 'No listing with this id.', 'E’lon topilmadi')
+  @ApiErrorEnvelope(
+    409,
+    ERROR_CODE.INVALID_STATUS_TRANSITION,
+    'The listing is not PENDING_REVIEW.',
+    'Bu e’lon ko‘rib chiqilmoqda emas',
+  )
+  async approve(@Param('id') id: string): Promise<AdminListingDto> {
+    const listing = await this.adminListingsWriteService.approve(id);
+    return AdminListingDto.fromDomain(listing);
+  }
+
+  @Post(':id/reject')
+  @HttpCode(200)
+  @ApiOperation({
+    summary: 'Reject a listing under review (ADMIN or MODERATOR)',
+    description: 'PENDING_REVIEW → REJECTED, recording `rejectionReason` (spec §6.2).',
+  })
+  @ApiParam({ name: 'id', description: 'Listing id' })
+  @ApiOkEnvelope(AdminListingDto)
+  @ApiValidationEnvelope()
+  @ApiNotFoundEnvelope(ERROR_CODE.LISTING_NOT_FOUND, 'No listing with this id.', 'E’lon topilmadi')
+  @ApiErrorEnvelope(
+    409,
+    ERROR_CODE.INVALID_STATUS_TRANSITION,
+    'The listing is not PENDING_REVIEW.',
+    'Bu e’lon ko‘rib chiqilmoqda emas',
+  )
+  async reject(@Param('id') id: string, @Body() body: AdminRejectDto): Promise<AdminListingDto> {
+    const listing = await this.adminListingsWriteService.reject(id, body.toReason());
     return AdminListingDto.fromDomain(listing);
   }
 }

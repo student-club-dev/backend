@@ -4,6 +4,7 @@ import { ERROR_CODE } from '../../../common/errors/error-code';
 import { ApiNotFoundEnvelope, ApiOkEnvelope } from '../../../common/swagger/api-envelope.decorator';
 import { CatalogService } from '../application/catalog.service';
 import { Gender } from '../domain/enums/gender.enum';
+import { AttributesSchemaDto } from './dto/attributes-schema.dto';
 import { BusinessTypeInfoDto } from './dto/business-type-info.dto';
 import { CategoryDto } from './dto/category.dto';
 import { GenderQueryDto } from './dto/gender-query.dto';
@@ -57,5 +58,26 @@ export class CatalogController {
   ): Promise<CategoryDto[]> {
     const categories = await this.catalogService.getCategories(type, query.gender ?? null);
     return categories.map(CategoryDto.fromDomain);
+  }
+
+  @Get(':type/attributes-schema')
+  @ApiOperation({
+    summary: 'Attribute schema for a business type',
+    description:
+      'Every attribute field defined for the type, so the client builds the listing form ' +
+      'dynamically — a new field needs no app release. `common` applies to all its listings; ' +
+      '`byCategory` adds the selected category’s fields. Same `AttributeFieldDto` vocabulary the ' +
+      'categories endpoint already returns.',
+  })
+  @ApiParam({ name: 'type', description: 'Business type key', example: 'PLAYSTATION' })
+  @ApiOkEnvelope(AttributesSchemaDto)
+  @ApiNotFoundEnvelope(
+    ERROR_CODE.NOT_FOUND,
+    'No business type with this key.',
+    'Biznes turi topilmadi',
+  )
+  async getAttributesSchema(@Param('type') type: string): Promise<AttributesSchemaDto> {
+    const schema = await this.catalogService.getAttributesSchema(type);
+    return AttributesSchemaDto.fromDomain(schema);
   }
 }

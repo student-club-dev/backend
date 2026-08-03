@@ -7,6 +7,7 @@ import {
   UpdateBusinessData,
 } from '../domain/business.repository';
 import { Business } from '../domain/entities/business.entity';
+import { BusinessStatus as DomainBusinessStatus } from '../domain/enums/business-status.enum';
 import { BusinessMapper } from './business.mapper';
 
 /** Prisma implementation of the business repository port. Prisma is used ONLY here. */
@@ -38,6 +39,24 @@ export class BusinessPrismaRepository implements BusinessRepository {
       data: BusinessMapper.toUpdateData(data),
     });
     return BusinessMapper.toDomain(row);
+  }
+
+  async setStatus(
+    id: string,
+    status: DomainBusinessStatus,
+    rejectionReason: string | null,
+  ): Promise<Business> {
+    const row = await this.prisma.business.update({
+      where: { id },
+      data: BusinessMapper.toStatusData(status, rejectionReason),
+    });
+    return BusinessMapper.toDomain(row);
+  }
+
+  async countByOwner(ownerId: string): Promise<number> {
+    return this.prisma.business.count({
+      where: { ownerId, status: { not: BusinessStatus.ARCHIVED } },
+    });
   }
 
   /** Archive the business and cascade all its listings to ARCHIVED in one transaction. */

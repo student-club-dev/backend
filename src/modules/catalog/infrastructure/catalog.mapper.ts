@@ -11,6 +11,7 @@ import { AttributeSpec } from '../domain/entities/attribute-spec.entity';
 import { BusinessType } from '../domain/entities/business-type.entity';
 import { CatalogGroup } from '../domain/entities/catalog-group.entity';
 import { AttributeField, AttributeOption, Category } from '../domain/entities/category.entity';
+import { TypeAttributeSchema } from '../domain/entities/type-attribute-schema.entity';
 import { BusinessTypeWrite } from '../domain/catalog.repository';
 import { AttributeFieldType } from '../domain/enums/attribute-field-type.enum';
 import { Gender } from '../domain/enums/gender.enum';
@@ -142,6 +143,37 @@ export class CatalogMapper {
       required: spec.required,
       suffix: spec.suffix,
       options: toAttributeSpecOptions(spec.options),
+    };
+  }
+
+  /**
+   * Splits every spec of a business type into the type-level fields and the per-category ones —
+   * the shape `GET /business/types/{type}/attributes-schema` serves. Rows are assumed to arrive
+   * ordered by `sortOrder`; grouping preserves that order within each bucket.
+   */
+  static toTypeAttributeSchema(
+    businessType: string,
+    specs: AttributeSpecRow[],
+  ): TypeAttributeSchema {
+    const common: AttributeField[] = [];
+    const byCategoryKey = new Map<string, AttributeField[]>();
+    for (const spec of specs) {
+      const field = CatalogMapper.toAttributeField(spec);
+      if (spec.categoryKey === null) {
+        common.push(field);
+        continue;
+      }
+      const bucket = byCategoryKey.get(spec.categoryKey);
+      if (bucket === undefined) {
+        byCategoryKey.set(spec.categoryKey, [field]);
+      } else {
+        bucket.push(field);
+      }
+    }
+    return {
+      businessType,
+      common,
+      byCategory: [...byCategoryKey].map(([categoryKey, fields]) => ({ categoryKey, fields })),
     };
   }
 

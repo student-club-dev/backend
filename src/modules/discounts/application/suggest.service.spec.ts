@@ -37,6 +37,7 @@ function makeCatalog(groups: CatalogGroup[] = GROUPS): CatalogRepository {
     deleteType: jest.fn(),
     countBusinessesOfType: jest.fn().mockResolvedValue(0),
     countCategoriesOfType: jest.fn().mockResolvedValue(0),
+    findTypeAttributeSchema: jest.fn().mockResolvedValue(null),
   };
 }
 
