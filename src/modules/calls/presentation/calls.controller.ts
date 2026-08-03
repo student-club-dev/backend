@@ -73,17 +73,25 @@ export class CallsController {
   @ApiErrorEnvelope(
     503,
     ERROR_CODE.NOT_IMPLEMENTED,
-    'TURN is not configured on this deployment (`TURN_HOST`/`TURN_STATIC_SECRET`). Only possible ' +
-      'outside production — the env schema requires both there.',
+    'Either the calls feature is switched off (`CALLS_ENABLED=false` — happens in any environment, ' +
+      'including production), or, once enabled, TURN is not configured on this deployment ' +
+      '(`TURN_HOST`/`TURN_STATIC_SECRET`) — only possible outside production, since the env schema ' +
+      'requires both once `CALLS_ENABLED=true`.',
     'Qo‘ng‘iroq xizmati sozlanmagan',
   )
   iceServers(@CurrentUser() user: AuthenticatedUser): IceServersDto {
     const host = this.config.get('TURN_HOST', { infer: true });
     const secret = this.config.get('TURN_STATIC_SECRET', { infer: true });
     const ttlSeconds = this.config.get('TURN_TTL_SECONDS', { infer: true });
-    // Both are optional in the env schema outside production. Answer 503 rather than reach
-    // `createHmac(undefined)`, which would be a 500 with a stack trace instead of a clear answer.
-    if (host === undefined || secret === undefined) {
+    // CALLS_ENABLED is the feature's master switch: while false, this answers 503 regardless of
+    // whether TURN happens to be configured. Both are also optional in the env schema outside
+    // production — the `undefined` check still guards against reaching `createHmac(undefined)`,
+    // which would be a 500 with a stack trace instead of a clear answer.
+    if (
+      this.config.get('CALLS_ENABLED', { infer: true }) !== 'true' ||
+      host === undefined ||
+      secret === undefined
+    ) {
       throw new AppException(ERROR_CODE.NOT_IMPLEMENTED, 503, 'Qo‘ng‘iroq xizmati sozlanmagan');
     }
     const credential = buildIceCredential(secret, user.id, ttlSeconds, Date.now());

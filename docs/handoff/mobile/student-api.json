@@ -9567,7 +9567,7 @@
             }
           },
           "503": {
-            "description": "TURN is not configured on this deployment (`TURN_HOST`/`TURN_STATIC_SECRET`). Only possible outside production — the env schema requires both there.",
+            "description": "Either the calls feature is switched off (`CALLS_ENABLED=false` — happens in any environment, including production), or, once enabled, TURN is not configured on this deployment (`TURN_HOST`/`TURN_STATIC_SECRET`) — only possible outside production, since the env schema requires both once `CALLS_ENABLED=true`.",
             "content": {
               "application/json": {
                 "schema": {

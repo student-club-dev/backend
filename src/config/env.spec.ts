@@ -52,6 +52,22 @@ describe('validateEnv — CALLS_ENABLED gates the TURN requirement', () => {
     expect(env.TURN_STATIC_SECRET).toBeUndefined();
   });
 
+  // Regression: `.env.example` ships TURN_HOST=/TURN_STATIC_SECRET= blank, so a server whose .env
+  // was copied from it has them defined-but-empty. That took production down with a 502 on
+  // 2026-08-02: `.min(1)` rejected the blanks, Nest never booted, and the container crash-looped
+  // with nothing listening for nginx to proxy to — even though CALLS_ENABLED was false. Blank must
+  // mean "not set", exactly like the key being absent.
+  it('boots in production with CALLS_ENABLED=false and blank TURN values', () => {
+    const env = validateEnv({
+      NODE_ENV: 'production',
+      TURN_HOST: '',
+      TURN_STATIC_SECRET: '',
+      ...prodMediaUrl,
+    });
+    expect(env.TURN_HOST).toBeUndefined();
+    expect(env.TURN_STATIC_SECRET).toBeUndefined();
+  });
+
   it('fails in production with CALLS_ENABLED=true and no TURN config', () => {
     expect(() =>
       validateEnv({ NODE_ENV: 'production', CALLS_ENABLED: 'true', ...prodMediaUrl }),

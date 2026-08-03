@@ -194,10 +194,13 @@ Shakl va nullability: `REST.md` §3.
 
 ### 13. `GET /v1/calls/ice-servers` → 503 bo'lishi mumkin
 
-Sizning §11.2 da bunday holat yo'q edi. Deploy'da TURN sozlanmagan bo'lsa endpoint
-**503 `NOT_IMPLEMENTED`** qaytaradi (`createHmac(undefined)` bilan 500 berish o'rniga).
+Sizning §11.2 da bunday holat yo'q edi. `CALLS_ENABLED=false` bo'lganda (hozirgi holat — TURN
+sozlanganidan qat'i nazar) yoki yoqilgan bo'lib TURN sozlanmagan bo'lsa endpoint
+**503 `NOT_IMPLEMENTED`** qaytaradi (`createHmac(undefined)` bilan 500 berish o'rniga). Xuddi shu
+bayroq `call:invite` ni ham rad etadi (`PROTOCOL.md` §9) — qolgan hodisalar va `GET /v1/calls` ga
+ta'sir qilmaydi.
 
-coturn hali ko'tarilmagan, ya'ni **hozircha bu kutilgan javob**. Klient buni alohida qayta
+`CALLS_ENABLED` hali `false`, ya'ni **hozircha bu kutilgan javob**. Klient buni alohida qayta
 ishlasin — «server ishlamayapti» emas, «qo'ng'iroq hozircha mavjud emas».
 
 ### 14. Chatdagi yozuv — snapshot

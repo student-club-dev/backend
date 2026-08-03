@@ -5,6 +5,9 @@ import { z } from 'zod';
  * DATABASE_URL / SMS / OAuth are optional at this stage (M0) and become required
  * as the modules that need them land.
  */
+/** An empty `.env` value (`KEY=`) is still "defined" to zod — normalise it to absent. */
+const blankAsUndefined = (value: unknown): unknown => (value === '' ? undefined : value);
+
 export const envSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -115,18 +118,26 @@ export const envSchema = z
 
     // TURN (coturn `use-auth-secret` REST scheme) for 1:1 calls. Left optional here — a missing
     // value must fail loudly in production when CALLS_ENABLED=true (see superRefine below), not
-    // silently boot with a guessable default the way JWT_ACCESS_SECRET currently does. `.min(1)`
-    // matters as much as `.optional()`: `.env.example` ships these blank, and a blank string is
-    // still "defined".
-    TURN_HOST: z.string().min(1).optional(),
-    TURN_STATIC_SECRET: z.string().min(1).optional(),
+    // silently boot with a guessable default the way JWT_ACCESS_SECRET currently does.
+    //
+    // `blankAsUndefined` is what makes that gate the ONLY one: `.env.example` ships these blank, so
+    // a real `.env` copied from it has them defined-but-empty, and `.min(1)` alone then rejected
+    // them at every boot regardless of CALLS_ENABLED — which took production down (502, container
+    // crash-loop) on 2026-08-02. Blank now means "not set", so a disabled feature cannot block boot
+    // and an enabled one still fails with the explanatory message below rather than a bare
+    // "must contain at least 1 character".
+    TURN_HOST: z.preprocess(blankAsUndefined, z.string().min(1).optional()),
+    TURN_STATIC_SECRET: z.preprocess(blankAsUndefined, z.string().min(1).optional()),
     TURN_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
 
     // Master switch for the calls feature. Defaults OFF: the calls code ships ahead of a deployed
     // coturn server and the mobile-client prerequisites it depends on. While false, TURN
-    // configuration is NOT required to boot in any environment — `GET /v1/calls/ice-servers`
-    // simply keeps answering its existing 503. Flip to true only once coturn is up; production
-    // then requires TURN_HOST/TURN_STATIC_SECRET exactly as before this flag existed.
+    // configuration is NOT required to boot in any environment, `GET /v1/calls/ice-servers` answers
+    // 503 regardless of whether TURN happens to be configured, and `call:invite` rejects every new
+    // call — but every other call event (`accept`/`connected`/`decline`/`cancel`/`end`/`ice`/
+    // `renegotiate`/`media-state`) and `GET /v1/calls` keep working, so a call already in progress
+    // when the flag is flipped off can still be ended cleanly. Flip to true only once coturn is up;
+    // production then requires TURN_HOST/TURN_STATIC_SECRET exactly as before this flag existed.
     CALLS_ENABLED: z.enum(['true', 'false']).default('false'),
 
     // Gates `CallsGateway`'s exp+grace disconnect (design §6.4). Defaults OFF: until both mobile

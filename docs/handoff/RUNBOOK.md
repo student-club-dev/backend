@@ -410,22 +410,27 @@ Protokolning to'liq tavsifi: `docs/architecture/calls.md`. coturn o'rnatish va s
 Ikkalasi ham sukut bo'yicha `false`, lekin turli sabab bilan va turli vaqtda yoqiladi — birini
 ikkinchisi bilan aralashtirmang:
 
-1. **`CALLS_ENABLED`** — qo'ng'iroqlar xususiyatining bosh kaliti, birinchi bo'lib yoqiladi.
-   `false` bo'lsa TURN sozlamalari (`TURN_HOST`/`TURN_STATIC_SECRET`) hech qanday muhitda, shu
-   jumladan productionda ham, boot uchun **shart emas** — `GET /v1/calls/ice-servers` shunchaki
-   mavjud `503` javobini beradi. Bu ataylab: qo'ng'iroq kodi coturn serveridan **va** uchta
-   mobil-klient talabidan oldinroq deploy qilingan, shu oraliqda backend productionda TURN'siz
-   ko'tarilishi kerak. Faqat coturn ko'tarilib, `TURN_HOST`/`TURN_STATIC_SECRET` to'ldirilgandan
-   **keyin** `true` qiling — shundan keyingina productionda TURN majburiy bo'ladi (pastdagi
-   jadval).
+1. **`CALLS_ENABLED`** — qo'ng'iroqlar xususiyatining chinakam bosh kaliti, birinchi bo'lib
+   yoqiladi. `false` bo'lsa TURN sozlamalari (`TURN_HOST`/`TURN_STATIC_SECRET`) hech qanday
+   muhitda, shu jumladan productionda ham, boot uchun **shart emas** — va ular sozlangan bo'lsa
+   ham `GET /v1/calls/ice-servers` **doim** `503` qaytaradi, `call:invite` esa yangi qo'ng'iroq
+   boshlashni rad etadi (`NOT_IMPLEMENTED`). Qo'ng'iroq ichidagi qolgan barcha hodisa
+   (`accept`/`connected`/`decline`/`cancel`/`end`/`ice`/`renegotiate`/`media-state`) va
+   `GET /v1/calls` tarixi bundan mustasno — bayroqni o'chirish allaqachon boshlangan qo'ng'iroqni
+   tugatib bo'lmaydigan holga hech qachon keltirmaydi. Bu ataylab: qo'ng'iroq kodi coturn
+   serveridan **va** uchta mobil-klient talabidan oldinroq deploy qilingan, shu oraliqda backend
+   productionda TURN'siz ko'tarilishi kerak. Faqat coturn ko'tarilib, `TURN_HOST`/
+   `TURN_STATIC_SECRET` to'ldirilgandan **keyin** `true` qiling — shundan keyingina productionda
+   TURN majburiy bo'ladi (pastdagi jadval).
 2. **`CALLS_ENFORCE_TOKEN_EXPIRY`** — 1-bayroqdan **keyin**, alohida bosqichda yoqiladi (quyida
    batafsil): ikkala mobil klient `call:auth` ni joriy qilgandan keyin, aks holda 16 daqiqadan
    uzun qo'ng'iroqlar socket bilan birga uziladi.
 
-Qisqasi: `CALLS_ENABLED` — "qo'ng'iroqlar umuman ishlaydimi" degan savolni hal qiladi;
-`CALLS_ENFORCE_TOKEN_EXPIRY` — ishlab turgan qo'ng'iroqlar kirish tokeni muddati tugaganda ham
-uziladimi, degan savolni. Birinchisi coturn tayyor bo'lishi bilanoq yoqiladi; ikkinchisi undan
-ancha keyin, mobil `call:auth`ni joylashtirgandan so'ng.
+Qisqasi: `CALLS_ENABLED` — faqat **"yangi qo'ng'iroq boshlash mumkinmi"** degan savolni hal qiladi
+(`ice-servers` va `call:invite`) — ishlab turgan qo'ng'iroqqa yoki `GET /v1/calls` tarixiga
+ta'sir qilmaydi; `CALLS_ENFORCE_TOKEN_EXPIRY` — ishlab turgan qo'ng'iroqlar kirish tokeni muddati
+tugaganda ham uziladimi, degan savolni. Birinchisi coturn tayyor bo'lishi bilanoq yoqiladi;
+ikkinchisi undan ancha keyin, mobil `call:auth`ni joylashtirgandan so'ng.
 
 ### TURN env o'zgaruvchilari
 

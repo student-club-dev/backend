@@ -41,6 +41,14 @@ describe('CallsService.invite', () => {
     clearInCallCounters: jest.fn(),
   };
   const bus = { publish: jest.fn() };
+  // CALLS_ENABLED is the only key this service reads off `ConfigService` — default it to the
+  // enabled state so the tests above (all written before the flag gated `invite`) keep exercising
+  // the behaviour they actually name. The one test that cares about the flag overrides it below.
+  const config = {
+    get: jest.fn((key: string): string | undefined =>
+      key === 'CALLS_ENABLED' ? 'true' : undefined,
+    ),
+  };
 
   const service = (): CallsService =>
     new CallsService(
@@ -52,6 +60,7 @@ describe('CallsService.invite', () => {
       connections as never,
       limiter as never,
       bus as never,
+      config as never,
     );
 
   const input = { calleeId: CALLEE, media: CallMedia.AUDIO, sdp: 'v=0...' };
@@ -79,6 +88,19 @@ describe('CallsService.invite', () => {
   });
 
   beforeEach(() => jest.clearAllMocks());
+
+  // The master-switch behaviour: `invite` must be the ONLY thing this flag rejects, and a rejected
+  // invite must cost nothing — no rate-limit budget spent, no Redis claim, no history row.
+  it('rejects a new call when CALLS_ENABLED is false, without spending anything', async () => {
+    config.get.mockReturnValueOnce('false');
+    await expect(service().invite(CALLER, input)).rejects.toMatchObject({
+      status: 503,
+      code: ERROR_CODE.NOT_IMPLEMENTED,
+    });
+    expect(limiter.checkInvite).not.toHaveBeenCalled();
+    expect(state.claim).not.toHaveBeenCalled();
+    expect(calls.create).not.toHaveBeenCalled();
+  });
 
   it('creates a ringing call and arms the ring timeout', async () => {
     const result = await service().invite(CALLER, input);

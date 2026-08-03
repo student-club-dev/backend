@@ -77,12 +77,13 @@ qo'ng'iroq uni yangilamaydi.
 | 401 | `UNAUTHORIZED` / `TOKEN_EXPIRED` | token yo'q / muddati o'tgan |
 | 403 | `FORBIDDEN` | STUDENT hisobi emas |
 | 429 | `RATE_LIMITED` | daqiqasiga 10 tadan oshdi |
-| **503** | **`NOT_IMPLEMENTED`** | **bu deploy'da TURN sozlanmagan** |
+| **503** | **`NOT_IMPLEMENTED`** | **qo'ng'iroqlar xususiyati o'chirilgan (`CALLS_ENABLED=false`) yoki bu deploy'da TURN sozlanmagan** |
 
-⚠️ **503 ni qayta ishlang.** coturn hali ko'tarilmagan (`README.md` — rollout darvozalari), ya'ni
-hozircha bu javob **kutilgan holat**. Klient qo'ng'iroq tugmasini o'chirib qo'yishi yoki
-«qo'ng'iroq hozircha mavjud emas» deyishi kerak — 503 ni umumiy «server ishlamayapti» xatosi
-sifatida ko'rsatmang.
+⚠️ **503 ni qayta ishlang.** `CALLS_ENABLED=false` bo'lganda (hozirgi holat, `README.md` —
+rollout darvozalari) bu javob TURN qanday sozlanganidan qat'i nazar **kutilgan holat**. Klient
+qo'ng'iroq tugmasini o'chirib qo'yishi yoki «qo'ng'iroq hozircha mavjud emas» deyishi kerak — 503
+ni umumiy «server ishlamayapti» xatosi sifatida ko'rsatmang. Xuddi shu bayroq `call:invite` ni ham
+rad etadi (`PROTOCOL.md` §9) — ishlab turgan qo'ng'iroqqa yoki `GET /v1/calls` ga ta'sir qilmaydi.
 
 ---
 

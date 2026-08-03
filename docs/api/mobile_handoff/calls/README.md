@@ -71,9 +71,11 @@ socket'ni uyg'otish yo'li qo'shadi.
 
 | Darvoza | Ma'nosi |
 |---|---|
-| **coturn serveri** | Hali ko'tarilmagan. Usiz NAT ortidagi qo'ng'iroqlarning bir qismi umuman ulanmaydi va `GET /v1/calls/ice-servers` **503** qaytaradi (`REST.md`) |
+| **`CALLS_ENABLED`** | Hozir `false` — qo'ng'iroqlar xususiyatining bosh kaliti. `false` bo'lganda `GET /v1/calls/ice-servers` **doim 503** qaytaradi (TURN sozlangan bo'lsa ham) va `call:invite` yangi qo'ng'iroq boshlashni rad etadi (**`NOT_IMPLEMENTED`**, `PROTOCOL.md` §9). Qo'ng'iroq ichidagi qolgan hamma hodisa va `GET /v1/calls` tarixi bundan mustasno — bayroqdan qat'i nazar ishlaydi |
+| **coturn serveri** | Hali ko'tarilmagan. Usiz NAT ortidagi qo'ng'iroqlarning bir qismi umuman ulanmaydi va (`CALLS_ENABLED=true` bo'lganda ham) `GET /v1/calls/ice-servers` **503** qaytaradi (`REST.md`) |
 | **`CALLS_ENFORCE_TOKEN_EXPIRY`** | Hozir `false`. `true` ga faqat **ikkala platforma `call:auth` ni chiqargandan keyin** o'giriladi — `PREREQUISITES.md` §3 |
 
-Bular env sozlamalari; ular **simdagi kontraktni o'zgartirmaydi**. `/calls` namespace'i va barcha
-hodisalar ular holidan qat'i nazar ishlaydi — faqat TURN hisobi va socket'ning token bo'yicha
-uzilishi shularga bog'liq.
+Bular env sozlamalari; sim kontrakti (hodisa nomlari, payload'lar) o'zgarmaydi. Faqat
+**`call:invite`** (`CALLS_ENABLED=false` bo'lganda rad etiladi), TURN hisobi va socket'ning token
+bo'yicha uzilishi shu bayroqlarga bog'liq — qo'ng'iroq ichidagi qolgan barcha hodisa va
+`GET /v1/calls` ular holidan qat'i nazar ishlashda davom etadi.
