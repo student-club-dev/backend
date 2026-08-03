@@ -102,6 +102,76 @@ describe('validateEnv — CALLS_ENABLED gates the TURN requirement', () => {
     expect(env.TURN_HOST).toBe('turn.studentclub.uz');
   });
 
+  /**
+   * ICE_PROVIDER decides WHICH credentials the boot guard demands. Requiring both providers' would
+   * make it impossible to run on Metered without also standing up coturn — the whole point of the
+   * flag — and requiring only coturn's would let a `metered` deployment boot with nothing usable.
+   */
+  describe('ICE_PROVIDER selects which credentials are required', () => {
+    const prodCalls = { NODE_ENV: 'production', CALLS_ENABLED: 'true', ...prodMediaUrl };
+    const metered = { METERED_TURN_USERNAME: 'm_user', METERED_TURN_CREDENTIAL: 'm_pass' };
+
+    it('defaults to static, keeping the coturn requirement', () => {
+      const env = validateEnv({
+        ...prodCalls,
+        TURN_HOST: 'turn.studentclub.uz',
+        TURN_STATIC_SECRET: 'turn-secret',
+      });
+      expect(env.ICE_PROVIDER).toBe('static');
+    });
+
+    it('fails with ICE_PROVIDER=metered and no Metered credentials', () => {
+      expect(() => validateEnv({ ...prodCalls, ICE_PROVIDER: 'metered' })).toThrow(
+        /METERED_TURN_USERNAME and METERED_TURN_CREDENTIAL are required/,
+      );
+    });
+
+    // Same blank-value trap that took production down on 2026-08-02, now on the Metered keys.
+    it('fails with ICE_PROVIDER=metered and blank Metered credentials', () => {
+      expect(() =>
+        validateEnv({
+          ...prodCalls,
+          ICE_PROVIDER: 'metered',
+          METERED_TURN_USERNAME: '',
+          METERED_TURN_CREDENTIAL: '',
+        }),
+      ).toThrow(/METERED_TURN_USERNAME and METERED_TURN_CREDENTIAL are required/);
+    });
+
+    // ⚠️ Metered is selected, so coturn's absence must NOT block the boot.
+    it('boots with ICE_PROVIDER=metered and no coturn config at all', () => {
+      const env = validateEnv({ ...prodCalls, ICE_PROVIDER: 'metered', ...metered });
+      expect(env.ICE_PROVIDER).toBe('metered');
+      expect(env.TURN_HOST).toBeUndefined();
+    });
+
+    // The mirror: coturn is selected, so Metered's absence must not block it either.
+    it('boots with ICE_PROVIDER=static and no Metered config at all', () => {
+      const env = validateEnv({
+        ...prodCalls,
+        ICE_PROVIDER: 'static',
+        TURN_HOST: 'turn.studentclub.uz',
+        TURN_STATIC_SECRET: 'turn-secret',
+      });
+      expect(env.METERED_TURN_USERNAME).toBeUndefined();
+    });
+
+    it('fails with ICE_PROVIDER=metered when only coturn is configured', () => {
+      expect(() =>
+        validateEnv({
+          ...prodCalls,
+          ICE_PROVIDER: 'metered',
+          TURN_HOST: 'turn.studentclub.uz',
+          TURN_STATIC_SECRET: 'turn-secret',
+        }),
+      ).toThrow(/METERED_TURN_USERNAME and METERED_TURN_CREDENTIAL are required/);
+    });
+
+    it('rejects an unknown provider name outright', () => {
+      expect(() => validateEnv({ ...prodCalls, ICE_PROVIDER: 'twilio', ...metered })).toThrow();
+    });
+  });
+
   it('writes the formatted issues to console.error before throwing', () => {
     const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
     try {

@@ -78,6 +78,7 @@ describe('CallsService.invite', () => {
     callerId: CALLEE,
     calleeId: CALLER,
     media: CallMedia.AUDIO,
+    relayOnly: false,
     status: CallStatus.DECLINED,
     startedAt: new Date(),
     answeredAt: null,
@@ -271,13 +272,23 @@ describe('CallsService.invite', () => {
     expect(state.release).toHaveBeenCalledWith(claimedCallId);
   });
 
-  // Forced relay hides both IP addresses from an unfamiliar pair (design §9.2).
+  /**
+   * Forced relay hides both IP addresses from an unfamiliar pair (design §9.2).
+   *
+   * Each case asserts the value twice, and the second assertion is not redundant: the returned
+   * `relayOnly` drives the client's `RTCConfiguration`, the persisted one is what later separates
+   * a relay we forced from one NAT made unavoidable. Nothing ties them together, so a row written
+   * with a hardcoded `false` would leave the wire behaviour correct and quietly make every quota
+   * forecast built on `call_stats` wrong.
+   */
   it('forces relay for a pair that has never completed a call', async () => {
     expect((await service().invite(CALLER, input)).relayOnly).toBe(true);
+    expect(calls.create).toHaveBeenCalledWith(expect.objectContaining({ relayOnly: true }));
   });
 
   it('allows P2P once the pair has talked before', async () => {
     calls.hasCompletedCallBetween.mockResolvedValueOnce(true);
     expect((await service().invite(CALLER, input)).relayOnly).toBe(false);
+    expect(calls.create).toHaveBeenCalledWith(expect.objectContaining({ relayOnly: false }));
   });
 });

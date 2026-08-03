@@ -11,13 +11,26 @@ Branch: `feat/chat-calls-phase1`. Tekshirilganlik: tsc toza · lint toza · **11
 > chidamlilik. Batafsil: `PREREQUISITES.md` §1. Qolgan ikkitasi deploy'ni bloklamaydi, lekin
 > qo'ng'iroqni yoqishni bloklaydi.
 
+## 🆕 2026-08-03 da qo'shilganlar
+
+Asl handoff'dan keyingi o'zgarishlar. Ikkalasi ham **`REST.md`** da:
+
+| Nima | Qayerda | Nima uchun muhim |
+|---|---|---|
+| **`POST /v1/calls/{callId}/stats`** — yangi endpoint | `REST.md` §3 | **Yuborilmasa, TURN sarfi haqida bizda hech qanday ma'lumot bo'lmaydi.** Ixtiyoriy telemetriya emas — TURN byudjeti shu raqamlar bilan hal qilinadi |
+| `iceServers` ro'yxatining **shakli o'zgarishi mumkin** | `REST.md` §1, «Ro'yxatning shakli» | Backend endi ikkita TURN provayderini qo'llaydi. Host nomini ham, URL sonini ham **qotirmang** |
+
+`PROTOCOL.md` §11 ga bitta aniqlik qo'shildi: `relayOnly: true` bo'lgan qo'ng'iroqda ham
+`iceServers` ichida STUN yozuvi bo'ladi — bu kutilgan holat, cheklovni `iceTransportPolicy = "relay"`
+bilan siz qo'yasiz (talab o'zgarmagan).
+
 ## Qaysi hujjatni o'qish
 
 | Fayl | Nima uchun |
 |---|---|
 | **`PREREQUISITES.md`** | **Avval shuni o'qing.** Sizga bog'liq uchta ish — ularsiz rollout bo'lmaydi |
 | **`PROTOCOL.md`** | 17 ta WS hodisasi, payload'lar, holat mashinasi, taymerlar, cheklovlar, xato kodlari |
-| **`REST.md`** | Ikkita endpoint (`GET /v1/calls/ice-servers`, `GET /v1/calls`) va o'zgargan `MessageDto` |
+| **`REST.md`** | **Uchta** endpoint (`GET /v1/calls/ice-servers`, `GET /v1/calls`, **`POST /v1/calls/{id}/stats`**) va o'zgargan `MessageDto` |
 | **`DEVIATIONS.md`** | Sizning spec'ingizdan farq qiladigan **hamma narsa**, har biri sababi bilan |
 
 OpenAPI: **`docs/handoff/mobile/student-api.json`** — klientni shundan qayta generatsiya qiling.

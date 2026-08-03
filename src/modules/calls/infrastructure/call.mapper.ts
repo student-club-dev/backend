@@ -13,6 +13,7 @@ export function toDomainCall(row: PrismaCall): Call {
     callerId: row.callerId,
     calleeId: row.calleeId,
     media: row.media as CallMedia,
+    relayOnly: row.relayOnly,
     status: row.status as CallStatus,
     startedAt: row.startedAt,
     answeredAt: row.answeredAt,

@@ -10,6 +10,13 @@ export interface Call {
   callerId: string;
   calleeId: string;
   media: CallMedia;
+  /**
+   * Whether §9.2 forced this call through TURN. Its `CallState` twin drives the live `call:ice`
+   * filter; this copy outlives the call so the relay share in `call_stats` can be split into
+   * "we forced it" versus "NAT left no choice" — the only form of that number a policy decision
+   * can be made from.
+   */
+  relayOnly: boolean;
   status: CallStatus;
   startedAt: Date;
   answeredAt: Date | null;

@@ -1070,6 +1070,7 @@ describe('Connections + Chat — e2e', () => {
       callerId: aId,
       calleeId: bId,
       media: CallMedia.AUDIO,
+      relayOnly: false,
       status: CallStatus.ENDED,
       startedAt: new Date('2026-08-01T10:00:00.000Z'),
       answeredAt: new Date('2026-08-01T10:00:10.000Z'),

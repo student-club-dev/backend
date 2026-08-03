@@ -128,7 +128,21 @@ export const envSchema = z
     // "must contain at least 1 character".
     TURN_HOST: z.preprocess(blankAsUndefined, z.string().min(1).optional()),
     TURN_STATIC_SECRET: z.preprocess(blankAsUndefined, z.string().min(1).optional()),
+    // For `static`, the real lifetime baked into the HMAC username. For `metered`, whose credentials
+    // never expire, a re-fetch hint only — it is what gives us a rotation window, since a client
+    // that refreshes hourly picks up a rotated credential within the hour.
     TURN_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
+
+    // Which TURN provider this deployment talks to.
+    //
+    // `static` — our own coturn, per-student HMAC credentials that expire on their own.
+    // `metered` — Metered.ca, ONE long-lived username/password shared by every client. That is a
+    // real downgrade: coturn's per-user quota cannot apply, a leak lasts until rotated by hand, and
+    // any student who calls `/ice-servers` once can extract it. Accepted only because the free tier
+    // is a stopgap; `static` is the destination.
+    ICE_PROVIDER: z.enum(['static', 'metered']).default('static'),
+    METERED_TURN_USERNAME: z.preprocess(blankAsUndefined, z.string().min(1).optional()),
+    METERED_TURN_CREDENTIAL: z.preprocess(blankAsUndefined, z.string().min(1).optional()),
 
     // Master switch for the calls feature. Defaults OFF: the calls code ships ahead of a deployed
     // coturn server and the mobile-client prerequisites it depends on. While false, TURN
@@ -157,15 +171,31 @@ export const envSchema = z
         });
       }
 
-      if (env.CALLS_ENABLED === 'true' && (!env.TURN_HOST || !env.TURN_STATIC_SECRET)) {
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['TURN_HOST'],
-          message:
-            'TURN_HOST and TURN_STATIC_SECRET are required in production when CALLS_ENABLED=true ' +
-            '— without them GET /v1/calls/ice-servers returns nothing usable and calls behind NAT ' +
-            'never connect.',
-        });
+      // Only the SELECTED provider's credentials are required — demanding both would make it
+      // impossible to run on Metered without also standing up coturn, which is the whole point of
+      // the flag.
+      if (env.CALLS_ENABLED === 'true') {
+        if (env.ICE_PROVIDER === 'metered') {
+          if (!env.METERED_TURN_USERNAME || !env.METERED_TURN_CREDENTIAL) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ['METERED_TURN_USERNAME'],
+              message:
+                'METERED_TURN_USERNAME and METERED_TURN_CREDENTIAL are required in production when ' +
+                'CALLS_ENABLED=true and ICE_PROVIDER=metered — without them ' +
+                'GET /v1/calls/ice-servers returns nothing usable and calls behind NAT never connect.',
+            });
+          }
+        } else if (!env.TURN_HOST || !env.TURN_STATIC_SECRET) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['TURN_HOST'],
+            message:
+              'TURN_HOST and TURN_STATIC_SECRET are required in production when CALLS_ENABLED=true ' +
+              '— without them GET /v1/calls/ice-servers returns nothing usable and calls behind NAT ' +
+              'never connect.',
+          });
+        }
       }
     }
   });

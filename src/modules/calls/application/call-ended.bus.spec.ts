@@ -11,6 +11,7 @@ const call: Call = {
   callerId: 'std_caller',
   calleeId: 'std_callee',
   media: CallMedia.AUDIO,
+  relayOnly: false,
   status: CallStatus.ENDED,
   startedAt: new Date('2026-08-01T10:00:00.000Z'),
   answeredAt: new Date('2026-08-01T10:00:10.000Z'),
