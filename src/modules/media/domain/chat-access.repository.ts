@@ -22,4 +22,14 @@ export interface ChatAccessRepository {
    * a story is visible to every connection, including those you have never messaged.
    */
   areConnected(a: string, b: string): Promise<boolean>;
+
+  /**
+   * Whether the story backed by this asset is still live (not expired, not deleted).
+   *
+   * Story media outlives the story now — an expired story stays in its author's archive — so
+   * "connected to the owner" is no longer enough on its own. Past `expiresAt` the audience narrows
+   * to the author alone, and this is the question that narrows it. `false` for an asset that backs
+   * no story at all, which fails closed.
+   */
+  isStoryLive(mediaId: string): Promise<boolean>;
 }

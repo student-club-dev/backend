@@ -1542,14 +1542,22 @@ model Story {
   /// step by the same statement that inserts the view.
   viewsCount Int @default(0) @map("views_count")
 
+  /// Set once the archive retention window has passed and the bytes were reclaimed. The row stays —
+  /// the author still sees the post in their archive, drawn as an empty cell — so this is what tells
+  /// the client the file is gone rather than broken.
+  archivedMediaPurged Boolean @default(false) @map("archived_media_purged")
+
   author Student     @relation(fields: [authorId], references: [id], onDelete: Cascade)
   media  MediaAsset  @relation(fields: [mediaId], references: [id], onDelete: Cascade)
   views  StoryView[]
 
-  // The feed: one author's live stories, newest first.
+  // The feed and the archive: one author's stories in date order. Both directions use it.
   @@index([authorId, createdAt])
-  // The cleanup sweep, and the `expiresAt > now()` filter every read carries.
+  // The `expiresAt > now()` filter every feed read carries, and the archive retention sweep.
   @@index([expiresAt])
+  // The delete sweep, which runs every ten minutes. Almost every row here is NULL, but a B-tree
+  // keeps those at one end, so `deleted_at < $1` reads only the handful that are not.
+  @@index([deletedAt])
   @@map("stories")
 }
 

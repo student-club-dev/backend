@@ -266,7 +266,12 @@ export class ChatMediaService {
       return true;
     }
     if (isStoryKind(asset.kind)) {
-      return this.access.areConnected(asset.ownerId, studentId);
+      // Connections see a story while it is live; once it expires it is archive, and an archive is
+      // the author's alone. Checked here rather than in the stories module because a direct link to
+      // the bytes bypasses that module entirely.
+      return (await this.access.isStoryLive(asset.id))
+        ? this.access.areConnected(asset.ownerId, studentId)
+        : false;
     }
     if (asset.kind === MediaKind.PROFILE_PHOTO) {
       return true;
@@ -320,6 +325,28 @@ export class ChatMediaService {
       }
     }
     await this.assets.deleteMany(ids);
+    return ids.length;
+  }
+
+  /**
+   * Reclaims the bytes of assets whose rows must survive them — the story archive's retention sweep.
+   *
+   * `deleteAssets` cannot be used there: `Story` cascades from `MediaAsset`, so removing the row
+   * would delete the archived post the author is still meant to see. Here the file goes and the row
+   * stays with its keys nulled, which is the state `/media/{id}/raw` already answers 404 to.
+   */
+  async purgeAssetBytes(ids: string[]): Promise<number> {
+    if (ids.length === 0) {
+      return 0;
+    }
+    for (const asset of await this.assets.findByIds(ids)) {
+      for (const key of [asset.storageKey, asset.thumbStorageKey]) {
+        if (key !== null) {
+          await this.storage.delete(key).catch(() => undefined);
+        }
+      }
+    }
+    await this.assets.clearStorageKeys(ids);
     return ids.length;
   }
 

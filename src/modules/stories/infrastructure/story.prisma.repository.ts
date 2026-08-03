@@ -15,6 +15,7 @@ import { Story } from '../domain/entities/story.entity';
 import { StoryKind } from '../domain/enums/story-kind.enum';
 import {
   NewStory,
+  StoryArchivePage,
   StoryRepository,
   StoryViewerPage,
   StoryWithSeen,
@@ -23,10 +24,10 @@ import {
 /**
  * Prisma implementation of the story port. Prisma is used ONLY here.
  *
- * `LIVE` below is the filter that defines what a story *is* to every reader. It is applied inside
- * each method rather than passed in, because the cleanup cron runs on a ten-minute tick: between a
- * story expiring and the sweep removing it there is always a window where a query without this
- * clause would hand back content that is supposed to have vanished.
+ * `live()` below is the filter that decides what a story is to a *reader*: not yet expired, not
+ * deleted. It is applied inside each method rather than passed in so no future caller can forget it.
+ * `listArchived` and `findExisting` are the two deliberate exceptions — they look past `expiresAt`
+ * because that is exactly what the author's archive is.
  */
 @Injectable()
 export class StoryPrismaRepository implements StoryRepository {
@@ -56,6 +57,30 @@ export class StoryPrismaRepository implements StoryRepository {
   async findLive(storyId: string): Promise<Story | null> {
     const row = await this.prisma.story.findFirst({ where: { id: storyId, ...live() } });
     return row === null ? null : toDomain(row);
+  }
+
+  async findExisting(storyId: string): Promise<Story | null> {
+    const row = await this.prisma.story.findFirst({ where: { id: storyId, deletedAt: null } });
+    return row === null ? null : toDomain(row);
+  }
+
+  /** Served by `(author_id, created_at)` — the same index the feed uses. */
+  async listArchived(authorId: string, page: number, size: number): Promise<StoryArchivePage> {
+    const where: Prisma.StoryWhereInput = {
+      authorId,
+      expiresAt: { lte: new Date() },
+      deletedAt: null,
+    };
+    const [rows, total] = await this.prisma.$transaction([
+      this.prisma.story.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (page - 1) * size,
+        take: size,
+      }),
+      this.prisma.story.count({ where }),
+    ]);
+    return { items: rows.map(toDomain), total };
   }
 
   countActive(authorId: string): Promise<number> {
@@ -125,11 +150,29 @@ export class StoryPrismaRepository implements StoryRepository {
     return count > 0;
   }
 
-  async findPurgeable(before: Date, limit: number): Promise<{ id: string; mediaId: string }[]> {
+  findDeletedPurgeable(before: Date, limit: number): Promise<{ id: string; mediaId: string }[]> {
     return this.prisma.story.findMany({
-      where: { expiresAt: { lt: before } },
+      where: { deletedAt: { lt: before } },
       select: { id: true, mediaId: true },
       take: limit,
+    });
+  }
+
+  findArchivePurgeable(before: Date, limit: number): Promise<{ id: string; mediaId: string }[]> {
+    return this.prisma.story.findMany({
+      where: { expiresAt: { lt: before }, deletedAt: null, archivedMediaPurged: false },
+      select: { id: true, mediaId: true },
+      take: limit,
+    });
+  }
+
+  async markArchivedMediaPurged(storyIds: string[]): Promise<void> {
+    if (storyIds.length === 0) {
+      return;
+    }
+    await this.prisma.story.updateMany({
+      where: { id: { in: storyIds } },
+      data: { archivedMediaPurged: true },
     });
   }
 
@@ -165,7 +208,7 @@ function isUniqueViolation(error: unknown): boolean {
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002';
 }
 
-/** Not yet expired and not deleted — what "a story exists" means everywhere in this feature. */
+/** Not yet expired and not deleted — what "a story is visible" means to anyone reading the feed. */
 function live(): Prisma.StoryWhereInput {
   return { expiresAt: { gt: new Date() }, deletedAt: null };
 }
@@ -185,5 +228,6 @@ function toDomain(row: PrismaStory): Story {
     createdAt: row.createdAt,
     expiresAt: row.expiresAt,
     viewsCount: row.viewsCount,
+    archivedMediaPurged: row.archivedMediaPurged,
   };
 }

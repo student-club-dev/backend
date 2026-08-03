@@ -79,6 +79,7 @@ function makeMedia(asset: MediaAsset | null = photoAsset()): MediaAssetRepositor
     attachToMessage: jest.fn(),
     findOrphans: jest.fn().mockResolvedValue([]),
     deleteMany: jest.fn(),
+    clearStorageKeys: jest.fn(),
   };
 }
 

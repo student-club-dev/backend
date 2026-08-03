@@ -31,13 +31,24 @@ export interface StoryViewerPage {
   total: number;
 }
 
+/** A page of the author's own expired stories. */
+export interface StoryArchivePage {
+  items: Story[];
+  total: number;
+}
+
 /**
  * Story storage.
  *
- * Every read here filters on `expiresAt > now() AND deletedAt IS NULL` internally. That is not left
- * to callers on purpose: the cleanup cron runs every ten minutes, so between an expiry and the sweep
- * there is always a window in which an unfiltered query would return stories that are supposed to be
- * gone. Making the filter part of the repository means no future caller can forget it.
+ * The `live*` reads here filter on `expiresAt > now() AND deletedAt IS NULL` internally. That is not
+ * left to callers on purpose: the cleanup cron runs every ten minutes, so between an expiry and the
+ * sweep there is always a window in which an unfiltered query would return stories that are supposed
+ * to have left the feed. Making the filter part of the repository means no future caller can forget
+ * it.
+ *
+ * An expired story is not gone, though — it moves to the author's archive, which is what
+ * `listArchived` and `findExisting` read. Those two are the only methods that see past `expiresAt`,
+ * and both callers are responsible for checking that the caller is the author.
  */
 export interface StoryRepository {
   /** Creates a story. */
@@ -45,6 +56,19 @@ export interface StoryRepository {
 
   /** A live story by id, or `null` (expired and soft-deleted both read as absent). */
   findLive(storyId: string): Promise<Story | null>;
+
+  /**
+   * A story by id that has not been deleted — **expired ones included**. Only for callers that
+   * then check authorship themselves: an expired story belongs to its author's archive and must not
+   * be handed to anyone else.
+   */
+  findExisting(storyId: string): Promise<Story | null>;
+
+  /**
+   * The author's expired stories, newest first — the archive. Unlike the feed this is a list rather
+   * than a playback order, so it reads newest-first while `listLiveByAuthors` reads oldest-first.
+   */
+  listArchived(authorId: string, page: number, size: number): Promise<StoryArchivePage>;
 
   /** How many live stories this student has — the concurrent cap. */
   countActive(authorId: string): Promise<number>;
@@ -68,10 +92,20 @@ export interface StoryRepository {
   softDelete(storyId: string, authorId: string): Promise<boolean>;
 
   /**
-   * Stories whose grace period has also passed, for the cleanup sweep. Returns the media ids so the
-   * caller can delete the bytes before the rows.
+   * Stories the author deleted before `before`, for the cleanup sweep. A deleted story leaves for
+   * good — row, views and bytes — which is what separates it from one that merely expired. Returns
+   * the media ids so the caller can delete the bytes first.
    */
-  findPurgeable(before: Date, limit: number): Promise<{ id: string; mediaId: string }[]>;
+  findDeletedPurgeable(before: Date, limit: number): Promise<{ id: string; mediaId: string }[]>;
+
+  /**
+   * Archived stories that expired before `before` and still have their bytes — the retention sweep.
+   * The rows stay; only the files go, so this is deliberately not the same query as above.
+   */
+  findArchivePurgeable(before: Date, limit: number): Promise<{ id: string; mediaId: string }[]>;
+
+  /** Flags archived stories whose bytes have been reclaimed, so the sweep never revisits them. */
+  markArchivedMediaPurged(storyIds: string[]): Promise<void>;
 
   /** Deletes stories and their views. */
   purge(storyIds: string[]): Promise<void>;

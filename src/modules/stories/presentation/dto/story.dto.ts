@@ -70,7 +70,9 @@ export class StoryDto {
   @ApiProperty({
     type: String,
     format: 'date-time',
-    description: '24 hours after `createdAt`. Past this the story is gone from every response.',
+    description:
+      '24 hours after `createdAt`. Past this the story leaves the feed and `/mine` and appears in ' +
+      'the author’s `GET /v1/stories/archive` — where this timestamp is expected to be in the past.',
   })
   expiresAt!: string;
 
@@ -89,6 +91,14 @@ export class StoryDto {
   })
   viewsCount!: number | null;
 
+  @ApiProperty({
+    description:
+      'Archive only. `true` once the retention window passed and the file was reclaimed — `url` ' +
+      'then answers `404`, so draw an empty cell rather than a broken image. Always `false` on a ' +
+      'live story.',
+  })
+  archivedMediaPurged!: boolean;
+
   static fromDomain(entry: StoryForViewer): StoryDto {
     const dto = new StoryDto();
     dto.id = entry.story.id;
@@ -104,6 +114,7 @@ export class StoryDto {
     dto.expiresAt = entry.story.expiresAt.toISOString();
     dto.seen = entry.seen;
     dto.viewsCount = entry.viewsCount;
+    dto.archivedMediaPurged = entry.story.archivedMediaPurged;
     return dto;
   }
 }

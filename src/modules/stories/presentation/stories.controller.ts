@@ -27,6 +27,7 @@ import {
 import type { AuthenticatedUser } from '../../../common/types/authenticated-user';
 import { StoriesService } from '../application/stories.service';
 import { MAX_ACTIVE_STORIES, MAX_STORIES_PER_DAY } from '../domain/entities/story.entity';
+import { StoryArchivePageDto, StoryArchiveQueryDto } from './dto/story-archive.dto';
 import { StoryViewerPageDto, StoryViewersQueryDto } from './dto/story-viewers.dto';
 import { CreateStoryDto, MyStoriesDto, StoryDto, StoryFeedDto } from './dto/story.dto';
 
@@ -36,6 +37,9 @@ import { CreateStoryDto, MyStoriesDto, StoryDto, StoryFeedDto } from './dto/stor
  * The same gate as chat: connections see them, blocked people never do, and a direct link is no way
  * around either. Nothing here sends a push; a notification per frame is how users end up switching
  * notifications off altogether.
+ *
+ * After 24 hours a story is not deleted, it is archived: it leaves the feed and narrows to an
+ * audience of one, its author (`GET /archive`).
  */
 @ApiTags('Stories')
 @ApiBearerAuth()
@@ -52,7 +56,8 @@ export class StoriesController {
     description:
       'Upload the file first with `POST /v1/media/chat-upload` and `kind=STORY_IMAGE` or ' +
       '`STORY_VIDEO` (no `conversationId`; video ≤ 30 s, 48 MB), then post the `id` it returns. ' +
-      'The story disappears 24 hours later. Stories cannot be edited — delete and post again.',
+      'The story leaves the feed 24 hours later and moves to your archive. Stories cannot be ' +
+      'edited — delete and post again.',
   })
   @ApiCreatedEnvelope(StoryDto)
   @ApiErrorEnvelope(
@@ -101,11 +106,33 @@ export class StoriesController {
   @Get('mine')
   @ApiOperation({
     summary: 'Your own live stories, with their view counts',
-    description: 'Expired stories are not returned.',
+    description: 'Expired stories are not returned — they are in `GET /v1/stories/archive`.',
   })
   @ApiOkEnvelope(MyStoriesDto)
   async mine(@CurrentUser() user: AuthenticatedUser): Promise<MyStoriesDto> {
     return MyStoriesDto.from(await this.stories.mine(user));
+  }
+
+  @Get('archive')
+  @ApiOperation({
+    summary: 'Your expired stories — yours alone',
+    description:
+      'An expired story does not disappear; it leaves the feed and `/mine` and lands here, where ' +
+      'only its author can reach it. There is no endpoint for anyone else’s archive.\n\n' +
+      'Same `StoryDto` as `/mine`, with two fields read differently: `viewsCount` is the real ' +
+      'count, frozen at expiry — nothing can view an archived story — and `expiresAt` is in the ' +
+      'past by definition. Newest first.\n\n' +
+      'Files are kept for a year. After that `archivedMediaPurged` turns `true`, `url` answers ' +
+      '`404` and the post stays as an empty cell.',
+  })
+  @ApiOkEnvelope(StoryArchivePageDto)
+  async archive(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: StoryArchiveQueryDto,
+  ): Promise<StoryArchivePageDto> {
+    const page = query.page ?? 1;
+    const size = query.size ?? 30;
+    return StoryArchivePageDto.fromPage(await this.stories.archive(user, page, size), page, size);
   }
 
   @Post(':id/view')
@@ -139,6 +166,7 @@ export class StoriesController {
   @ApiOperation({
     summary: 'Who has seen a story — author only',
     description:
+      'Works for archived stories too, so the frozen `viewsCount` stays openable.\n\n' +
       'Deliberately **not** subject to `lastSeenVisibility`: opening someone’s story shows ' +
       'yourself to them. Hiding a viewer here would make the list and `viewsCount` disagree.',
   })
@@ -146,7 +174,7 @@ export class StoriesController {
   @ApiOkEnvelope(StoryViewerPageDto)
   @ApiNotFoundEnvelope(
     ERROR_CODE.STORY_NOT_FOUND,
-    'No such story, or it has expired or been deleted.',
+    'No such story, it has been deleted, or it is someone else’s archive.',
     'Story topilmadi',
   )
   @ApiErrorEnvelope(403, ERROR_CODE.STORY_FORBIDDEN, 'You are not the author.')
@@ -169,9 +197,10 @@ export class StoriesController {
   @ApiOperation({
     summary: 'Delete your own story',
     description:
-      'Gone from every response immediately. The file itself is removed by the cleanup pass a day ' +
-      'later — deleting it at once would break copies already in flight or in a CDN, which shows ' +
-      'up as a broken image rather than a missing one.',
+      'Works on archived stories as well, and is the only thing that ends one for good: gone from ' +
+      'every response immediately, including the archive. The file itself is removed by the ' +
+      'cleanup pass a day later — deleting it at once would break copies already in flight or in a ' +
+      'CDN, which shows up as a broken image rather than a missing one.',
   })
   @ApiParam({ name: 'id', description: 'Story id' })
   @ApiOkEnvelope(undefined, 'Deleted; `result` is null.')

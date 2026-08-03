@@ -35,4 +35,13 @@ export interface MediaAssetRepository {
   findOrphans(before: Date, limit: number): Promise<MediaAsset[]>;
 
   deleteMany(ids: string[]): Promise<void>;
+
+  /**
+   * Drops the storage keys of assets whose bytes have been reclaimed, keeping the rows.
+   *
+   * For the story archive, where the post survives its file: `Story` cascades from `MediaAsset`, so
+   * deleting the row would take the archived post with it. A null `storageKey` is already what
+   * `GET /media/{id}/raw` answers 404 to, so nothing else needs to learn about this state.
+   */
+  clearStorageKeys(ids: string[]): Promise<void>;
 }

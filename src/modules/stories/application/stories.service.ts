@@ -32,7 +32,12 @@ import {
 } from '../domain/entities/story.entity';
 import { StoryKind } from '../domain/enums/story-kind.enum';
 import { STORY_AUDIENCE, StoryAudienceRepository } from '../domain/story-audience.repository';
-import { STORY_REPOSITORY, StoryRepository, StoryViewerPage } from '../domain/story.repository';
+import {
+  STORY_REPOSITORY,
+  StoryArchivePage,
+  StoryRepository,
+  StoryViewerPage,
+} from '../domain/story.repository';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -47,6 +52,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 @Injectable()
 export class StoriesService {
   private readonly apiBase: string;
+  private readonly archiveRetentionMs: number;
 
   constructor(
     @Inject(STORY_REPOSITORY) private readonly stories: StoryRepository,
@@ -60,6 +66,8 @@ export class StoriesService {
     config: ConfigService<Env, true>,
   ) {
     this.apiBase = `/${config.get('API_PREFIX', { infer: true })}`;
+    this.archiveRetentionMs =
+      config.get('STORY_ARCHIVE_RETENTION_DAYS', { infer: true }) * DAY_MS;
   }
 
   /** Posts a story from an already-uploaded `STORY_IMAGE` / `STORY_VIDEO` asset. */
@@ -186,6 +194,17 @@ export class StoriesService {
   }
 
   /**
+   * The caller's expired stories — their archive. Author only, and there is deliberately no way to
+   * ask for anyone else's: an archive is the one part of stories that was never social.
+   *
+   * `viewsCount` is the frozen real count. Nulling it here would empty the number the profile grid
+   * is built around, and there is nothing left to protect — no one else can reach this list.
+   */
+  async archive(user: AuthenticatedUser, page: number, size: number): Promise<StoryArchivePage> {
+    return this.stories.listArchived(user.id, page, size);
+  }
+
+  /**
    * Records that the caller opened a story.
    *
    * The most-called endpoint here — it fires on every tap through the feed — so it does the minimum:
@@ -201,7 +220,9 @@ export class StoriesService {
   }
 
   /**
-   * Who has seen a story — **author only**.
+   * Who has seen a story — **author only**. Works for archived stories too: the view list is the
+   * other half of the frozen count the archive shows, and losing it at expiry would leave a number
+   * nobody can open.
    *
    * Note that this list ignores `lastSeenVisibility`: someone who opens a story has shown themselves
    * to its author, and hiding that would make the count and the list disagree. That is a deliberate
@@ -213,8 +234,10 @@ export class StoriesService {
     page: number,
     size: number,
   ): Promise<StoryViewerPage> {
-    const story = await this.stories.findLive(storyId);
-    if (story === null) {
+    const story = await this.stories.findExisting(storyId);
+    // An archived story does not exist for anyone but its author — 404, not the 403 a live one
+    // gets, because admitting it is there is already more than an outsider should learn.
+    if (story === null || (story.authorId !== user.id && story.expiresAt <= new Date())) {
       throw AppException.notFound(ERROR_CODE.STORY_NOT_FOUND, 'Story topilmadi');
     }
     if (story.authorId !== user.id) {
@@ -241,22 +264,46 @@ export class StoriesService {
   }
 
   /**
-   * Removes stories whose grace period has also passed, bytes and rows.
+   * Removes stories the author deleted, bytes and rows.
    *
-   * Two stages by design. A story stops being *visible* the moment `expiresAt` passes — every read
-   * filters on it, so the cron being late can never resurface one. This pass is about reclaiming
-   * disk, and it waits an extra day so a copy still sitting in a CDN or an in-flight request has
-   * somewhere to point.
+   * Expiry no longer triggers this — an expired story moves to its author's archive and keeps both.
+   * Only an explicit delete ends a story, and even then a day's grace: a copy still sitting in a CDN
+   * or an in-flight request has somewhere to point until then.
    *
    * Deleting the `MediaAsset` is enough: `Story` cascades from it and `StoryView` cascades from the
    * story. Returns how many went.
    */
-  async purgeExpired(gracePeriodMs = STORY_TTL_MS, batch = 500): Promise<number> {
-    const stale = await this.stories.findPurgeable(new Date(Date.now() - gracePeriodMs), batch);
+  async purgeDeleted(gracePeriodMs = STORY_TTL_MS, batch = 500): Promise<number> {
+    const stale = await this.stories.findDeletedPurgeable(
+      new Date(Date.now() - gracePeriodMs),
+      batch,
+    );
     if (stale.length === 0) {
       return 0;
     }
     return this.mediaFiles.deleteAssets(stale.map((story) => story.mediaId));
+  }
+
+  /**
+   * Reclaims the files behind archived stories older than the retention window.
+   *
+   * The rows survive — the author still sees the post, drawn as an empty cell once
+   * `archivedMediaPurged` is set. That flag is also what keeps this sweep from re-reading the same
+   * rows forever, since unlike a delete there is nothing left for it to remove. Returns how many.
+   */
+  async purgeArchivedMedia(batch = 500): Promise<number> {
+    const stale = await this.stories.findArchivePurgeable(
+      new Date(Date.now() - this.archiveRetentionMs),
+      batch,
+    );
+    if (stale.length === 0) {
+      return 0;
+    }
+    await this.mediaFiles.purgeAssetBytes(stale.map((story) => story.mediaId));
+    // Flagged only after the bytes are gone: a crash in between costs a repeated sweep, which is
+    // harmless, where the reverse order would leave files nothing ever looks at again.
+    await this.stories.markArchivedMediaPurged(stale.map((story) => story.id));
+    return stale.length;
   }
 
   /** A live story the caller is allowed to open, or the matching error. */

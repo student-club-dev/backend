@@ -19875,7 +19875,7 @@
           "expiresAt": {
             "type": "string",
             "format": "date-time",
-            "description": "24 hours after `createdAt`. Past this the story is gone from every response."
+            "description": "24 hours after `createdAt`. Past this the story leaves the feed and `/mine` and appears in the author’s `GET /v1/stories/archive` — where this timestamp is expected to be in the past."
           },
           "seen": {
             "type": "boolean",
@@ -19886,6 +19886,10 @@
             "format": "int32",
             "nullable": true,
             "description": "The real count on **your own** stories; `null` on everyone else’s. Someone else’s view count would let you measure the size of their network."
+          },
+          "archivedMediaPurged": {
+            "type": "boolean",
+            "description": "Archive only. `true` once the retention window passed and the file was reclaimed — `url` then answers `404`, so draw an empty cell rather than a broken image. Always `false` on a live story."
           }
         },
         "required": [
@@ -19901,7 +19905,8 @@
           "createdAt",
           "expiresAt",
           "seen",
-          "viewsCount"
+          "viewsCount",
+          "archivedMediaPurged"
         ]
       },
       "CreateStoryDto": {
@@ -19978,6 +19983,40 @@
         },
         "required": [
           "items"
+        ]
+      },
+      "StoryArchivePageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "Newest first — this is a list, not a playback order, which is why it runs the opposite way to `/mine`. `seen` is always `true` and `expiresAt` is in the past; both are expected.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StoryDto"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "hasNext": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "size",
+          "total",
+          "hasNext"
         ]
       },
       "StoryViewerPageDto": {

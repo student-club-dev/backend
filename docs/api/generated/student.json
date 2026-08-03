@@ -15675,7 +15675,7 @@
       "post": {
         "operationId": "StoriesController_create",
         "summary": "Post a story",
-        "description": "Upload the file first with `POST /v1/media/chat-upload` and `kind=STORY_IMAGE` or `STORY_VIDEO` (no `conversationId`; video ≤ 30 s, 48 MB), then post the `id` it returns. The story disappears 24 hours later. Stories cannot be edited — delete and post again.",
+        "description": "Upload the file first with `POST /v1/media/chat-upload` and `kind=STORY_IMAGE` or `STORY_VIDEO` (no `conversationId`; video ≤ 30 s, 48 MB), then post the `id` it returns. The story leaves the feed 24 hours later and moves to your archive. Stories cannot be edited — delete and post again.",
         "parameters": [],
         "requestBody": {
           "required": true,
@@ -16000,7 +16000,7 @@
       "get": {
         "operationId": "StoriesController_mine",
         "summary": "Your own live stories, with their view counts",
-        "description": "Expired stories are not returned.",
+        "description": "Expired stories are not returned — they are in `GET /v1/stories/archive`.",
         "parameters": [],
         "responses": {
           "200": {
@@ -16017,6 +16017,164 @@
                       "properties": {
                         "result": {
                           "$ref": "#/components/schemas/MyStoriesDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid access token (`UNAUTHORIZED`), or expired (`TOKEN_EXPIRED`) — refresh and retry.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 401
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Avtorizatsiyadan o‘tilmagan"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "UNAUTHORIZED",
+                            "message": "Avtorizatsiyadan o‘tilmagan",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "The caller is not a STUDENT account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 403
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Ruxsat yo‘q"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "FORBIDDEN",
+                            "message": "Ruxsat yo‘q",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Stories"
+        ],
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/v1/stories/archive": {
+      "get": {
+        "operationId": "StoriesController_archive",
+        "summary": "Your expired stories — yours alone",
+        "description": "An expired story does not disappear; it leaves the feed and `/mine` and lands here, where only its author can reach it. There is no endpoint for anyone else’s archive.\n\nSame `StoryDto` as `/mine`, with two fields read differently: `viewsCount` is the real count, frozen at expiry — nothing can view an archived story — and `expiresAt` is in the past by definition. Newest first.\n\nFiles are kept for a year. After that `archivedMediaPurged` turns `true`, `url` answers `404` and the post stays as an empty cell.",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "format": "int32",
+              "default": 1,
+              "type": "integer"
+            }
+          },
+          {
+            "name": "size",
+            "required": false,
+            "in": "query",
+            "schema": {
+              "minimum": 1,
+              "maximum": 100,
+              "format": "int32",
+              "default": 30,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "$ref": "#/components/schemas/StoryArchivePageDto"
                         }
                       }
                     }
@@ -16327,7 +16485,7 @@
       "get": {
         "operationId": "StoriesController_viewers",
         "summary": "Who has seen a story — author only",
-        "description": "Deliberately **not** subject to `lastSeenVisibility`: opening someone’s story shows yourself to them. Hiding a viewer here would make the list and `viewsCount` disagree.",
+        "description": "Works for archived stories too, so the frozen `viewsCount` stays openable.\n\nDeliberately **not** subject to `lastSeenVisibility`: opening someone’s story shows yourself to them. Hiding a viewer here would make the list and `viewsCount` disagree.",
         "parameters": [
           {
             "name": "id",
@@ -16480,7 +16638,7 @@
             }
           },
           "404": {
-            "description": "No such story, or it has expired or been deleted.",
+            "description": "No such story, it has been deleted, or it is someone else’s archive.",
             "content": {
               "application/json": {
                 "schema": {
@@ -16541,7 +16699,7 @@
       "delete": {
         "operationId": "StoriesController_remove",
         "summary": "Delete your own story",
-        "description": "Gone from every response immediately. The file itself is removed by the cleanup pass a day later — deleting it at once would break copies already in flight or in a CDN, which shows up as a broken image rather than a missing one.",
+        "description": "Works on archived stories as well, and is the only thing that ends one for good: gone from every response immediately, including the archive. The file itself is removed by the cleanup pass a day later — deleting it at once would break copies already in flight or in a CDN, which shows up as a broken image rather than a missing one.",
         "parameters": [
           {
             "name": "id",
@@ -26826,7 +26984,7 @@
           "expiresAt": {
             "type": "string",
             "format": "date-time",
-            "description": "24 hours after `createdAt`. Past this the story is gone from every response."
+            "description": "24 hours after `createdAt`. Past this the story leaves the feed and `/mine` and appears in the author’s `GET /v1/stories/archive` — where this timestamp is expected to be in the past."
           },
           "seen": {
             "type": "boolean",
@@ -26837,6 +26995,10 @@
             "format": "int32",
             "nullable": true,
             "description": "The real count on **your own** stories; `null` on everyone else’s. Someone else’s view count would let you measure the size of their network."
+          },
+          "archivedMediaPurged": {
+            "type": "boolean",
+            "description": "Archive only. `true` once the retention window passed and the file was reclaimed — `url` then answers `404`, so draw an empty cell rather than a broken image. Always `false` on a live story."
           }
         },
         "required": [
@@ -26852,7 +27014,8 @@
           "createdAt",
           "expiresAt",
           "seen",
-          "viewsCount"
+          "viewsCount",
+          "archivedMediaPurged"
         ]
       },
       "CreateStoryDto": {
@@ -26929,6 +27092,40 @@
         },
         "required": [
           "items"
+        ]
+      },
+      "StoryArchivePageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "Newest first — this is a list, not a playback order, which is why it runs the opposite way to `/mine`. `seen` is always `true` and `expiresAt` is in the past; both are expected.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StoryDto"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "hasNext": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "size",
+          "total",
+          "hasNext"
         ]
       },
       "StoryViewerPageDto": {

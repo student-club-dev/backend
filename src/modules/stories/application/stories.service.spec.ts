@@ -19,6 +19,11 @@ import { StoriesService } from './stories.service';
 
 const me: AuthenticatedUser = { id: 'me', type: AccountType.STUDENT };
 
+/** An `expiresAt` that is still ahead — the default fixture's is already in the past. */
+function future(): Date {
+  return new Date(Date.now() + 3600_000);
+}
+
 function story(overrides: Partial<Story> = {}): Story {
   return {
     id: 'sty_1',
@@ -34,6 +39,7 @@ function story(overrides: Partial<Story> = {}): Story {
     createdAt: new Date('2026-07-31T08:00:00Z'),
     expiresAt: new Date('2026-08-01T08:00:00Z'),
     viewsCount: 3,
+    archivedMediaPurged: false,
     ...overrides,
   };
 }
@@ -93,13 +99,17 @@ function makeStories(overrides: Partial<StoryRepository> = {}): StoryRepository 
   return {
     create: jest.fn(async (input: NewStory) => story({ ...input, id: 'sty_new', viewsCount: 0 })),
     findLive: jest.fn().mockResolvedValue(null),
+    findExisting: jest.fn().mockResolvedValue(null),
+    listArchived: jest.fn().mockResolvedValue({ items: [], total: 0 }),
     countActive: jest.fn().mockResolvedValue(0),
     countPostedSince: jest.fn().mockResolvedValue(0),
     listLiveByAuthors: jest.fn().mockResolvedValue([]),
     recordView: jest.fn().mockResolvedValue(true),
     listViewers: jest.fn().mockResolvedValue({ items: [], total: 0 }),
     softDelete: jest.fn().mockResolvedValue(true),
-    findPurgeable: jest.fn().mockResolvedValue([]),
+    findDeletedPurgeable: jest.fn().mockResolvedValue([]),
+    findArchivePurgeable: jest.fn().mockResolvedValue([]),
+    markArchivedMediaPurged: jest.fn().mockResolvedValue(undefined),
     purge: jest.fn().mockResolvedValue(undefined),
     ...overrides,
   };
@@ -131,6 +141,7 @@ function makeMedia(asset: MediaAsset | null = storyAsset()): MediaAssetRepositor
     attachToMessage: jest.fn(),
     findOrphans: jest.fn().mockResolvedValue([]),
     deleteMany: jest.fn(),
+    clearStorageKeys: jest.fn(),
   };
 }
 
@@ -144,7 +155,10 @@ function makePresence(): PresenceRepository {
 }
 
 function makeMediaFiles(): ChatMediaService {
-  return { deleteAssets: jest.fn().mockResolvedValue(0) } as unknown as ChatMediaService;
+  return {
+    deleteAssets: jest.fn().mockResolvedValue(0),
+    purgeAssetBytes: jest.fn().mockResolvedValue(0),
+  } as unknown as ChatMediaService;
 }
 
 function makeService(
@@ -154,7 +168,9 @@ function makeService(
   media: MediaAssetRepository = makeMedia(),
   mediaFiles: ChatMediaService = makeMediaFiles(),
 ): StoriesService {
-  const config = { get: () => 'v1' } as unknown as ConfigService<never, true>;
+  const config = {
+    get: (key: string) => (key === 'STORY_ARCHIVE_RETENTION_DAYS' ? 365 : 'v1'),
+  } as unknown as ConfigService<never, true>;
   return new StoriesService(
     stories,
     audience,
@@ -381,9 +397,28 @@ describe('StoriesService', () => {
     });
   });
 
+  describe('archive', () => {
+    it('asks only for the caller’s own expired stories', async () => {
+      const stories = makeStories();
+      await makeService(stories).archive(me, 2, 30);
+      expect(stories.listArchived).toHaveBeenCalledWith('me', 2, 30);
+    });
+
+    it('keeps the frozen view count — the profile grid draws it', async () => {
+      const archived = story({ authorId: 'me', viewsCount: 12 });
+      const stories = makeStories({
+        listArchived: jest.fn().mockResolvedValue({ items: [archived], total: 1 }),
+      });
+      const page = await makeService(stories).archive(me, 1, 30);
+      expect(page.items[0].viewsCount).toBe(12);
+    });
+  });
+
   describe('viewers', () => {
     it('is author-only', async () => {
-      const stories = makeStories({ findLive: jest.fn().mockResolvedValue(story()) });
+      const stories = makeStories({
+        findExisting: jest.fn().mockResolvedValue(story({ expiresAt: future() })),
+      });
       await expect(makeService(stories).viewers(me, 'sty_1', 1, 30)).rejects.toMatchObject({
         code: ERROR_CODE.STORY_FORBIDDEN,
         status: 403,
@@ -392,11 +427,30 @@ describe('StoriesService', () => {
 
     it('returns the list to the author', async () => {
       const stories = makeStories({
-        findLive: jest.fn().mockResolvedValue(story({ authorId: 'me' })),
+        findExisting: jest.fn().mockResolvedValue(story({ authorId: 'me' })),
         listViewers: jest.fn().mockResolvedValue({ items: [summary('viewer')], total: 1 }),
       });
       await expect(makeService(stories).viewers(me, 'sty_1', 1, 30)).resolves.toMatchObject({
         total: 1,
+      });
+    });
+
+    it('still works once the story is archived — the frozen count stays openable', async () => {
+      const stories = makeStories({
+        // `expiresAt` is already in the past on the default fixture.
+        findExisting: jest.fn().mockResolvedValue(story({ authorId: 'me' })),
+        listViewers: jest.fn().mockResolvedValue({ items: [summary('viewer')], total: 1 }),
+      });
+      await expect(makeService(stories).viewers(me, 'sty_1', 1, 30)).resolves.toMatchObject({
+        total: 1,
+      });
+    });
+
+    it('404s rather than 403s on someone else’s archive — it should not be there at all', async () => {
+      const stories = makeStories({ findExisting: jest.fn().mockResolvedValue(story()) });
+      await expect(makeService(stories).viewers(me, 'sty_1', 1, 30)).rejects.toMatchObject({
+        code: ERROR_CODE.STORY_NOT_FOUND,
+        status: 404,
       });
     });
   });
@@ -410,11 +464,11 @@ describe('StoriesService', () => {
     });
   });
 
-  describe('purgeExpired', () => {
+  describe('purgeDeleted', () => {
     it('deletes the media, which is what cascades the story and its views away', async () => {
       const mediaFiles = makeMediaFiles();
       const stories = makeStories({
-        findPurgeable: jest.fn().mockResolvedValue([{ id: 'sty_1', mediaId: 'med_1' }]),
+        findDeletedPurgeable: jest.fn().mockResolvedValue([{ id: 'sty_1', mediaId: 'med_1' }]),
       });
       await makeService(
         stories,
@@ -422,7 +476,7 @@ describe('StoriesService', () => {
         makeDirectory(),
         makeMedia(),
         mediaFiles,
-      ).purgeExpired();
+      ).purgeDeleted();
       expect(mediaFiles.deleteAssets).toHaveBeenCalledWith(['med_1']);
     });
 
@@ -434,8 +488,67 @@ describe('StoriesService', () => {
         makeDirectory(),
         makeMedia(),
         mediaFiles,
-      ).purgeExpired();
+      ).purgeDeleted();
       expect(mediaFiles.deleteAssets).not.toHaveBeenCalled();
+    });
+
+    it('leaves an expired story alone — expiry is an archive, not a delete', async () => {
+      const mediaFiles = makeMediaFiles();
+      const stories = makeStories();
+      await makeService(
+        stories,
+        makeAudience(),
+        makeDirectory(),
+        makeMedia(),
+        mediaFiles,
+      ).purgeDeleted();
+      // The sweep asks only about `deletedAt` now; nothing here reaches for `expiresAt`.
+      expect(stories.findDeletedPurgeable).toHaveBeenCalled();
+      expect(mediaFiles.deleteAssets).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('purgeArchivedMedia', () => {
+    it('sweeps at the configured retention boundary', async () => {
+      const stories = makeStories();
+      const before = Date.now();
+      await makeService(stories).purgeArchivedMedia();
+      const [cutoff] = (stories.findArchivePurgeable as jest.Mock).mock.calls[0] as [Date];
+      // 365 days back, give or take the millisecond the call took.
+      expect(before - cutoff.getTime()).toBeGreaterThanOrEqual(365 * 24 * 3600_000);
+      expect(before - cutoff.getTime()).toBeLessThan(365 * 24 * 3600_000 + 5_000);
+    });
+
+    it('takes the bytes but keeps the row, then flags it', async () => {
+      const mediaFiles = makeMediaFiles();
+      const stories = makeStories({
+        findArchivePurgeable: jest.fn().mockResolvedValue([{ id: 'sty_1', mediaId: 'med_1' }]),
+      });
+      const purged = await makeService(
+        stories,
+        makeAudience(),
+        makeDirectory(),
+        makeMedia(),
+        mediaFiles,
+      ).purgeArchivedMedia();
+
+      expect(mediaFiles.purgeAssetBytes).toHaveBeenCalledWith(['med_1']);
+      // `deleteAssets` would cascade the archived post away with its asset.
+      expect(mediaFiles.deleteAssets).not.toHaveBeenCalled();
+      expect(stories.markArchivedMediaPurged).toHaveBeenCalledWith(['sty_1']);
+      expect(purged).toBe(1);
+    });
+
+    it('does nothing when nothing has aged out', async () => {
+      const mediaFiles = makeMediaFiles();
+      await makeService(
+        makeStories(),
+        makeAudience(),
+        makeDirectory(),
+        makeMedia(),
+        mediaFiles,
+      ).purgeArchivedMedia();
+      expect(mediaFiles.purgeAssetBytes).not.toHaveBeenCalled();
     });
   });
 });

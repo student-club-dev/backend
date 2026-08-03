@@ -176,6 +176,7 @@ function makeMedia(asset: MediaAsset | null = null): MediaAssetRepository {
     attachToMessage: jest.fn(),
     findOrphans: jest.fn().mockResolvedValue([]),
     deleteMany: jest.fn(),
+    clearStorageKeys: jest.fn(),
   };
 }
 

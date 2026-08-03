@@ -162,6 +162,7 @@ function makeMedia(): MediaAssetRepository {
     attachToMessage: jest.fn(),
     findOrphans: jest.fn().mockResolvedValue([]),
     deleteMany: jest.fn(),
+    clearStorageKeys: jest.fn(),
   };
 }
 

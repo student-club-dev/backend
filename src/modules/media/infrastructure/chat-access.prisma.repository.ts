@@ -63,4 +63,12 @@ export class ChatAccessPrismaRepository implements ChatAccessRepository {
     ]);
     return connection !== null && block === null;
   }
+
+  async isStoryLive(mediaId: string): Promise<boolean> {
+    const story = await this.prisma.story.findFirst({
+      where: { mediaId, expiresAt: { gt: new Date() }, deletedAt: null },
+      select: { id: true },
+    });
+    return story !== null;
+  }
 }

@@ -106,6 +106,16 @@ export class MediaAssetPrismaRepository implements MediaAssetRepository {
     }
     await this.prisma.mediaAsset.deleteMany({ where: { id: { in: ids } } });
   }
+
+  async clearStorageKeys(ids: string[]): Promise<void> {
+    if (ids.length === 0) {
+      return;
+    }
+    await this.prisma.mediaAsset.updateMany({
+      where: { id: { in: ids } },
+      data: { storageKey: null, thumbStorageKey: null, sizeBytes: 0 },
+    });
+  }
 }
 
 function toDomain(row: PrismaMediaAsset): MediaAsset {

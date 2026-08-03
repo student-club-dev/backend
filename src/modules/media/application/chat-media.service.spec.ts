@@ -68,15 +68,22 @@ function makeAssets(overrides: Partial<MediaAssetRepository> = {}): MediaAssetRe
     attachToMessage: jest.fn().mockResolvedValue(undefined),
     findOrphans: jest.fn().mockResolvedValue([]),
     deleteMany: jest.fn().mockResolvedValue(undefined),
+    clearStorageKeys: jest.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }
 
-function makeAccess(canSend = true, isMember = true, areConnected = true): ChatAccessRepository {
+function makeAccess(
+  canSend = true,
+  isMember = true,
+  areConnected = true,
+  isStoryLive = true,
+): ChatAccessRepository {
   return {
     isMember: jest.fn().mockResolvedValue(isMember),
     canSend: jest.fn().mockResolvedValue(canSend),
     areConnected: jest.fn().mockResolvedValue(areConnected),
+    isStoryLive: jest.fn().mockResolvedValue(isStoryLive),
   };
 }
 
@@ -554,6 +561,41 @@ describe('ChatMediaService — findForMember', () => {
     await expect(service.findForMember('nope', me.id)).rejects.toMatchObject({
       code: ERROR_CODE.MEDIA_NOT_FOUND,
       status: 404,
+    });
+  });
+
+  describe('story media', () => {
+    const storyAsset: MediaAsset = {
+      ...stored,
+      conversationId: null,
+      kind: MediaKind.STORY_IMAGE,
+    };
+
+    it('lets a connection open a live story', async () => {
+      const assets = makeAssets({ findById: jest.fn().mockResolvedValue(storyAsset) });
+      const { service } = makeService(assets, makeAccess(true, false, true, true));
+
+      await expect(service.findForMember('med_1', me.id)).resolves.toBe(storyAsset);
+    });
+
+    it('shuts a connection out once the story is archived', async () => {
+      // The whole point of the archive: past `expiresAt` the audience is the author alone, and a
+      // direct link to the bytes must not be the way around that.
+      const assets = makeAssets({ findById: jest.fn().mockResolvedValue(storyAsset) });
+      const { service } = makeService(assets, makeAccess(true, false, true, false));
+
+      await expect(service.findForMember('med_1', me.id)).rejects.toMatchObject({
+        code: ERROR_CODE.MEDIA_NOT_FOUND,
+        status: 404,
+      });
+    });
+
+    it('still lets the author open their own archived story', async () => {
+      const mine = { ...storyAsset, ownerId: me.id };
+      const assets = makeAssets({ findById: jest.fn().mockResolvedValue(mine) });
+      const { service } = makeService(assets, makeAccess(true, false, true, false));
+
+      await expect(service.findForMember('med_1', me.id)).resolves.toBe(mine);
     });
   });
 });

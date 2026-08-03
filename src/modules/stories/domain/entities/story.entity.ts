@@ -1,7 +1,7 @@
 import { StudentSummary } from '../../../connections/domain/entities/student-summary.entity';
 import { StoryKind } from '../enums/story-kind.enum';
 
-/** How long a story stays visible. */
+/** How long a story stays visible in the feed. After this it moves to the author's archive. */
 export const STORY_TTL_MS = 24 * 60 * 60 * 1000;
 
 /** Most stories one student may have live at once. */
@@ -29,6 +29,12 @@ export interface Story {
   createdAt: Date;
   expiresAt: Date;
   viewsCount: number;
+  /**
+   * Whether the archive retention window passed and the bytes were reclaimed. The row is still the
+   * author's post — only the file behind `url` is gone, which is why this is a flag rather than a
+   * deletion.
+   */
+  archivedMediaPurged: boolean;
 }
 
 /** A story plus the two things that depend on who is looking at it. */
