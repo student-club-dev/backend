@@ -116,13 +116,6 @@ export const envSchema = z
     MODERATOR_EMAIL: z.string().optional(),
     MODERATOR_PASSWORD_HASH: z.string().optional(),
 
-    // ⚠️ DEAD KEY — declared only so `AdminGuard` compiles. That guard is a placeholder from the
-    // superseded header-secret design and is referenced by NOTHING: admin auth is ADMIN_EMAIL +
-    // ADMIN_PASSWORD_HASH above. Leaving it unset denies every request the guard would ever see,
-    // which is the correct behaviour for a gate nothing is mounted behind. Delete this line
-    // together with `src/common/guards/admin.guard.ts`.
-    ADMIN_API_KEY: z.string().optional(),
-
     // TURN (coturn `use-auth-secret` REST scheme) for 1:1 calls. Left optional here — a missing
     // value must fail loudly in production when CALLS_ENABLED=true (see superRefine below), not
     // silently boot with a guessable default the way JWT_ACCESS_SECRET currently does.
