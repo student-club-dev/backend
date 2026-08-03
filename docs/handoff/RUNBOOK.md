@@ -405,6 +405,33 @@ npm run prisma:seed-stickers
 Protokolning to'liq tavsifi: `docs/architecture/calls.md`. coturn o'rnatish va sertifikatlar:
 `deploy/coturn/README.md`.
 
+### Qo'ng'iroqlarni yoqish — aniq buyruqlar ketma-ketligi
+
+1. **coturn'ni ko'taring** (sertifikat va public IP tayyor bo'lgandan keyin —
+   `deploy/coturn/README.md`). U `docker compose up` bilan **avtomatik ko'tarilmaydi** — `calls`
+   profili ortida turibdi:
+   ```bash
+   docker compose --profile calls up -d coturn
+   docker compose logs -f coturn
+   ```
+2. **`.env` da quyidagi qiymatlarni to'ldiring** (har birining nima uchunligi `.env.example`da):
+   `TURN_HOST`, va coturn'ning o'zi uchun kerak bo'lgan uchta qiymat — `TURN_STATIC_SECRET`
+   (coturn'ga berilgan qiymat bilan **bir xil**), `SERVER_PRIVATE_IP`, `SERVER_PUBLIC_IP` —
+   oxirgisi noto'g'ri bo'lsa qo'ng'iroq ulanadi-yu, ovoz kelmaydi (pastdagi jadvalda batafsil).
+3. **`CALLS_ENABLED=true` qiling** — shu bayroqsiz `ice-servers` doim `503`, `call:invite` esa
+   `NOT_IMPLEMENTED` qaytaradi (pastda, ikkinchi bayroq bilan aralashtirmaslik haqida batafsil).
+4. **Backend'ni qayta ishga tushiring** — `.env` o'zgargani uchun oddiy `restart` yetarli emas:
+   ```bash
+   docker compose up -d --force-recreate backend
+   ```
+5. **Tekshiring:**
+   ```bash
+   curl -i https://api.studentclub.uz/v1/calls/ice-servers -H 'Authorization: Bearer <token>'
+   ```
+   `503` emas, `iceServers` ro'yxati (STUN + TURN, `username`/`credential` bilan) qaytsa — ishladi.
+   Chuqurroq tekshiruv (coturn allokatsiyasi, sirning mosligi, `denied-peer-ip` diagnostika
+   so'rovini bloklamagani) — `deploy/coturn/README.md` §Verifying.
+
 ### Ikkita bayroq, ikki xil vaqt: `CALLS_ENABLED` va `CALLS_ENFORCE_TOKEN_EXPIRY`
 
 Ikkalasi ham sukut bo'yicha `false`, lekin turli sabab bilan va turli vaqtda yoqiladi — birini
