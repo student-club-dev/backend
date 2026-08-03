@@ -164,14 +164,22 @@ bog'langan, ya'ni qatorni o'chirish arxivdagi postni ham o'chirib yuborardi.
 
 ## 6. Deploy paytida bilib qo'yish kerak bo'lgan 2 narsa
 
-**1. Eski konteynerlar yangisi bilan bir vaqtda ishlamasin.** Eski koddagi cron har 10
-daqiqada `expiresAt < now-24h` bo'lganlarni **o'chiradi** — bu endi aynan arxiv. Deploy
-paytida eski instance tirik qolsa, u arxivni o'chirib boradi. Eskisini to'xtatib, keyin
-yangisini ko'taring (Compose'da odatdagi tartib shunday).
+**1. Birinchi kuni arxiv deyarli bo'sh bo'ladi.** Eski cron 24 soatdan oshgan hamma postni
+allaqachon o'chirib yuborgan — tiklab bo'lmaydi. Arxivga faqat oxirgi ~48 soatlik postlar
+tushadi va keyin asta to'ladi. **Klientda bo'sh holat ko'rinsa, bu xato emas** — §5 dagi
+«backend chiqmaguncha bo'sh holat» xulqi shu kunlar uchun ayni muddao.
 
-**2. Birinchi kuni arxiv deyarli bo'sh bo'ladi.** Eski cron 24 soatdan oshgan hamma
-postni allaqachon o'chirib yuborgan — tiklab bo'lmaydi. Arxivga faqat oxirgi ~48 soatlik
-postlar tushadi va keyin asta to'ladi. Klientda bo'sh holat ko'rinsa, bu xato emas.
+**2. Migratsiya orqaga mos.** Qo'shilgan ustunning defaulti bor, indeks esa additive —
+ya'ni eski kod ham yangi sxemada muammosiz ishlaydi. Deploy tartibi Compose'da o'zi
+to'g'ri: `migrate` servisi tugagandan keyingina `backend` ko'tariladi.
+
+> Eski koddagi cron `expiresAt < now-24h` bo'lganlarni o'chirar edi — bu endi aynan arxiv.
+> `container_name: elonuz-backend` tufayli bir vaqtda ikkita backend konteyner ishlay
+> olmaydi, shuning uchun bu jiddiy xavf emas; deploy'ni to'liq xotirjam qilish uchun
+> backend'ni avval to'xtatib olish kifoya (§ pastdagi buyruqlar).
+
+**Yangi env o'zgaruvchisi majburiy emas.** `STORY_ARCHIVE_RETENTION_DAYS` ning kodda
+defaulti 365 — serverdagi mavjud `.env` ni o'zgartirmasa ham ishlaydi.
 
 ---
 
