@@ -88,6 +88,11 @@ export class UploadSessionService {
    * Everything that can refuse the upload for free is checked here rather than at `complete`: there
    * is no point taking a gigabyte from someone who was never allowed to send it, or who has no
    * quota left for it.
+   *
+   * `totalBytes` is an **upper bound**, not a promise of the exact figure. A client encoding a video
+   * while it uploads cannot know the final size yet, so it declares one it is certain not to exceed
+   * — the source file — and sends the real number to `complete`. Every guard here still measures
+   * against the bound, so declaring one costs the same as declaring an exact size.
    */
   async init(user: AuthenticatedUser, input: InitUploadInput): Promise<UploadProgress> {
     if (!Number.isInteger(input.totalBytes) || input.totalBytes <= 0) {
@@ -184,33 +189,57 @@ export class UploadSessionService {
    * that arrived whole. Two code paths would eventually disagree, and the one nobody looks at would
    * be the lenient one.
    */
-  async complete(user: AuthenticatedUser, uploadId: string): Promise<MediaAsset> {
+  async complete(
+    user: AuthenticatedUser,
+    uploadId: string,
+    finalTotalBytes?: number,
+  ): Promise<MediaAsset> {
     const session = await this.require(uploadId, user.id);
 
-    const expected = Math.ceil(session.totalBytes / session.chunkSize);
+    // Completeness is a question about the parts themselves — 0,1,2,… with no hole — rather than
+    // about a count derived from `totalBytes`. That is what lets a client start sending before it
+    // knows the final size: it declares an upper bound at `init` and the real figure here.
     const received = await this.parts.receivedParts(uploadId);
-    if (received.length !== expected) {
-      const missing = [];
-      for (let index = 0; index < expected; index += 1) {
-        if (!received.includes(index)) {
-          missing.push(index);
-        }
-      }
+    const gap = firstGap(received);
+    if (gap !== null) {
       throw new AppException(
         ERROR_CODE.UPLOAD_INCOMPLETE,
         422,
-        `Yuklash tugallanmagan — ${missing.length} ta bo'lak yetishmayapti`,
+        `Yuklash tugallanmagan — ${gap}-bo'lak yetishmayapti`,
       );
     }
 
+    // Absent, the declared size stands — which is exactly the old behaviour for a client that
+    // knew the size up front and never sends this.
+    const declared = finalTotalBytes ?? session.totalBytes;
     const actualBytes = await this.parts.receivedBytes(uploadId);
-    if (actualBytes !== session.totalBytes) {
-      // Not pedantry: the quota was reserved against the promised size, and the parts are what the
-      // pipeline is about to treat as one file. A mismatch means one of the two is wrong.
+
+    // Short, with no hole in the middle, means the parts simply stop early — the tail has not
+    // arrived yet. That is "incomplete" and not "wrong size": the client's next move is to send
+    // more parts, and telling it the numbers disagree would send it looking for the wrong bug.
+    if (actualBytes < declared) {
+      throw new AppException(
+        ERROR_CODE.UPLOAD_INCOMPLETE,
+        422,
+        `Yuklash tugallanmagan — ${declared - actualBytes} bayt yetishmayapti`,
+      );
+    }
+    if (actualBytes > declared) {
+      // Not pedantry: the parts are what the pipeline is about to treat as one file, and a
+      // mismatch means either the client or the disk is wrong about which bytes those are.
       throw new AppException(
         ERROR_CODE.UPLOAD_SIZE_MISMATCH,
         422,
         "Yuklangan hajm e'lon qilingan hajmga mos kelmadi",
+      );
+    }
+    if (actualBytes > session.totalBytes) {
+      // The quota and the disk check at `init` were both answered for `session.totalBytes`. Letting
+      // the real file exceed it would make that approval meaningless, so the bound stays a bound.
+      throw new AppException(
+        ERROR_CODE.UPLOAD_SIZE_MISMATCH,
+        422,
+        "Yuklangan hajm boshda e'lon qilingan chegaradan oshib ketdi",
       );
     }
 
@@ -308,4 +337,17 @@ export class UploadSessionService {
     }
     return session;
   }
+}
+
+/**
+ * The first missing index in an ascending, de-duplicated part list, or `null` when it runs 0..n-1
+ * unbroken. An empty list is a gap at 0 — nothing was ever sent.
+ */
+function firstGap(received: number[]): number | null {
+  for (let index = 0; index < received.length; index += 1) {
+    if (received[index] !== index) {
+      return index;
+    }
+  }
+  return received.length === 0 ? 0 : null;
 }

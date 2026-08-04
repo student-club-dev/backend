@@ -32,13 +32,33 @@ export class InitUploadDto {
     type: 'integer',
     format: 'int64',
     description:
-      'Exact size of the whole file. Checked against what actually arrives before `complete` ' +
-      'runs, and used to reserve your daily quota up front.',
+      'An **upper bound** on the finished file, used to reserve your daily quota and to bound the ' +
+      'part index. It does not have to be exact.\n\n' +
+      'If you know the size, send it. If you are still encoding, send something you are certain ' +
+      'not to exceed — the source file’s size — and send the real figure to `complete`. Going over ' +
+      'this bound is the one thing `complete` will refuse.',
   })
   @Type(() => Number)
   @IsInt({ message: 'Fayl hajmini yuboring' })
   @IsPositive({ message: 'Fayl hajmini yuboring' })
   totalBytes!: number;
+}
+
+/** Body of `POST /v1/media/upload/{uploadId}/complete`. Optional — an empty body is valid. */
+export class CompleteUploadDto {
+  @ApiPropertyOptional({
+    type: 'integer',
+    format: 'int64',
+    description:
+      'The finished file’s real size. Send this when `init` was given an estimate — it is what the ' +
+      'assembled parts are checked against. Omit it and the figure from `init` is used instead, ' +
+      'which is what a client that knew the size all along should do.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: 'Fayl hajmini yuboring' })
+  @IsPositive({ message: 'Fayl hajmini yuboring' })
+  totalBytes?: number;
 }
 
 /** The state of an upload — returned by `init`, every `PUT part`, and `GET`. */

@@ -40,7 +40,7 @@ import type { Env } from '../../../config/env';
 import { UploadSessionService } from '../application/upload-session.service';
 import { isChatKind } from '../domain/enums/media-kind.enum';
 import { AttachmentDto } from './dto/attachment.dto';
-import { InitUploadDto, UploadProgressDto } from './dto/upload-session.dto';
+import { CompleteUploadDto, InitUploadDto, UploadProgressDto } from './dto/upload-session.dto';
 import { StorageSpaceGuard } from './storage-space.guard';
 
 /**
@@ -49,6 +49,11 @@ import { StorageSpaceGuard } from './storage-space.guard';
  * Use these for anything over roughly 10 MB. `POST /v1/media/chat-upload` is still there and is
  * still faster for a small file — one request beats four — but a one-shot upload that drops starts
  * again from zero, which on mobile data means a large one may never finish.
+ *
+ * They are also how a video is sent *while it is being encoded*, which is most of the difference
+ * between a send that feels instant and one that does not: bound the session by the source size at
+ * `init`, push each part as the muxer writes it, and report the real size at `complete`. Nothing
+ * has to wait for the encoder to close the file first.
  */
 @ApiTags('Chat')
 @ApiBearerAuth()
@@ -166,9 +171,15 @@ export class UploadSessionController {
       'Joins the parts and processes them exactly as `POST /v1/media/chat-upload` would — same ' +
       'type detection, same EXIF stripping, same transcoding. Returns the same `AttachmentDto`, and ' +
       'its `id` is the `mediaId` to send with a message.\n\n' +
-      'A video may come back `PROCESSING`; wait for `media:ready` as usual. The session and its ' +
-      'parts are removed once this succeeds.',
+      'Send `totalBytes` here when the figure given to `init` was an estimate — which is what lets ' +
+      'you upload a video **while it is still encoding**: bound the session by the source size, ' +
+      'push parts as the muxer writes them, and report the real size once it closes. Omit the body ' +
+      'entirely if `init` already had the exact number.\n\n' +
+      'A video may come back `PROCESSING`; wait for `media:ready` as usual. An H.264/AAC file — ' +
+      'which is what every client encoder produces — is not re-encoded and comes back `READY` ' +
+      'immediately. The session and its parts are removed once this succeeds.',
   })
+  @ApiBody({ required: false, type: CompleteUploadDto })
   @ApiOkEnvelope(AttachmentDto)
   @ApiNotFoundEnvelope(
     ERROR_CODE.UPLOAD_SESSION_NOT_FOUND,
@@ -176,14 +187,16 @@ export class UploadSessionController {
     'Yuklash sessiyasi topilmadi',
   )
   @ApiValidationEnvelope(
-    'Parts are missing (`UPLOAD_INCOMPLETE`), the assembled size does not match `totalBytes` ' +
-      '(`UPLOAD_SIZE_MISMATCH`), or the finished file fails the checks for its `kind`.',
+    'A part is missing (`UPLOAD_INCOMPLETE`), the assembled size does not match the one declared ' +
+      'or exceeds the bound set at `init` (`UPLOAD_SIZE_MISMATCH`), or the finished file fails the ' +
+      'checks for its `kind`.',
   )
   async complete(
     @CurrentUser() user: AuthenticatedUser,
     @Param('uploadId') uploadId: string,
+    @Body() body: CompleteUploadDto,
   ): Promise<AttachmentDto> {
-    const asset = await this.uploads.complete(user, uploadId);
+    const asset = await this.uploads.complete(user, uploadId, body?.totalBytes);
     return AttachmentDto.fromDomain(asset, this.apiBase);
   }
 

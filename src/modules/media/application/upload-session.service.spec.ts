@@ -319,16 +319,102 @@ describe('UploadSessionService — complete', () => {
     });
   });
 
-  it('refuses when the assembled size is not the size that was promised', async () => {
+  it('refuses when the assembled size falls short of the size that was promised', async () => {
     const { service } = makeService(makeSessions(session({ totalBytes: 12, chunkSize: 4 })));
     await service.writePart(me, 'upl_seed', 0, bytes('aaaa'));
     await service.writePart(me, 'upl_seed', 1, bytes('bbbb'));
     await service.writePart(me, 'upl_seed', 2, bytes('cc')); // two bytes short
 
+    // `UPLOAD_INCOMPLETE`, not `UPLOAD_SIZE_MISMATCH`: a truncated last part and an unsent one are
+    // the same situation from the client's side, and the fix for both is to re-send it — which is
+    // free, because writing a part twice overwrites it.
     await expect(service.complete(me, 'upl_seed')).rejects.toMatchObject({
+      code: ERROR_CODE.UPLOAD_INCOMPLETE,
+      status: 422,
+      message: expect.stringContaining('2 bayt'),
+    });
+  });
+
+  it('names the first missing part rather than only the count', async () => {
+    const { service } = makeService(makeSessions(session({ totalBytes: 12, chunkSize: 4 })));
+    await service.writePart(me, 'upl_seed', 0, bytes('aaaa'));
+    await service.writePart(me, 'upl_seed', 2, bytes('cccc')); // 1 skipped
+
+    await expect(service.complete(me, 'upl_seed')).rejects.toMatchObject({
+      code: ERROR_CODE.UPLOAD_INCOMPLETE,
+      status: 422,
+      message: expect.stringContaining('1-'),
+    });
+  });
+
+  /**
+   * The point of the whole feature: a client encoding a video cannot know the finished size when it
+   * opens the session, so it bounds the session by the source file and sends parts as the muxer
+   * writes them. Without this it would have to wait for the encoder to close the file first, which
+   * is exactly the serial compress-then-upload the mobile team measured in minutes.
+   */
+  it('accepts a real size smaller than the bound declared at init', async () => {
+    const media = makeMedia();
+    // Session opened for a 40-byte source; the encode landed at 8.
+    const { service } = makeService(makeSessions(session({ totalBytes: 40, chunkSize: 4 })), media);
+    await service.writePart(me, 'upl_seed', 0, bytes('aaaa'));
+    await service.writePart(me, 'upl_seed', 1, bytes('bbbb'));
+
+    await service.complete(me, 'upl_seed', 8);
+
+    expect(media.upload).toHaveBeenCalledWith(
+      me,
+      expect.objectContaining({ file: expect.objectContaining({ size: 8 }) }),
+    );
+  });
+
+  it('still refuses when more arrived than the real size claims', async () => {
+    const { service } = makeService(makeSessions(session({ totalBytes: 40, chunkSize: 4 })));
+    await service.writePart(me, 'upl_seed', 0, bytes('aaaa'));
+    await service.writePart(me, 'upl_seed', 1, bytes('bbbb')); // 8 on disk, 6 claimed
+
+    await expect(service.complete(me, 'upl_seed', 6)).rejects.toMatchObject({
       code: ERROR_CODE.UPLOAD_SIZE_MISMATCH,
       status: 422,
     });
+  });
+
+  it('calls a short tail incomplete rather than a size mismatch', async () => {
+    // No hole — the parts just stop early. The fix is to send the rest, not to recheck the number.
+    const { service } = makeService(makeSessions(session({ totalBytes: 40, chunkSize: 4 })));
+    await service.writePart(me, 'upl_seed', 0, bytes('aaaa'));
+
+    await expect(service.complete(me, 'upl_seed', 8)).rejects.toMatchObject({
+      code: ERROR_CODE.UPLOAD_INCOMPLETE,
+      status: 422,
+    });
+  });
+
+  it('refuses a real size above the bound — the quota was approved for the bound', async () => {
+    // 8 bytes arrive against a session that promised 6. Letting this through would mean the quota
+    // and disk checks at `init` were answered for a smaller file than the one being stored.
+    const { service } = makeService(makeSessions(session({ totalBytes: 6, chunkSize: 4 })));
+    await service.writePart(me, 'upl_seed', 0, bytes('aaaa'));
+    await service.writePart(me, 'upl_seed', 1, bytes('bbbb'));
+
+    await expect(service.complete(me, 'upl_seed', 8)).rejects.toMatchObject({
+      code: ERROR_CODE.UPLOAD_SIZE_MISMATCH,
+      status: 422,
+    });
+  });
+
+  it('lets a client that knew the size all along omit the figure entirely', async () => {
+    const media = makeMedia();
+    const { service } = makeService(makeSessions(session({ totalBytes: 8, chunkSize: 4 })), media);
+    await service.writePart(me, 'upl_seed', 0, bytes('aaaa'));
+    await service.writePart(me, 'upl_seed', 1, bytes('bbbb'));
+
+    await service.complete(me, 'upl_seed');
+
+    expect(media.upload).toHaveBeenCalledWith(
+      me,
+      expect.objectContaining({ file: expect.objectContaining({ size: 8 }) }),
+    );
   });
 
   /**
