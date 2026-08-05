@@ -125,9 +125,6 @@ function makeService(
   oauthAccounts: OAuthAccountRepository = makeOAuthAccountRepository(),
   registry: OAuthProviderRegistry = makeRegistry(),
   otpService: OtpService = makeOtpService(),
-  // Matches the shipped default: the gate is deployed off and switched on once the app sends
-  // `otpCode`. The tests that exercise the gate pass their own config.
-  registrationOtpRequired = false,
 ): AuthService {
   return new AuthService(
     accounts,
@@ -137,10 +134,6 @@ function makeService(
     oauthAccounts,
     registry,
     otpService,
-    {
-      get: (key: string) =>
-        key === 'REGISTRATION_OTP_REQUIRED' ? String(registrationOtpRequired) : undefined,
-    } as never,
   );
 }
 
@@ -182,7 +175,7 @@ describe('AuthService', () => {
      * number the caller does not own **permanently locks out its real owner** — and the same
      * request handed back a working session for it. Anyone could claim any number by typing it.
      */
-    describe('the phone-number gate (REGISTRATION_OTP_REQUIRED)', () => {
+    describe('the phone-number gate', () => {
       const withPhone = {
         email: null,
         phoneNumber: '+998901234567',
@@ -200,7 +193,6 @@ describe('AuthService', () => {
             makeOAuthAccountRepository(),
             makeRegistry(),
             otpService,
-            true,
           ),
         };
       }
@@ -258,12 +250,8 @@ describe('AuthService', () => {
         );
       });
 
-      /**
-       * The rollout window: the flag ships off so builds already in the store keep working. A
-       * client that has adopted the new flow early still gets its number verified — which is what
-       * lets the switch be flipped without a flag day.
-       */
-      it('honours a code even while the gate is off, and marks the phone verified', async () => {
+      /** The proof is recorded on the row, so nothing has to re-check it later. */
+      it('marks the phone verified on the row it creates', async () => {
         const accounts = makeAccountRepository();
         const service = makeService(accounts, makeRefreshTokenRepository());
 
@@ -271,17 +259,6 @@ describe('AuthService', () => {
 
         expect(accounts.create).toHaveBeenCalledWith(
           expect.objectContaining({ phoneVerified: true }),
-        );
-      });
-
-      it('still allows a code-less phone registration while the gate is off', async () => {
-        const accounts = makeAccountRepository();
-        const service = makeService(accounts, makeRefreshTokenRepository());
-
-        await service.register({ ...withPhone, otpCode: null });
-
-        expect(accounts.create).toHaveBeenCalledWith(
-          expect.objectContaining({ phoneVerified: false }),
         );
       });
     });

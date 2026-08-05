@@ -51,24 +51,22 @@ ishlayveradi.
 
 ---
 
-## 3. Qachon majburiy bo'ladi
+## 3. ⚠️ Bu DARHOL majburiy — bayroq yo'q
 
-`otpCode` hozircha **ixtiyoriy** — server tomonda `REGISTRATION_OTP_REQUIRED=false`.
+`otpCode` **`phoneNumber` yuborilganda majburiy**, serverga deploy qilingan zahoti.
 
-Sabab: uni darhol majburiy qilsak, do'kondagi mavjud build'da telefon bilan ro'yxatdan o'tish
-**butunlay ishlamay qolardi**.
+Avval buni env bayrog'i ostiga qo'ygan edik (eski build'lar buzilmasin uchun), lekin qaror
+o'zgardi: xavfsizlik tuzatmasini o'chirib qo'yish mumkin bo'lgan bayroq — bu kimdir yoqishni
+unutadigan bayroq. Endi u doimiy.
 
-Tartib:
+**Sizga ta'siri:**
 
-1. ✅ Server deploy qilindi (bayroq o'chiq — hech narsa buzilmadi)
-2. ⏳ **Siz yangi build chiqarasiz** — `register/otp` chaqiradi va `otpCode` yuboradi
-3. ⏳ Biz `REGISTRATION_OTP_REQUIRED=true` qilamiz
+- Email / Google / Apple bilan ro'yxatdan o'tish — **hech qanday o'zgarishsiz**. `otpCode` kerak
+  emas. Telefon umuman majburiy emas (`docs/architecture/auth.md`, D1).
+- Telefon raqam bilan ro'yxatdan o'tish — **`otpCode` siz endi `422` qaytaradi**.
 
-**2-qadamdan keyin darhol ayting** — 3-qadamgacha zaiflik ochiq turadi.
-
-⚠️ Muhim: bayroq o'chiq bo'lsa ham, **`otpCode` yuborsangiz u tekshiriladi** va raqam
-`phoneVerified: true` bo'lib yoziladi. Ya'ni yangi oqimga bugunoq o'tsangiz bo'ladi — bayroqni
-kutish shart emas, va biz uni yoqishdan oldin haqiqiy trafikda ishlayotganini ko'ramiz.
+Agar hozirgi build ro'yxatdan o'tishda telefon yuborayotgan bo'lsa, o'sha yo'l yangi versiya
+chiqquncha ishlamaydi. Aynan o'sha yo'l zaiflik edi; foydalanuvchilar email bilan o'tadi.
 
 ---
 
@@ -76,7 +74,7 @@ kutish shart emas, va biz uni yoqishdan oldin haqiqiy trafikda ishlayotganini ko
 
 | Holat | Kod | Status |
 |---|---|---|
-| `otpCode` yo'q (bayroq yoqilgandan keyin) | `VALIDATION_ERROR`, `fields.otpCode` | 422 |
+| `otpCode` yo'q, lekin `phoneNumber` bor | `VALIDATION_ERROR`, `fields.otpCode` | 422 |
 | Kod noto'g'ri | `OTP_INVALID` | 422 |
 | Kod eskirgan / so'ralmagan | `OTP_EXPIRED` | 410 |
 | Urinishlar oshib ketdi | `OTP_TOO_MANY_ATTEMPTS` | 429 |
@@ -96,6 +94,5 @@ Foydalanuvchi buni ko'rmasligi kerak; ko'rsa — bizga ayting, chegarani ko'tara
 |---|---|
 | 1 | `student-club.json` ni yangilash |
 | 2 | Ro'yxatdan o'tish ekraniga kod bosqichini qo'shish (`register/otp` → kod kiritish → `register`) |
-| 3 | Build chiqqach bizga aytish — bayroqni yoqamiz |
 
 Email bilan ro'yxatdan o'tish oqimiga tegmaysiz.

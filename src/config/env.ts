@@ -49,16 +49,6 @@ export const envSchema = z
 
     OTP_DEV_CODE: z.string().optional(),
 
-    // Whether `register` demands a verified OTP when it is given a phone number.
-    //
-    // ⚠️ Default OFF, and that is a rollout decision rather than a security opinion. Turning it on
-    // adds a required field to `POST /v1/auth/*/register`, so every app build already in the store
-    // would fail to sign anyone up until a new one ships. Deploy the code first, ship the app, then
-    // set this to `true` — the same order `CALLS_ENABLED` uses.
-    //
-    // While it is off, a phone number can be claimed by anyone who types it, and its real owner is
-    // then locked out of registering. Turn it on as soon as the app supports it.
-    REGISTRATION_OTP_REQUIRED: z.enum(['true', 'false']).default('false'),
     // Platform-wide ceiling on registration OTPs per day. That endpoint is anonymous, so the
     // per-phone limits bound one number but nothing bounds an attacker cycling through many — and
     // each request spends real SMS credit. Behind Nginx with `trust proxy` off, per-IP throttling

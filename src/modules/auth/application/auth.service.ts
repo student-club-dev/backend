@@ -1,10 +1,8 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { hash, verify } from '@node-rs/argon2';
 import { AccountType } from '../../../common/enums/account-type.enum';
 import { ERROR_CODE } from '../../../common/errors/error-code';
 import { AppException } from '../../../common/exceptions/app.exception';
-import type { Env } from '../../../config/env';
 import { AuthProvider } from '../../../common/enums/auth-provider.enum';
 import { ACCOUNT_REPOSITORY, ACCOUNT_TYPE, AccountRepository } from '../domain/account.repository';
 import { AccountStatus } from '../domain/enums/account-status.enum';
@@ -49,7 +47,6 @@ export class AuthService {
     @Inject(OAUTH_ACCOUNT_REPOSITORY) private readonly oauthAccounts: OAuthAccountRepository,
     @Inject(OAUTH_PROVIDER_REGISTRY) private readonly oauthProviders: OAuthProviderRegistry,
     private readonly otpService: OtpService,
-    private readonly config: ConfigService<Env, true>,
   ) {}
 
   /**
@@ -60,13 +57,14 @@ export class AuthService {
    * not own **permanently locks its real owner out of registering** — and until this existed, the
    * request also handed back a working session for that number.
    *
-   * The gate applies only when a phone is supplied: an email-only signup has nothing to prove here
-   * (email verification is a separate gap, and it is not this one — an unverified email cannot be
-   * squatted the same way, because nobody else is trying to sign up with it as their identifier).
+   * The gate applies only when a phone is supplied, and that is D1 rather than a compromise: phone
+   * is **not** required to create an account — email, Google and Apple are all complete signups on
+   * their own, and verification is asked for later, at the actions where trust matters. An
+   * email-only registration therefore has nothing to prove here.
    *
-   * It is behind `REGISTRATION_OTP_REQUIRED` because turning it on adds a required field to a live
-   * endpoint: every app build already in the store would fail to sign anyone up until a new one
-   * ships. Deploy, ship the app, then switch it on.
+   * There is deliberately no flag to turn this off. A phone number written without proof is the
+   * vulnerability itself, so an environment variable that disables the check would only be a way to
+   * leave it open — and a switch someone forgets to flip.
    */
   async register(input: RegisterInput): Promise<AuthTokens> {
     await this.ensureIdentifiersAvailable(input.email, input.phoneNumber);
@@ -83,7 +81,7 @@ export class AuthService {
   }
 
   /**
-   * Consumes the registration OTP, returning whether the phone ended up proven.
+   * Proves the phone, or refuses the registration. Returns whether a phone ended up verified.
    *
    * Runs **after** the uniqueness check and **before** the row is written, so a code is never
    * burned for a registration that was going to fail anyway, and a row is never written for a code
@@ -93,22 +91,11 @@ export class AuthService {
     if (input.phoneNumber === null) {
       return false;
     }
-    if (!this.registrationOtpRequired()) {
-      // The pre-gate behaviour, kept only until the app ships `otpCode`. A code sent anyway is
-      // still honoured — that is what lets the mobile side adopt the new flow before the switch
-      // is flipped, and lets us watch it working in production first.
-      if (input.otpCode === null) {
-        return false;
-      }
-    } else if (input.otpCode === null) {
+    if (input.otpCode === null) {
       throw AppException.validation({ otpCode: 'Telefon raqamni tasdiqlash kodi kerak' });
     }
-    await this.otpService.verifyRegistration(input.phoneNumber, input.otpCode as string);
+    await this.otpService.verifyRegistration(input.phoneNumber, input.otpCode);
     return true;
-  }
-
-  private registrationOtpRequired(): boolean {
-    return this.config.get('REGISTRATION_OTP_REQUIRED', { infer: true }) === 'true';
   }
 
   async login(input: LoginInput): Promise<AuthTokens> {

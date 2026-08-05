@@ -20793,7 +20793,7 @@
           "otpCode": {
             "type": "string",
             "example": "123456",
-            "description": "The code from `POST /v1/auth/{student|business}/otp/request` with `purpose: \"registration\"`.\n\n**Required whenever `phoneNumber` is sent**, once `REGISTRATION_OTP_REQUIRED` is switched on server-side. Until then it is optional and honoured when present — send it as soon as your build supports it, so the switch can be flipped without breaking anyone.\n\nNot needed for an email-only registration."
+            "description": "The code from `POST /v1/auth/{student|business}/register/otp`.\n\n**Required whenever `phoneNumber` is sent.** `phoneNumber` is unique, so a registration that claimed a number without proving it would lock out that number’s real owner for good — which is why there is no way to skip this.\n\nNot needed for an email-only registration: phone is not required to create an account at all (email, Google and Apple are complete signups on their own), and verification is asked for later, at the actions where trust matters."
           },
           "deviceName": {
             "type": "string",
