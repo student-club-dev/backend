@@ -33,12 +33,25 @@ export interface PushTarget {
  * `data` carries silent key/values the app routes on (a deep link into a conversation). `badge` is
  * the recipient's total unread count — iOS does not compute the number on the app icon itself, so
  * whatever the server sends is what the user sees. Android ignores it.
+ *
+ * `collapseKey` and `threadId` are the two halves of "one event, one row in the tray" (push
+ * catalogue §4.1), and they are deliberately *not* the same mechanism:
+ *
+ *  - `collapseKey` → Android `collapse_key`. FCM keeps only the newest message per key, so five
+ *    messages from one conversation leave one tray row rather than five.
+ *  - `threadId` → iOS `aps.thread-id`. Apple *groups* rather than replaces: the five stay, stacked
+ *    under one heading. That is why there is no `apns-collapse-id` — replacing a chat notification
+ *    would hide messages the user has not seen, which is not what grouping is for.
+ *
+ * Both are optional. A payload with neither behaves exactly as it did before they existed.
  */
 export interface PushNotification {
   title: string;
   body: string;
   data?: Record<string, string>;
   badge?: number;
+  collapseKey?: string;
+  threadId?: string;
 }
 
 /**

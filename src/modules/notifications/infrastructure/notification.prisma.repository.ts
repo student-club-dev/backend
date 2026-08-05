@@ -28,9 +28,34 @@ export class NotificationPrismaRepository implements NotificationRepository {
         body: notification.body,
         targetType: (notification.target?.type ?? null) as PrismaTargetType | null,
         targetId: notification.target?.id ?? null,
+        pushDeferredUntil: notification.pushDeferredUntil ?? null,
       },
     });
     return toDomain(row);
+  }
+
+  countUnread(studentId: string): Promise<number> {
+    return this.prisma.notification.count({ where: { studentId, readAt: null } });
+  }
+
+  /** `not: null` keeps this on the tiny `push_deferred_until` index instead of scanning the table. */
+  async findPushDue(now: Date, limit: number): Promise<Notification[]> {
+    const rows = await this.prisma.notification.findMany({
+      where: { pushDeferredUntil: { not: null, lte: now } },
+      orderBy: { pushDeferredUntil: 'asc' },
+      take: limit,
+    });
+    return rows.map(toDomain);
+  }
+
+  async clearPushDeferred(ids: string[]): Promise<void> {
+    if (ids.length === 0) {
+      return;
+    }
+    await this.prisma.notification.updateMany({
+      where: { id: { in: ids } },
+      data: { pushDeferredUntil: null },
+    });
   }
 
   /**

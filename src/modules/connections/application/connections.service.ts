@@ -3,9 +3,18 @@ import { ERROR_CODE } from '../../../common/errors/error-code';
 import { AppException } from '../../../common/exceptions/app.exception';
 import type { AuthenticatedUser } from '../../../common/types/authenticated-user';
 import {
+  CONVERSATION_DIRECTORY,
+  ConversationDirectoryRepository,
+} from '../../../infrastructure/chat-directory/conversation-directory.repository';
+import {
   PRESENCE_REPOSITORY,
   PresenceRepository,
 } from '../../../infrastructure/presence/presence.repository';
+import { NotificationDispatcher } from '../../notifications/application/notification-dispatcher.service';
+import {
+  NotificationCatalog,
+  displayName,
+} from '../../notifications/domain/events/notification-catalog';
 import { CONNECTIONS_REPOSITORY, ConnectionsRepository } from '../domain/connections.repository';
 import { Connection } from '../domain/entities/connection.entity';
 import { StudentSummary } from '../domain/entities/student-summary.entity';
@@ -40,6 +49,9 @@ export class ConnectionsService {
     @Inject(CONNECTIONS_REPOSITORY) private readonly connections: ConnectionsRepository,
     @Inject(STUDENT_DIRECTORY) private readonly directory: StudentDirectoryRepository,
     @Inject(PRESENCE_REPOSITORY) private readonly presence: PresenceRepository,
+    @Inject(CONVERSATION_DIRECTORY)
+    private readonly conversations: ConversationDirectoryRepository,
+    private readonly notifications: NotificationDispatcher,
   ) {}
 
   /**
@@ -78,7 +90,10 @@ export class ConnectionsService {
         );
       }
       // reverse pending — they already requested the caller → auto-accept (C1).
-      return this.connections.setStatus(edge.id, ConnectionStatus.ACCEPTED);
+      const accepted = await this.connections.setStatus(edge.id, ConnectionStatus.ACCEPTED);
+      // The other side asked first, so they are the one told it went through (catalogue §3.1 №5).
+      await this.notifyAccepted(accepted.requesterId, user.id);
+      return accepted;
     }
     if (edge !== null) {
       // A prior DECLINED edge — enforce a cooldown before a fresh request is allowed (C10).
@@ -95,13 +110,55 @@ export class ConnectionsService {
       // Cooldown passed — clear it so the unique pair constraint allows a new request.
       await this.connections.deleteEdge(user.id, addresseeId);
     }
-    return this.connections.create(user.id, addresseeId);
+    const created = await this.connections.create(user.id, addresseeId);
+    await this.notifyRequested(addresseeId, user.id);
+    return created;
   }
 
   /** Accepts a pending request addressed to the caller. */
   async accept(user: AuthenticatedUser, requestId: string): Promise<Connection> {
-    await this.loadIncomingPending(user, requestId);
-    return this.connections.setStatus(requestId, ConnectionStatus.ACCEPTED);
+    const pending = await this.loadIncomingPending(user, requestId);
+    const accepted = await this.connections.setStatus(requestId, ConnectionStatus.ACCEPTED);
+    // The requester is the one who has been waiting to hear back.
+    await this.notifyAccepted(pending.requesterId, user.id);
+    return accepted;
+  }
+
+  /**
+   * §3.1 №4 — tells the addressee somebody wants to connect. Opens the requests tab, which needs
+   * no id of its own.
+   */
+  private async notifyRequested(addresseeId: string, requesterId: string): Promise<void> {
+    const requester = await this.directory.findSummary(requesterId);
+    await this.notifications.dispatch(
+      NotificationCatalog.connectionRequest({
+        recipientId: addresseeId,
+        requesterName: displayName(requester?.fullName, requester?.username),
+      }),
+    );
+  }
+
+  /**
+   * §3.1 №5 — tells the requester they were accepted, and points at the conversation they may now
+   * use.
+   *
+   * The conversation is created here rather than looked up, because at this moment it almost never
+   * exists yet: it is made when somebody opens the chat. A notification that promised a chat and
+   * then opened nothing would be worse than not sending one, and placing a call already creates the
+   * row exactly this way — so the two paths stay consistent.
+   */
+  private async notifyAccepted(requesterId: string, accepterId: string): Promise<void> {
+    const [accepter, conversationId] = await Promise.all([
+      this.directory.findSummary(accepterId),
+      this.conversations.findOrCreateDirect(requesterId, accepterId),
+    ]);
+    await this.notifications.dispatch(
+      NotificationCatalog.connectionAccepted({
+        recipientId: requesterId,
+        accepterName: displayName(accepter?.fullName, accepter?.username),
+        conversationId,
+      }),
+    );
   }
 
   /** Declines a pending request addressed to the caller. */

@@ -59,6 +59,27 @@ export class UpdateProfileDto {
   @IsEmail()
   universityEmail?: string;
 
+  @ApiPropertyOptional({
+    nullable: true,
+    example: 'TOSHKENT_SHAHRI',
+    description:
+      'Where the student lives. Feeds the "jobs near you" match (push catalogue §3.3 №9) — until ' +
+      'it is set, a student is matched on their university alone. Same id space as the listing ' +
+      'geo catalogue; not a foreign key, so an id the seed does not have yet is still accepted.',
+  })
+  @IsOptional()
+  @IsString()
+  regionId?: string;
+
+  @ApiPropertyOptional({
+    nullable: true,
+    example: 'CHILONZOR',
+    description: 'The finer half of the same signal; preferred over `regionId` when both are set.',
+  })
+  @IsOptional()
+  @IsString()
+  districtId?: string;
+
   @ApiPropertyOptional({ nullable: true, example: 2004 })
   @IsOptional()
   @IsInt()
@@ -122,6 +143,8 @@ export class UpdateProfileDto {
       gender: this.gender ?? undefined,
       universityId: this.universityId ?? undefined,
       universityEmail: this.universityEmail ?? undefined,
+      regionId: this.regionId ?? undefined,
+      districtId: this.districtId ?? undefined,
       birthYear: this.birthYear ?? undefined,
       courseYear: this.courseYear ?? undefined,
       lastSeenVisibility: this.lastSeenVisibility ?? undefined,

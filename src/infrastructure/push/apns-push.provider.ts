@@ -262,8 +262,12 @@ export function buildApnsHeaders(topic: string, now: number): Record<string, str
  * The APNs body (§3).
  *
  * APNs has no `data` section: custom fields sit at the ROOT next to `aps`, which is where the app
- * reads them from (`userInfo["conversationId"]`). `thread-id` groups a conversation's notifications
- * into one stack; without it every message piles up separately.
+ * reads them from (`userInfo["conversationId"]`). `thread-id` groups a notification into a stack;
+ * without it every one piles up separately.
+ *
+ * The caller supplies `threadId` (push catalogue §4.1 gives a key per event family, not just per
+ * conversation). `data.conversationId` remains the fallback so a caller that predates the field —
+ * and any future one that only knows about conversations — still gets a chat grouped correctly.
  */
 export function buildApnsPayload(notification: PushNotification): Record<string, unknown> {
   const data = notification.data ?? {};
@@ -275,8 +279,9 @@ export function buildApnsPayload(notification: PushNotification): Record<string,
   if (notification.badge !== undefined) {
     aps.badge = notification.badge;
   }
-  if (data.conversationId !== undefined) {
-    aps['thread-id'] = data.conversationId;
+  const threadId = notification.threadId ?? data.conversationId;
+  if (threadId !== undefined) {
+    aps['thread-id'] = threadId;
   }
   // `aps` last: a custom field can never overwrite the section Apple itself reads.
   return { ...data, aps };

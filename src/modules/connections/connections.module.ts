@@ -2,8 +2,10 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { StudentGuard } from '../../common/guards/student.guard';
+import { ChatDirectoryModule } from '../../infrastructure/chat-directory/chat-directory.module';
 import { PrismaModule } from '../../infrastructure/database/prisma.module';
 import { PresenceModule } from '../../infrastructure/presence/presence.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { ConnectionsService } from './application/connections.service';
 import { ReportsService } from './application/reports.service';
 import { CONNECTIONS_REPOSITORY } from './domain/connections.repository';
@@ -24,7 +26,15 @@ import { StudentSearchController } from './presentation/student-search.controlle
  * Students-only (JwtAuthGuard + StudentGuard). Repository ports are bound to their Prisma impls.
  */
 @Module({
-  imports: [PrismaModule, PresenceModule, JwtModule.register({})],
+  imports: [
+    PrismaModule,
+    PresenceModule,
+    // A request and its acceptance both raise a notification (push catalogue §3.1 №4/№5), and the
+    // acceptance needs the pair's conversation id to point at.
+    NotificationsModule,
+    ChatDirectoryModule,
+    JwtModule.register({}),
+  ],
   controllers: [
     StudentSearchController,
     ConnectionsController,

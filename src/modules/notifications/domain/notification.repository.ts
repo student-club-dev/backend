@@ -11,6 +11,8 @@ export interface NewNotification {
   title: string;
   body: string | null;
   target: NotificationTarget | null;
+  /** When a quiet-hours-deferred push is owed (§5.3); null when none is. */
+  pushDeferredUntil?: Date | null;
 }
 
 /** A student's list plus the count the bell icon shows. */
@@ -47,6 +49,23 @@ export interface NotificationRepository {
 
   /** Stamps `readAt` on every unread row the student has. */
   markAllRead(studentId: string): Promise<void>;
+
+  /** Unread rows for a student — the notifications half of the app-icon badge (§4.2). */
+  countUnread(studentId: string): Promise<number>;
+
+  /**
+   * Rows whose held-back push is now due (§5.3), oldest first. Capped so one flush cannot try to
+   * send a night's backlog in a single tick.
+   */
+  findPushDue(now: Date, limit: number): Promise<Notification[]>;
+
+  /**
+   * Clears the deferral marker, whether or not the push itself succeeded.
+   *
+   * Deliberately not conditional on delivery: push is best-effort, and a row that stayed marked
+   * after a failed send would be retried at every flush for as long as it existed.
+   */
+  clearPushDeferred(ids: string[]): Promise<void>;
 
   /** Deletes rows created before `before`, for the retention sweep. Returns how many went. */
   deleteOlderThan(before: Date): Promise<number>;

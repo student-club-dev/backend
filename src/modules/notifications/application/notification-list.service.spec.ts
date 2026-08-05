@@ -11,6 +11,9 @@ describe('NotificationListService', () => {
       list: jest.fn().mockResolvedValue({ items: [], unreadCount: 0 }),
       markRead: jest.fn().mockResolvedValue(undefined),
       markAllRead: jest.fn().mockResolvedValue(undefined),
+      countUnread: jest.fn().mockResolvedValue(0),
+      findPushDue: jest.fn().mockResolvedValue([]),
+      clearPushDeferred: jest.fn().mockResolvedValue(undefined),
       deleteOlderThan: jest.fn().mockResolvedValue(0),
     };
     service = new NotificationListService(repository);

@@ -24,6 +24,8 @@ export interface Profile {
   gender: Gender | null;
   universityId: string | null;
   universityEmail: string | null;
+  regionId: string | null;
+  districtId: string | null;
   birthYear: number | null;
   courseYear: CourseYear | null;
   /** Students only — who may see this student's presence (C7). `null` for a business owner. */
@@ -47,6 +49,8 @@ export interface ProfilePatch {
   gender?: Gender;
   universityId?: string;
   universityEmail?: string;
+  regionId?: string;
+  districtId?: string;
   birthYear?: number;
   courseYear?: CourseYear;
   lastSeenVisibility?: LastSeenVisibility;

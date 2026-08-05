@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { StudentGuard } from '../../common/guards/student.guard';
@@ -7,6 +7,7 @@ import { PresenceModule } from '../../infrastructure/presence/presence.module';
 import { SocialGraphModule } from '../../infrastructure/social-graph/social-graph.module';
 import { CallsModule } from '../calls/calls.module';
 import { MediaModule } from '../media/media.module';
+import { MESSAGE_UNREAD_PORT } from '../notifications/domain/message-unread.port';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { ChatService } from './application/chat.service';
 import { ChatGateway } from './chat.gateway';
@@ -27,7 +28,10 @@ import { MessagesController } from './presentation/messages.controller';
     PresenceModule,
     SocialGraphModule,
     JwtModule.register({}),
-    NotificationsModule,
+    // `forwardRef` because the need genuinely runs both ways (push catalogue §4.2): chat pushes to
+    // an offline recipient, and every push the dispatcher sends needs this module's unread-message
+    // count for the badge. One named port (`MESSAGE_UNREAD_PORT`) carries the return direction.
+    forwardRef(() => NotificationsModule),
     MediaModule,
     // For `CallEndedBus` — `ChatGateway` subscribes, `CallsService` publishes, and they must be the
     // same instance (mirrors MediaReadyBus/MediaModule). Importing it here rather than re-providing
@@ -42,8 +46,12 @@ import { MessagesController } from './presentation/messages.controller';
     StudentGuard,
     { provide: CHAT_REPOSITORY, useClass: ChatPrismaRepository },
     { provide: STICKER_DIRECTORY, useClass: StickerDirectoryPrismaRepository },
+    // The badge port. `useExisting` rather than a wrapper: `ChatService` already answers exactly
+    // this question, and a second instance would keep a second copy of its dependencies.
+    { provide: MESSAGE_UNREAD_PORT, useExisting: ChatService },
   ],
   // For CronModule's weekly purge (§B1). Service only — the repository stays private.
-  exports: [ChatService],
+  // `MESSAGE_UNREAD_PORT` is exported for the notification dispatcher's badge (§4.2).
+  exports: [ChatService, MESSAGE_UNREAD_PORT],
 })
 export class ChatModule {}

@@ -183,12 +183,20 @@ export class FcmPushProvider implements PushProvider {
  * Android gets `priority: high` so the app is woken rather than batched into a maintenance window.
  * There is no `apns` block: iPhones no longer travel this path at all, and leaving one here would
  * suggest they still do. `badge` is dropped for the same reason — it is an iOS concept.
+ *
+ * `collapse_key` is set only when the caller asked for one (push catalogue §4.1). Omitting the key
+ * entirely is not the same as sending an empty one: FCM treats every message without a key as
+ * distinct, which is the behaviour every existing caller already relies on.
  */
 function buildMessage(token: string, notification: PushNotification): Record<string, unknown> {
   return {
     token,
     notification: { title: notification.title, body: notification.body },
     data: notification.data ?? {},
-    android: { priority: 'high', notification: { sound: 'default' } },
+    android: {
+      priority: 'high',
+      notification: { sound: 'default' },
+      ...(notification.collapseKey === undefined ? {} : { collapse_key: notification.collapseKey }),
+    },
   };
 }

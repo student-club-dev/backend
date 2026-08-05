@@ -15,7 +15,7 @@ import { isTerminal } from '../domain/call-state-machine';
 import {
   CONVERSATION_DIRECTORY,
   ConversationDirectoryRepository,
-} from '../domain/conversation-directory.repository';
+} from '../../../infrastructure/chat-directory/conversation-directory.repository';
 import {
   CALL_STUDENT_DIRECTORY,
   CallerSummary,

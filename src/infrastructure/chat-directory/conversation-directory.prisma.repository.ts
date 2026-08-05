@@ -1,14 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { directKeyFor } from '../../../common/chat/direct-key';
-import { PrismaService } from '../../../infrastructure/database/prisma.service';
-import { ConversationDirectoryRepository } from '../domain/conversation-directory.repository';
+import { directKeyFor } from '../../common/chat/direct-key';
+import { PrismaService } from '../database/prisma.service';
+import { ConversationDirectoryRepository } from './conversation-directory.repository';
 
 const UNIQUE_VIOLATION = 'P2002';
 
 /**
  * Resolves a pair to their 1:1 conversation without importing chat — that direction is taken (chat
- * subscribes to `CallEndedBus`), which is why `directKeyFor` lives in `common/`.
+ * subscribes to `CallEndedBus`), which is why `directKeyFor` lives in `common/`. Shared
+ * infrastructure: calls needs it to place one, connections to name the chat a new pair may now use.
  *
  * ⚠️ The `create` block must stay identical to `ChatPrismaRepository.createDirect`: both write rows
  * the other one then reads. `type` is the schema default (`DIRECT`) and is spelled out here only to

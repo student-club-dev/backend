@@ -13280,6 +13280,47 @@
           "code"
         ]
       },
+      "AdminSendNotificationDto": {
+        "type": "object",
+        "properties": {
+          "studentIds": {
+            "minItems": 1,
+            "maxItems": 500,
+            "description": "The students to notify, at most 500 per request. Explicit ids rather than a \"send to everyone\" flag: a broadcast is the one notification nobody can undo, and it should take a deliberate act to build the list.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 120,
+            "example": "Ilova yangilandi"
+          },
+          "body": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "ANNOUNCEMENT",
+              "PROFILE"
+            ],
+            "default": "ANNOUNCEMENT",
+            "description": "`ANNOUNCEMENT` opens nothing; `PROFILE` opens the profile screen and is always pushed — it is about the reader’s own account, never marketing."
+          },
+          "sendPush": {
+            "type": "boolean",
+            "default": false,
+            "description": "Whether an `ANNOUNCEMENT` also reaches the lock screen. **Off by default and deliberately so** (§3.4): a marketing push is how a user comes to switch notifications off altogether, taking their chat and call alerts with them. Ignored for `PROFILE`, which always pushes."
+          }
+        },
+        "required": [
+          "studentIds",
+          "title"
+        ]
+      },
       "AdminAuthTokensDto": {
         "type": "object",
         "properties": {
@@ -16181,6 +16222,18 @@
             "type": "string",
             "nullable": true
           },
+          "regionId": {
+            "type": "string",
+            "nullable": true,
+            "example": "TOSHKENT_SHAHRI",
+            "description": "Where the student lives. Feeds the \"jobs near you\" match (push catalogue §3.3 №9) — until it is set, a student is matched on their university alone. Same id space as the listing geo catalogue; not a foreign key, so an id the seed does not have yet is still accepted."
+          },
+          "districtId": {
+            "type": "string",
+            "nullable": true,
+            "example": "CHILONZOR",
+            "description": "The finer half of the same signal; preferred over `regionId` when both are set."
+          },
           "birthYear": {
             "type": "number",
             "nullable": true,
@@ -17044,6 +17097,1282 @@
           "redemption",
           "validFrom",
           "validTo"
+        ]
+      },
+      "DevicePlatformDto": {
+        "type": "string",
+        "enum": [
+          "IOS",
+          "ANDROID",
+          "WEB"
+        ]
+      },
+      "RegisterDeviceDto": {
+        "type": "object",
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "The device push token. `ANDROID`/`WEB`: the FCM registration token. `IOS`: the raw APNs device token — 64 lowercase hex characters; anything else is rejected with 422 `INVALID_DEVICE_TOKEN`.",
+            "example": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
+          },
+          "platform": {
+            "$ref": "#/components/schemas/DevicePlatformDto"
+          }
+        },
+        "required": [
+          "token",
+          "platform"
+        ]
+      },
+      "NotificationTargetDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "example": "CHAT",
+            "description": "One of `CHAT | LISTING | CONNECTION_REQUESTS | MY_LISTINGS | PROFILE` — as a string, not an enum, so an unrecognised value can be treated as \"no destination\" instead of breaking the response."
+          },
+          "id": {
+            "type": "string",
+            "nullable": true,
+            "example": "cnv_01HX2E4Q7Z",
+            "description": "The id `type` addresses: `conversationId` for CHAT, `listingId` for LISTING. Null for the target types that name a screen (`CONNECTION_REQUESTS`, `MY_LISTINGS`, `PROFILE`)."
+          }
+        },
+        "required": [
+          "type",
+          "id"
+        ]
+      },
+      "NotificationDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "ntf_01HX2E4Q7Z"
+          },
+          "type": {
+            "type": "string",
+            "example": "CHAT",
+            "description": "One of `JOB | DISCOUNT | LISTING | CHAT | CONNECTION | SYSTEM` — a string, not an enum (see §1.1). Drives icon and colour only."
+          },
+          "title": {
+            "type": "string",
+            "example": "Yangi xabar",
+            "maxLength": 120
+          },
+          "body": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 300,
+            "example": "Dilnoza sizga xabar yozdi.",
+            "description": "Optional — a row with no body is drawn as a title-only card."
+          },
+          "target": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NotificationTargetDto"
+              }
+            ],
+            "nullable": true,
+            "description": "Null when the row is informational and opens nothing."
+          },
+          "readAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2026-08-04T08:00:00.000Z",
+            "description": "When it was read, or null. ISO-8601 UTC."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-08-04T09:12:33.000Z",
+            "description": "ISO-8601 UTC. Never a pre-rendered \"2 hours ago\" — that string would freeze at the moment it was written and still read \"2 hours ago\" the next day (§2.3)."
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "title",
+          "body",
+          "target",
+          "readAt",
+          "createdAt"
+        ]
+      },
+      "NotificationListDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NotificationDto"
+            }
+          },
+          "unreadCount": {
+            "type": "integer",
+            "format": "int32",
+            "example": 3,
+            "description": "Unread across the student’s **entire** history, not within `items` (§2.2). This is what the dot on the home screen shows, so it must not shrink just because the list was capped."
+          }
+        },
+        "required": [
+          "items",
+          "unreadCount"
+        ]
+      },
+      "MarkNotificationsReadDto": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "maxItems": 200,
+            "example": [
+              "ntf_01HX2E4Q7Z",
+              "ntf_01HW9B3K2M"
+            ],
+            "description": "The rows to mark, at most 200. Ids that are unknown, or belong to another student, are skipped silently rather than failing the batch (§3.3) — one stale id from the client’s cache must not cost the others their mark.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "all": {
+            "type": "boolean",
+            "example": true,
+            "description": "Marks every unread notification. Mutually exclusive with `ids`."
+          }
+        }
+      },
+      "ConversationTypeDto": {
+        "type": "string",
+        "enum": [
+          "DIRECT",
+          "GROUP"
+        ]
+      },
+      "ConversationDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/ConversationTypeDto"
+          },
+          "lastMessageAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "lastMessageAt"
+        ]
+      },
+      "OpenDirectDto": {
+        "type": "object",
+        "properties": {
+          "studentId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "studentId"
+        ]
+      },
+      "StudentPhotoDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string",
+            "description": "Requires the same bearer token as any other call."
+          },
+          "thumbUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "height": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "url",
+          "thumbUrl",
+          "width",
+          "height"
+        ]
+      },
+      "StudentSummaryDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "username": {
+            "type": "string",
+            "nullable": true
+          },
+          "fullName": {
+            "type": "string",
+            "nullable": true
+          },
+          "avatarUrl": {
+            "type": "string",
+            "nullable": true
+          },
+          "photos": {
+            "description": "The student’s profile pictures, in display order — swipe through them on the profile screen. The first element always matches `avatarUrl`. **Empty** for a student who has never added one, in which case fall back to `avatarUrl` (which may itself be null).",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StudentPhotoDto"
+            }
+          },
+          "bio": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 140,
+            "description": "Short profile blurb, up to 140 characters. Never contains a link, a `@handle` or a phone number — those are rejected on write, so this is safe to render as plain text.",
+            "example": "5/5 · Dasturiy injiniring"
+          },
+          "phoneNumber": {
+            "type": "string",
+            "nullable": true,
+            "description": "E.164 phone number, subject to the target’s `phoneVisibility`: `EVERYONE` always, `CONNECTIONS` only once connected, `NOBODY` (**the default**) never. `null` when hidden — so expect `null` for most students, and do not draw the row at all when it is.",
+            "example": "+998901234567"
+          },
+          "universityId": {
+            "type": "string",
+            "nullable": true,
+            "description": "The value the student set on their own profile — the same string `GET /v1/students` accepts in `universityId`. There is no server-side university catalogue yet, so this is free-form (the app currently writes `emis-<profEmisId>`, e.g. `emis-142`).",
+            "example": "emis-142"
+          },
+          "gender": {
+            "nullable": true,
+            "$ref": "#/components/schemas/GenderDto"
+          },
+          "courseYear": {
+            "nullable": true,
+            "$ref": "#/components/schemas/CourseYearDto"
+          },
+          "online": {
+            "type": "boolean",
+            "description": "Live presence. Real everywhere the viewer is allowed to see it — subject to the target’s `lastSeenVisibility`: `EVERYONE` always, `CONNECTIONS` (the default) only once connected, `NOBODY` never. When hidden this is `false` and `lastSeenAt` is `null`."
+          },
+          "lastSeenAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time",
+            "description": "When the student last closed their last socket. `null` while online or hidden."
+          }
+        },
+        "required": [
+          "id",
+          "username",
+          "fullName",
+          "avatarUrl",
+          "photos",
+          "bio",
+          "phoneNumber",
+          "universityId",
+          "gender",
+          "courseYear",
+          "online",
+          "lastSeenAt"
+        ]
+      },
+      "MessageTypeDto": {
+        "type": "string",
+        "enum": [
+          "TEXT",
+          "IMAGE",
+          "GIF",
+          "VIDEO",
+          "VIDEO_NOTE",
+          "FILE",
+          "VOICE",
+          "STICKER",
+          "SYSTEM",
+          "CALL"
+        ]
+      },
+      "MessageStickerDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Catalogue id, or the provider’s own id."
+          },
+          "provider": {
+            "nullable": true,
+            "$ref": "#/components/schemas/MediaProviderDto"
+          },
+          "packId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Our pack id. `null` for a sticker from search, which belongs to no pack of ours."
+          },
+          "emoji": {
+            "type": "string",
+            "nullable": true,
+            "example": "😄",
+            "description": "Catalogue stickers only; `null` for a sticker from search."
+          },
+          "url": {
+            "type": "string",
+            "description": "WebP with a transparent background. Never an MP4 — that format has no alpha channel."
+          },
+          "thumbUrl": {
+            "type": "string",
+            "nullable": true,
+            "description": "Smaller preview, search results only. `null` for a catalogue sticker — a 512×512 WebP is already small enough to be its own preview, so fall back to `url`."
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "height": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "required": [
+          "id",
+          "provider",
+          "packId",
+          "emoji",
+          "url",
+          "thumbUrl",
+          "width",
+          "height"
+        ]
+      },
+      "QuoteDto": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 300
+          },
+          "offset": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Start of the selection in UTF-16 code units — the same units Kotlin/Swift count."
+          }
+        },
+        "required": [
+          "text",
+          "offset"
+        ]
+      },
+      "ReplyToDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "nullable": true,
+            "description": "`null` once the original has been purged — there is nothing left to jump to."
+          },
+          "seq": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Use with `?around=` to jump."
+          },
+          "senderId": {
+            "type": "string"
+          },
+          "senderName": {
+            "type": "string",
+            "nullable": true,
+            "description": "Name to draw above the bubble — already resolved, do not look it up by id."
+          },
+          "type": {
+            "$ref": "#/components/schemas/MessageTypeDto"
+          },
+          "preview": {
+            "type": "string",
+            "nullable": true,
+            "description": "Shortened original text (≤120). `null` for media — draw \"📷 Rasm\" and friends from `type`."
+          },
+          "quote": {
+            "nullable": true,
+            "description": "The fragment the sender highlighted, or `null` for a plain reply.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QuoteDto"
+              }
+            ]
+          },
+          "originalDeleted": {
+            "type": "boolean",
+            "description": "The original was deleted or purged after this reply was sent. Keep showing the quote — it is a snapshot — but drop the tap-to-jump affordance."
+          }
+        },
+        "required": [
+          "id",
+          "seq",
+          "senderId",
+          "senderName",
+          "type",
+          "preview",
+          "quote",
+          "originalDeleted"
+        ]
+      },
+      "CallMediaDto": {
+        "type": "string",
+        "enum": [
+          "AUDIO",
+          "VIDEO"
+        ]
+      },
+      "CallStatusDto": {
+        "type": "string",
+        "enum": [
+          "RINGING",
+          "CONNECTING",
+          "ACTIVE",
+          "ENDED",
+          "MISSED",
+          "DECLINED",
+          "FAILED",
+          "CANCELED"
+        ]
+      },
+      "CallEndReasonDto": {
+        "type": "string",
+        "enum": [
+          "HANGUP",
+          "TIMEOUT",
+          "DECLINED",
+          "BUSY",
+          "FAILED",
+          "CANCELED",
+          "UNAUTHORIZED"
+        ]
+      },
+      "MessageCallDto": {
+        "type": "object",
+        "properties": {
+          "callId": {
+            "type": "string"
+          },
+          "media": {
+            "$ref": "#/components/schemas/CallMediaDto"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CallStatusDto"
+          },
+          "durationMs": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Milliseconds of actual conversation; 0 when the call was never answered."
+          },
+          "endReason": {
+            "nullable": true,
+            "$ref": "#/components/schemas/CallEndReasonDto"
+          }
+        },
+        "required": [
+          "callId",
+          "media",
+          "status",
+          "durationMs",
+          "endReason"
+        ]
+      },
+      "MessageDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "conversationId": {
+            "type": "string"
+          },
+          "senderId": {
+            "type": "string"
+          },
+          "seq": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Per-conversation monotonic sequence"
+          },
+          "type": {
+            "$ref": "#/components/schemas/MessageTypeDto"
+          },
+          "body": {
+            "type": "string",
+            "nullable": true
+          },
+          "clientMsgId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Your own idempotency key, echoed back — set only when you are the sender, `null` for everyone else. Match your optimistic (\"sending\") copy against this rather than against the message text: two identical texts in a row are indistinguishable, and a media message has no text at all (§17.1)."
+          },
+          "deletedAt": {
+            "type": "string",
+            "nullable": true,
+            "format": "date-time",
+            "description": "When the sender deleted this message, `null` otherwise. The row keeps its `seq` and stays in the history — `body` is emptied and it no longer counts as unread. Render a \"message deleted\" placeholder (§18)."
+          },
+          "albumId": {
+            "type": "string",
+            "nullable": true,
+            "description": "Shared by every image of one multi-image send — draw consecutive messages with the same value as a grid. Each is still its own message with its own `seq`."
+          },
+          "attachment": {
+            "nullable": true,
+            "description": "Set for IMAGE, GIF, VIDEO, VOICE and FILE messages; null otherwise.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AttachmentDto"
+              }
+            ]
+          },
+          "sticker": {
+            "nullable": true,
+            "description": "Set for `STICKER` messages; null otherwise.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MessageStickerDto"
+              }
+            ]
+          },
+          "replyTo": {
+            "nullable": true,
+            "description": "Set when this message replies to another; null otherwise (§C2).",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ReplyToDto"
+              }
+            ]
+          },
+          "call": {
+            "nullable": true,
+            "description": "Set for `CALL` messages; null otherwise.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MessageCallDto"
+              }
+            ]
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "conversationId",
+          "senderId",
+          "seq",
+          "type",
+          "body",
+          "clientMsgId",
+          "deletedAt",
+          "albumId",
+          "attachment",
+          "sticker",
+          "replyTo",
+          "call",
+          "createdAt"
+        ]
+      },
+      "ConversationListItemDto": {
+        "type": "object",
+        "properties": {
+          "conversation": {
+            "$ref": "#/components/schemas/ConversationDto"
+          },
+          "other": {
+            "$ref": "#/components/schemas/StudentSummaryDto"
+          },
+          "lastMessage": {
+            "nullable": true,
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MessageDto"
+              }
+            ]
+          },
+          "unreadCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Messages from the other member with `seq > myReadSeq`."
+          },
+          "myReadSeq": {
+            "type": "integer",
+            "format": "int32",
+            "description": "How far you have read (`ConversationMember.lastReadSeq`). The persisted counterpart of `unreadCount` — advanced by `POST /v1/conversations/{id}/read` or the `message:read` event."
+          },
+          "peerReadSeq": {
+            "type": "integer",
+            "format": "int32",
+            "description": "How far the other member has read. Every message you sent with `seq <= peerReadSeq` is read (✓✓). Restores receipt state after a restart, when the live `message:read` event is gone."
+          },
+          "peerDeliveredSeq": {
+            "type": "integer",
+            "format": "int32",
+            "description": "How far the other member’s device has received. `seq <= peerDeliveredSeq` is delivered (✓)."
+          }
+        },
+        "required": [
+          "conversation",
+          "other",
+          "lastMessage",
+          "unreadCount",
+          "myReadSeq",
+          "peerReadSeq",
+          "peerDeliveredSeq"
+        ]
+      },
+      "ConversationPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConversationListItemDto"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "hasNext": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "size",
+          "total",
+          "hasNext"
+        ]
+      },
+      "UnreadCountDto": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Unread messages across every conversation. Deleted messages are not counted."
+          },
+          "conversations": {
+            "type": "integer",
+            "format": "int32",
+            "description": "How many conversations hold at least one unread message."
+          }
+        },
+        "required": [
+          "total",
+          "conversations"
+        ]
+      },
+      "MessageListDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "description": "Newest-first",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MessageDto"
+            }
+          },
+          "hasMore": {
+            "type": "boolean",
+            "description": "More messages exist past this page, in the direction you are paging. Exact — the server reads one row beyond `size` rather than inferring it from the page length, so a last page that happens to fill exactly still reports `false` (§17.5)."
+          }
+        },
+        "required": [
+          "items",
+          "hasMore"
+        ]
+      },
+      "QuoteInputDto": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "maxLength": 300,
+            "description": "Max 300 characters (422 `QUOTE_TOO_LONG`). Must be a real slice of the target’s body at `offset` — the server checks it and rejects a mismatch with 422 `QUOTE_NOT_FOUND`. It is stored as a snapshot, so an unchecked one would render forever as text the original never contained."
+          },
+          "offset": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0,
+            "description": "Start of the selection in UTF-16 code units. Kotlin and Swift already count in these, so pass the index straight through — no conversion on either side."
+          }
+        },
+        "required": [
+          "text",
+          "offset"
+        ]
+      },
+      "GifRefDto": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "$ref": "#/components/schemas/MediaProviderDto"
+          },
+          "externalId": {
+            "type": "string",
+            "description": "The search result `id`."
+          },
+          "url": {
+            "type": "string",
+            "description": "Provider CDN url. Checked against a host allowlist."
+          },
+          "thumbUrl": {
+            "type": "string"
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "height": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "durationMs": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          }
+        },
+        "required": [
+          "provider",
+          "externalId",
+          "url",
+          "thumbUrl",
+          "width",
+          "height"
+        ]
+      },
+      "StickerRefDto": {
+        "type": "object",
+        "properties": {
+          "provider": {
+            "$ref": "#/components/schemas/MediaProviderDto"
+          },
+          "externalId": {
+            "type": "string",
+            "description": "The search result `id`."
+          },
+          "url": {
+            "type": "string",
+            "description": "Provider CDN url. Checked against a host allowlist."
+          },
+          "thumbUrl": {
+            "type": "string"
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "height": {
+            "type": "integer",
+            "format": "int32"
+          }
+        },
+        "required": [
+          "provider",
+          "externalId",
+          "url",
+          "thumbUrl",
+          "width",
+          "height"
+        ]
+      },
+      "SendMessageDto": {
+        "type": "object",
+        "properties": {
+          "replyToMessageId": {
+            "type": "string",
+            "description": "Reply to this message. It must live in the same conversation (422 `REPLY_TARGET_NOT_FOUND`) and must not be deleted (422 `REPLY_TARGET_DELETED`)."
+          },
+          "quote": {
+            "description": "Quote a fragment of the target instead of the whole message. Never valid on its own — without `replyToMessageId` it is 422 `QUOTE_WITHOUT_REPLY`. Text messages only: media has no body to slice.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/QuoteInputDto"
+              }
+            ]
+          },
+          "type": {
+            "$ref": "#/components/schemas/MessageTypeDto"
+          },
+          "body": {
+            "type": "string",
+            "maxLength": 4000,
+            "description": "Required for `TEXT` (1–4000). An optional caption (≤1024) for `IMAGE`/`VIDEO`/`FILE`. Rejected for `GIF`/`VOICE`/`STICKER` — there is nowhere to render it."
+          },
+          "mediaId": {
+            "type": "string",
+            "description": "The id returned by `POST /v1/media/chat-upload`. Required for `IMAGE`, `VIDEO`, `VOICE`, `FILE` and an uploaded `GIF`. Single-use: an attachment belongs to one message."
+          },
+          "gif": {
+            "description": "For a `GIF` taken from search. Use this **or** `mediaId` (an uploaded GIF), not both.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GifRefDto"
+              }
+            ]
+          },
+          "stickerId": {
+            "type": "string",
+            "description": "For a `STICKER` from our own catalogue — an id from `GET /v1/stickers/packs`. Use this **or** `sticker`, never both (422 `STICKER_SOURCE_AMBIGUOUS`); a `STICKER` message needs exactly one of them."
+          },
+          "sticker": {
+            "description": "For a `STICKER` taken from `GET /v1/stickers/search` — pass the search result back verbatim. Use this **or** `stickerId`, never both. The response renders both sources as the same `MessageDto.sticker`, so nothing downstream has to tell them apart.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StickerRefDto"
+              }
+            ]
+          },
+          "albumId": {
+            "type": "string",
+            "description": "Client-generated id shared by every image of one multi-image send (max 10). Each image is still its own message with its own `seq`; this only tells the client to draw them as a grid."
+          },
+          "clientMsgId": {
+            "type": "string",
+            "description": "Client-generated id — makes a retried send idempotent (C6)"
+          }
+        }
+      },
+      "MarkReadDto": {
+        "type": "object",
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0,
+            "description": "Highest read `seq`"
+          }
+        },
+        "required": [
+          "seq"
+        ]
+      },
+      "MarkDeliveredDto": {
+        "type": "object",
+        "properties": {
+          "seq": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0,
+            "description": "Highest delivered `seq`"
+          }
+        },
+        "required": [
+          "seq"
+        ]
+      },
+      "ClearHistoryResultDto": {
+        "type": "object",
+        "properties": {
+          "conversationId": {
+            "type": "string"
+          },
+          "clearedBeforeSeq": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Everything with `seq <= clearedBeforeSeq` is gone for you. Drop it from the local cache; the server will never return it again. Messages sent after this keep climbing from here."
+          },
+          "unreadCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Always 0 — nothing is left to read."
+          }
+        },
+        "required": [
+          "conversationId",
+          "clearedBeforeSeq",
+          "unreadCount"
+        ]
+      },
+      "DeleteScopeDto": {
+        "type": "string",
+        "description": "`EVERYONE` deletes for both members and is allowed only on your own messages — anyone else’s land in `skipped` as `NOT_OWN`. `ME` hides the message on every device you own and leaves it untouched for the other member, so it works on any message in the conversation.",
+        "enum": [
+          "ME",
+          "EVERYONE"
+        ]
+      },
+      "SkippedMessageDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "NOT_OWN",
+              "NOT_FOUND",
+              "NOT_MEMBER"
+            ],
+            "description": "`NOT_OWN` — someone else’s message under `EVERYONE`. `NOT_FOUND` — no such id. `NOT_MEMBER` — the id belongs to a conversation you are not in."
+          }
+        },
+        "required": [
+          "id",
+          "reason"
+        ]
+      },
+      "BulkDeleteResultDto": {
+        "type": "object",
+        "properties": {
+          "conversationId": {
+            "type": "string"
+          },
+          "deleted": {
+            "description": "Ids actually deleted — or already deleted, which is the same result (idempotent).",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "skipped": {
+            "description": "Empty when everything was applied.",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SkippedMessageDto"
+            }
+          },
+          "unreadCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Your unread count, recomputed."
+          },
+          "lastMessage": {
+            "nullable": true,
+            "description": "The newest message still visible to **you**, or `null` if none is left. Under `scope=ME` the other member keeps seeing a different one — that is the feature working, not a bug.",
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/MessageDto"
+              }
+            ]
+          }
+        },
+        "required": [
+          "conversationId",
+          "deleted",
+          "skipped",
+          "unreadCount",
+          "lastMessage"
+        ]
+      },
+      "DeleteMessagesDto": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "description": "Message ids, 1–100, all from the same conversation (422 `MIXED_CONVERSATIONS` otherwise). Duplicates are collapsed. Ids that do not exist come back in `skipped` rather than failing the batch.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "scope": {
+            "$ref": "#/components/schemas/DeleteScopeDto"
+          }
+        },
+        "required": [
+          "ids",
+          "scope"
+        ]
+      },
+      "IceServerDto": {
+        "type": "object",
+        "properties": {
+          "urls": {
+            "example": [
+              "turn:turn.elonuz.uz:3478?transport=udp"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "username": {
+            "type": "string",
+            "description": "`<expiryUnixSeconds>:<studentId>` — absent on the STUN entry, which needs no auth."
+          },
+          "credential": {
+            "type": "string",
+            "description": "base64(HMAC-SHA1(TURN_STATIC_SECRET, username))."
+          }
+        },
+        "required": [
+          "urls"
+        ]
+      },
+      "IceServersDto": {
+        "type": "object",
+        "properties": {
+          "iceServers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IceServerDto"
+            }
+          },
+          "ttlSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "description": "How long the credential stays valid. Fetch a new one before placing a call once it has expired — the credential is not tied to a call and is not refreshed by one."
+          }
+        },
+        "required": [
+          "iceServers",
+          "ttlSeconds"
+        ]
+      },
+      "CallDirectionDto": {
+        "type": "string",
+        "description": "Relative to the authenticated student, not to the row.",
+        "enum": [
+          "INCOMING",
+          "OUTGOING"
+        ]
+      },
+      "CallPartyDto": {
+        "type": "string",
+        "enum": [
+          "CALLER",
+          "CALLEE"
+        ]
+      },
+      "CallDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "conversationId": {
+            "type": "string"
+          },
+          "peerId": {
+            "type": "string",
+            "description": "The other party — never the reader."
+          },
+          "direction": {
+            "$ref": "#/components/schemas/CallDirectionDto"
+          },
+          "media": {
+            "$ref": "#/components/schemas/CallMediaDto"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CallStatusDto"
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "answeredAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "endedAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "durationMs": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Milliseconds of actual conversation; 0 when the call was never answered."
+          },
+          "endReason": {
+            "nullable": true,
+            "$ref": "#/components/schemas/CallEndReasonDto"
+          },
+          "endedBy": {
+            "nullable": true,
+            "$ref": "#/components/schemas/CallPartyDto"
+          }
+        },
+        "required": [
+          "id",
+          "conversationId",
+          "peerId",
+          "direction",
+          "media",
+          "status",
+          "startedAt",
+          "answeredAt",
+          "endedAt",
+          "durationMs",
+          "endReason",
+          "endedBy"
+        ]
+      },
+      "CallListDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CallDto"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "hasNext": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "size",
+          "total",
+          "hasNext"
+        ]
+      },
+      "CallStatDto": {
+        "type": "object",
+        "properties": {
+          "callId": {
+            "type": "string"
+          },
+          "candidateType": {
+            "type": "string",
+            "enum": [
+              "HOST",
+              "SRFLX",
+              "RELAY"
+            ]
+          },
+          "rttMs": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "jitterMs": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "packetsLost": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "packetsReceived": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "bytesSent": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "bytesReceived": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "recordedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "callId",
+          "candidateType",
+          "rttMs",
+          "jitterMs",
+          "packetsLost",
+          "packetsReceived",
+          "bytesSent",
+          "bytesReceived",
+          "recordedAt"
+        ]
+      },
+      "RecordCallStatsDto": {
+        "type": "object",
+        "properties": {
+          "candidateType": {
+            "type": "string",
+            "enum": [
+              "HOST",
+              "SRFLX",
+              "RELAY"
+            ],
+            "description": "Type of the SELECTED candidate pair — `RELAY` only when media actually went through TURN."
+          },
+          "rttMs": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0,
+            "maximum": 60000
+          },
+          "jitterMs": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "packetsLost": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "packetsReceived": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0
+          },
+          "bytesSent": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Bytes this participant sent. The TURN bandwidth forecast is built on this."
+          },
+          "bytesReceived": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "candidateType"
         ]
       },
       "ListingBranchResponseDto": {
@@ -18027,39 +19356,6 @@
           "hasNext"
         ]
       },
-      "StudentPhotoDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "url": {
-            "type": "string",
-            "description": "Requires the same bearer token as any other call."
-          },
-          "thumbUrl": {
-            "type": "string",
-            "nullable": true
-          },
-          "width": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
-          },
-          "height": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
-          }
-        },
-        "required": [
-          "id",
-          "url",
-          "thumbUrl",
-          "width",
-          "height"
-        ]
-      },
       "ConnectionViewDto": {
         "type": "string",
         "enum": [
@@ -18242,84 +19538,6 @@
         },
         "required": [
           "addresseeId"
-        ]
-      },
-      "StudentSummaryDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "username": {
-            "type": "string",
-            "nullable": true
-          },
-          "fullName": {
-            "type": "string",
-            "nullable": true
-          },
-          "avatarUrl": {
-            "type": "string",
-            "nullable": true
-          },
-          "photos": {
-            "description": "The student’s profile pictures, in display order — swipe through them on the profile screen. The first element always matches `avatarUrl`. **Empty** for a student who has never added one, in which case fall back to `avatarUrl` (which may itself be null).",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/StudentPhotoDto"
-            }
-          },
-          "bio": {
-            "type": "string",
-            "nullable": true,
-            "maxLength": 140,
-            "description": "Short profile blurb, up to 140 characters. Never contains a link, a `@handle` or a phone number — those are rejected on write, so this is safe to render as plain text.",
-            "example": "5/5 · Dasturiy injiniring"
-          },
-          "phoneNumber": {
-            "type": "string",
-            "nullable": true,
-            "description": "E.164 phone number, subject to the target’s `phoneVisibility`: `EVERYONE` always, `CONNECTIONS` only once connected, `NOBODY` (**the default**) never. `null` when hidden — so expect `null` for most students, and do not draw the row at all when it is.",
-            "example": "+998901234567"
-          },
-          "universityId": {
-            "type": "string",
-            "nullable": true,
-            "description": "The value the student set on their own profile — the same string `GET /v1/students` accepts in `universityId`. There is no server-side university catalogue yet, so this is free-form (the app currently writes `emis-<profEmisId>`, e.g. `emis-142`).",
-            "example": "emis-142"
-          },
-          "gender": {
-            "nullable": true,
-            "$ref": "#/components/schemas/GenderDto"
-          },
-          "courseYear": {
-            "nullable": true,
-            "$ref": "#/components/schemas/CourseYearDto"
-          },
-          "online": {
-            "type": "boolean",
-            "description": "Live presence. Real everywhere the viewer is allowed to see it — subject to the target’s `lastSeenVisibility`: `EVERYONE` always, `CONNECTIONS` (the default) only once connected, `NOBODY` never. When hidden this is `false` and `lastSeenAt` is `null`."
-          },
-          "lastSeenAt": {
-            "type": "string",
-            "nullable": true,
-            "format": "date-time",
-            "description": "When the student last closed their last socket. `null` while online or hidden."
-          }
-        },
-        "required": [
-          "id",
-          "username",
-          "fullName",
-          "avatarUrl",
-          "photos",
-          "bio",
-          "phoneNumber",
-          "universityId",
-          "gender",
-          "courseYear",
-          "online",
-          "lastSeenAt"
         ]
       },
       "RequestItemDto": {
@@ -18549,1171 +19767,6 @@
         "required": [
           "reason"
         ]
-      },
-      "IceServerDto": {
-        "type": "object",
-        "properties": {
-          "urls": {
-            "example": [
-              "turn:turn.elonuz.uz:3478?transport=udp"
-            ],
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "username": {
-            "type": "string",
-            "description": "`<expiryUnixSeconds>:<studentId>` — absent on the STUN entry, which needs no auth."
-          },
-          "credential": {
-            "type": "string",
-            "description": "base64(HMAC-SHA1(TURN_STATIC_SECRET, username))."
-          }
-        },
-        "required": [
-          "urls"
-        ]
-      },
-      "IceServersDto": {
-        "type": "object",
-        "properties": {
-          "iceServers": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/IceServerDto"
-            }
-          },
-          "ttlSeconds": {
-            "type": "integer",
-            "format": "int32",
-            "description": "How long the credential stays valid. Fetch a new one before placing a call once it has expired — the credential is not tied to a call and is not refreshed by one."
-          }
-        },
-        "required": [
-          "iceServers",
-          "ttlSeconds"
-        ]
-      },
-      "CallDirectionDto": {
-        "type": "string",
-        "description": "Relative to the authenticated student, not to the row.",
-        "enum": [
-          "INCOMING",
-          "OUTGOING"
-        ]
-      },
-      "CallMediaDto": {
-        "type": "string",
-        "enum": [
-          "AUDIO",
-          "VIDEO"
-        ]
-      },
-      "CallStatusDto": {
-        "type": "string",
-        "enum": [
-          "RINGING",
-          "CONNECTING",
-          "ACTIVE",
-          "ENDED",
-          "MISSED",
-          "DECLINED",
-          "FAILED",
-          "CANCELED"
-        ]
-      },
-      "CallEndReasonDto": {
-        "type": "string",
-        "enum": [
-          "HANGUP",
-          "TIMEOUT",
-          "DECLINED",
-          "BUSY",
-          "FAILED",
-          "CANCELED",
-          "UNAUTHORIZED"
-        ]
-      },
-      "CallPartyDto": {
-        "type": "string",
-        "enum": [
-          "CALLER",
-          "CALLEE"
-        ]
-      },
-      "CallDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "conversationId": {
-            "type": "string"
-          },
-          "peerId": {
-            "type": "string",
-            "description": "The other party — never the reader."
-          },
-          "direction": {
-            "$ref": "#/components/schemas/CallDirectionDto"
-          },
-          "media": {
-            "$ref": "#/components/schemas/CallMediaDto"
-          },
-          "status": {
-            "$ref": "#/components/schemas/CallStatusDto"
-          },
-          "startedAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "answeredAt": {
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
-          },
-          "endedAt": {
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
-          },
-          "durationMs": {
-            "type": "integer",
-            "format": "int32",
-            "description": "Milliseconds of actual conversation; 0 when the call was never answered."
-          },
-          "endReason": {
-            "nullable": true,
-            "$ref": "#/components/schemas/CallEndReasonDto"
-          },
-          "endedBy": {
-            "nullable": true,
-            "$ref": "#/components/schemas/CallPartyDto"
-          }
-        },
-        "required": [
-          "id",
-          "conversationId",
-          "peerId",
-          "direction",
-          "media",
-          "status",
-          "startedAt",
-          "answeredAt",
-          "endedAt",
-          "durationMs",
-          "endReason",
-          "endedBy"
-        ]
-      },
-      "CallListDto": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/CallDto"
-            }
-          },
-          "page": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "size": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "total": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "hasNext": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "items",
-          "page",
-          "size",
-          "total",
-          "hasNext"
-        ]
-      },
-      "CallStatDto": {
-        "type": "object",
-        "properties": {
-          "callId": {
-            "type": "string"
-          },
-          "candidateType": {
-            "type": "string",
-            "enum": [
-              "HOST",
-              "SRFLX",
-              "RELAY"
-            ]
-          },
-          "rttMs": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
-          },
-          "jitterMs": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
-          },
-          "packetsLost": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
-          },
-          "packetsReceived": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
-          },
-          "bytesSent": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
-          },
-          "bytesReceived": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
-          },
-          "recordedAt": {
-            "type": "string",
-            "format": "date-time"
-          }
-        },
-        "required": [
-          "callId",
-          "candidateType",
-          "rttMs",
-          "jitterMs",
-          "packetsLost",
-          "packetsReceived",
-          "bytesSent",
-          "bytesReceived",
-          "recordedAt"
-        ]
-      },
-      "RecordCallStatsDto": {
-        "type": "object",
-        "properties": {
-          "candidateType": {
-            "type": "string",
-            "enum": [
-              "HOST",
-              "SRFLX",
-              "RELAY"
-            ],
-            "description": "Type of the SELECTED candidate pair — `RELAY` only when media actually went through TURN."
-          },
-          "rttMs": {
-            "type": "integer",
-            "format": "int32",
-            "minimum": 0,
-            "maximum": 60000
-          },
-          "jitterMs": {
-            "type": "integer",
-            "format": "int32",
-            "minimum": 0,
-            "maximum": 10000
-          },
-          "packetsLost": {
-            "type": "integer",
-            "format": "int32",
-            "minimum": 0
-          },
-          "packetsReceived": {
-            "type": "integer",
-            "format": "int32",
-            "minimum": 0
-          },
-          "bytesSent": {
-            "type": "integer",
-            "format": "int64",
-            "minimum": 0,
-            "description": "Bytes this participant sent. The TURN bandwidth forecast is built on this."
-          },
-          "bytesReceived": {
-            "type": "integer",
-            "format": "int64",
-            "minimum": 0
-          }
-        },
-        "required": [
-          "candidateType"
-        ]
-      },
-      "ConversationTypeDto": {
-        "type": "string",
-        "enum": [
-          "DIRECT",
-          "GROUP"
-        ]
-      },
-      "ConversationDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "type": {
-            "$ref": "#/components/schemas/ConversationTypeDto"
-          },
-          "lastMessageAt": {
-            "type": "string",
-            "nullable": true,
-            "format": "date-time"
-          }
-        },
-        "required": [
-          "id",
-          "type",
-          "lastMessageAt"
-        ]
-      },
-      "OpenDirectDto": {
-        "type": "object",
-        "properties": {
-          "studentId": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "studentId"
-        ]
-      },
-      "MessageTypeDto": {
-        "type": "string",
-        "enum": [
-          "TEXT",
-          "IMAGE",
-          "GIF",
-          "VIDEO",
-          "VIDEO_NOTE",
-          "FILE",
-          "VOICE",
-          "STICKER",
-          "SYSTEM",
-          "CALL"
-        ]
-      },
-      "MessageStickerDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "description": "Catalogue id, or the provider’s own id."
-          },
-          "provider": {
-            "nullable": true,
-            "$ref": "#/components/schemas/MediaProviderDto"
-          },
-          "packId": {
-            "type": "string",
-            "nullable": true,
-            "description": "Our pack id. `null` for a sticker from search, which belongs to no pack of ours."
-          },
-          "emoji": {
-            "type": "string",
-            "nullable": true,
-            "example": "😄",
-            "description": "Catalogue stickers only; `null` for a sticker from search."
-          },
-          "url": {
-            "type": "string",
-            "description": "WebP with a transparent background. Never an MP4 — that format has no alpha channel."
-          },
-          "thumbUrl": {
-            "type": "string",
-            "nullable": true,
-            "description": "Smaller preview, search results only. `null` for a catalogue sticker — a 512×512 WebP is already small enough to be its own preview, so fall back to `url`."
-          },
-          "width": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "height": {
-            "type": "integer",
-            "format": "int32"
-          }
-        },
-        "required": [
-          "id",
-          "provider",
-          "packId",
-          "emoji",
-          "url",
-          "thumbUrl",
-          "width",
-          "height"
-        ]
-      },
-      "QuoteDto": {
-        "type": "object",
-        "properties": {
-          "text": {
-            "type": "string",
-            "maxLength": 300
-          },
-          "offset": {
-            "type": "integer",
-            "format": "int32",
-            "description": "Start of the selection in UTF-16 code units — the same units Kotlin/Swift count."
-          }
-        },
-        "required": [
-          "text",
-          "offset"
-        ]
-      },
-      "ReplyToDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "nullable": true,
-            "description": "`null` once the original has been purged — there is nothing left to jump to."
-          },
-          "seq": {
-            "type": "integer",
-            "format": "int32",
-            "description": "Use with `?around=` to jump."
-          },
-          "senderId": {
-            "type": "string"
-          },
-          "senderName": {
-            "type": "string",
-            "nullable": true,
-            "description": "Name to draw above the bubble — already resolved, do not look it up by id."
-          },
-          "type": {
-            "$ref": "#/components/schemas/MessageTypeDto"
-          },
-          "preview": {
-            "type": "string",
-            "nullable": true,
-            "description": "Shortened original text (≤120). `null` for media — draw \"📷 Rasm\" and friends from `type`."
-          },
-          "quote": {
-            "nullable": true,
-            "description": "The fragment the sender highlighted, or `null` for a plain reply.",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/QuoteDto"
-              }
-            ]
-          },
-          "originalDeleted": {
-            "type": "boolean",
-            "description": "The original was deleted or purged after this reply was sent. Keep showing the quote — it is a snapshot — but drop the tap-to-jump affordance."
-          }
-        },
-        "required": [
-          "id",
-          "seq",
-          "senderId",
-          "senderName",
-          "type",
-          "preview",
-          "quote",
-          "originalDeleted"
-        ]
-      },
-      "MessageCallDto": {
-        "type": "object",
-        "properties": {
-          "callId": {
-            "type": "string"
-          },
-          "media": {
-            "$ref": "#/components/schemas/CallMediaDto"
-          },
-          "status": {
-            "$ref": "#/components/schemas/CallStatusDto"
-          },
-          "durationMs": {
-            "type": "integer",
-            "format": "int32",
-            "description": "Milliseconds of actual conversation; 0 when the call was never answered."
-          },
-          "endReason": {
-            "nullable": true,
-            "$ref": "#/components/schemas/CallEndReasonDto"
-          }
-        },
-        "required": [
-          "callId",
-          "media",
-          "status",
-          "durationMs",
-          "endReason"
-        ]
-      },
-      "MessageDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "conversationId": {
-            "type": "string"
-          },
-          "senderId": {
-            "type": "string"
-          },
-          "seq": {
-            "type": "integer",
-            "format": "int32",
-            "description": "Per-conversation monotonic sequence"
-          },
-          "type": {
-            "$ref": "#/components/schemas/MessageTypeDto"
-          },
-          "body": {
-            "type": "string",
-            "nullable": true
-          },
-          "clientMsgId": {
-            "type": "string",
-            "nullable": true,
-            "description": "Your own idempotency key, echoed back — set only when you are the sender, `null` for everyone else. Match your optimistic (\"sending\") copy against this rather than against the message text: two identical texts in a row are indistinguishable, and a media message has no text at all (§17.1)."
-          },
-          "deletedAt": {
-            "type": "string",
-            "nullable": true,
-            "format": "date-time",
-            "description": "When the sender deleted this message, `null` otherwise. The row keeps its `seq` and stays in the history — `body` is emptied and it no longer counts as unread. Render a \"message deleted\" placeholder (§18)."
-          },
-          "albumId": {
-            "type": "string",
-            "nullable": true,
-            "description": "Shared by every image of one multi-image send — draw consecutive messages with the same value as a grid. Each is still its own message with its own `seq`."
-          },
-          "attachment": {
-            "nullable": true,
-            "description": "Set for IMAGE, GIF, VIDEO, VOICE and FILE messages; null otherwise.",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/AttachmentDto"
-              }
-            ]
-          },
-          "sticker": {
-            "nullable": true,
-            "description": "Set for `STICKER` messages; null otherwise.",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/MessageStickerDto"
-              }
-            ]
-          },
-          "replyTo": {
-            "nullable": true,
-            "description": "Set when this message replies to another; null otherwise (§C2).",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/ReplyToDto"
-              }
-            ]
-          },
-          "call": {
-            "nullable": true,
-            "description": "Set for `CALL` messages; null otherwise.",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/MessageCallDto"
-              }
-            ]
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time"
-          }
-        },
-        "required": [
-          "id",
-          "conversationId",
-          "senderId",
-          "seq",
-          "type",
-          "body",
-          "clientMsgId",
-          "deletedAt",
-          "albumId",
-          "attachment",
-          "sticker",
-          "replyTo",
-          "call",
-          "createdAt"
-        ]
-      },
-      "ConversationListItemDto": {
-        "type": "object",
-        "properties": {
-          "conversation": {
-            "$ref": "#/components/schemas/ConversationDto"
-          },
-          "other": {
-            "$ref": "#/components/schemas/StudentSummaryDto"
-          },
-          "lastMessage": {
-            "nullable": true,
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/MessageDto"
-              }
-            ]
-          },
-          "unreadCount": {
-            "type": "integer",
-            "format": "int32",
-            "description": "Messages from the other member with `seq > myReadSeq`."
-          },
-          "myReadSeq": {
-            "type": "integer",
-            "format": "int32",
-            "description": "How far you have read (`ConversationMember.lastReadSeq`). The persisted counterpart of `unreadCount` — advanced by `POST /v1/conversations/{id}/read` or the `message:read` event."
-          },
-          "peerReadSeq": {
-            "type": "integer",
-            "format": "int32",
-            "description": "How far the other member has read. Every message you sent with `seq <= peerReadSeq` is read (✓✓). Restores receipt state after a restart, when the live `message:read` event is gone."
-          },
-          "peerDeliveredSeq": {
-            "type": "integer",
-            "format": "int32",
-            "description": "How far the other member’s device has received. `seq <= peerDeliveredSeq` is delivered (✓)."
-          }
-        },
-        "required": [
-          "conversation",
-          "other",
-          "lastMessage",
-          "unreadCount",
-          "myReadSeq",
-          "peerReadSeq",
-          "peerDeliveredSeq"
-        ]
-      },
-      "ConversationPageDto": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ConversationListItemDto"
-            }
-          },
-          "page": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "size": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "total": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "hasNext": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "items",
-          "page",
-          "size",
-          "total",
-          "hasNext"
-        ]
-      },
-      "UnreadCountDto": {
-        "type": "object",
-        "properties": {
-          "total": {
-            "type": "integer",
-            "format": "int32",
-            "description": "Unread messages across every conversation. Deleted messages are not counted."
-          },
-          "conversations": {
-            "type": "integer",
-            "format": "int32",
-            "description": "How many conversations hold at least one unread message."
-          }
-        },
-        "required": [
-          "total",
-          "conversations"
-        ]
-      },
-      "MessageListDto": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "description": "Newest-first",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/MessageDto"
-            }
-          },
-          "hasMore": {
-            "type": "boolean",
-            "description": "More messages exist past this page, in the direction you are paging. Exact — the server reads one row beyond `size` rather than inferring it from the page length, so a last page that happens to fill exactly still reports `false` (§17.5)."
-          }
-        },
-        "required": [
-          "items",
-          "hasMore"
-        ]
-      },
-      "QuoteInputDto": {
-        "type": "object",
-        "properties": {
-          "text": {
-            "type": "string",
-            "maxLength": 300,
-            "description": "Max 300 characters (422 `QUOTE_TOO_LONG`). Must be a real slice of the target’s body at `offset` — the server checks it and rejects a mismatch with 422 `QUOTE_NOT_FOUND`. It is stored as a snapshot, so an unchecked one would render forever as text the original never contained."
-          },
-          "offset": {
-            "type": "integer",
-            "format": "int32",
-            "minimum": 0,
-            "description": "Start of the selection in UTF-16 code units. Kotlin and Swift already count in these, so pass the index straight through — no conversion on either side."
-          }
-        },
-        "required": [
-          "text",
-          "offset"
-        ]
-      },
-      "GifRefDto": {
-        "type": "object",
-        "properties": {
-          "provider": {
-            "$ref": "#/components/schemas/MediaProviderDto"
-          },
-          "externalId": {
-            "type": "string",
-            "description": "The search result `id`."
-          },
-          "url": {
-            "type": "string",
-            "description": "Provider CDN url. Checked against a host allowlist."
-          },
-          "thumbUrl": {
-            "type": "string"
-          },
-          "width": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "height": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "durationMs": {
-            "type": "integer",
-            "format": "int32",
-            "nullable": true
-          }
-        },
-        "required": [
-          "provider",
-          "externalId",
-          "url",
-          "thumbUrl",
-          "width",
-          "height"
-        ]
-      },
-      "StickerRefDto": {
-        "type": "object",
-        "properties": {
-          "provider": {
-            "$ref": "#/components/schemas/MediaProviderDto"
-          },
-          "externalId": {
-            "type": "string",
-            "description": "The search result `id`."
-          },
-          "url": {
-            "type": "string",
-            "description": "Provider CDN url. Checked against a host allowlist."
-          },
-          "thumbUrl": {
-            "type": "string"
-          },
-          "width": {
-            "type": "integer",
-            "format": "int32"
-          },
-          "height": {
-            "type": "integer",
-            "format": "int32"
-          }
-        },
-        "required": [
-          "provider",
-          "externalId",
-          "url",
-          "thumbUrl",
-          "width",
-          "height"
-        ]
-      },
-      "SendMessageDto": {
-        "type": "object",
-        "properties": {
-          "replyToMessageId": {
-            "type": "string",
-            "description": "Reply to this message. It must live in the same conversation (422 `REPLY_TARGET_NOT_FOUND`) and must not be deleted (422 `REPLY_TARGET_DELETED`)."
-          },
-          "quote": {
-            "description": "Quote a fragment of the target instead of the whole message. Never valid on its own — without `replyToMessageId` it is 422 `QUOTE_WITHOUT_REPLY`. Text messages only: media has no body to slice.",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/QuoteInputDto"
-              }
-            ]
-          },
-          "type": {
-            "$ref": "#/components/schemas/MessageTypeDto"
-          },
-          "body": {
-            "type": "string",
-            "maxLength": 4000,
-            "description": "Required for `TEXT` (1–4000). An optional caption (≤1024) for `IMAGE`/`VIDEO`/`FILE`. Rejected for `GIF`/`VOICE`/`STICKER` — there is nowhere to render it."
-          },
-          "mediaId": {
-            "type": "string",
-            "description": "The id returned by `POST /v1/media/chat-upload`. Required for `IMAGE`, `VIDEO`, `VOICE`, `FILE` and an uploaded `GIF`. Single-use: an attachment belongs to one message."
-          },
-          "gif": {
-            "description": "For a `GIF` taken from search. Use this **or** `mediaId` (an uploaded GIF), not both.",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/GifRefDto"
-              }
-            ]
-          },
-          "stickerId": {
-            "type": "string",
-            "description": "For a `STICKER` from our own catalogue — an id from `GET /v1/stickers/packs`. Use this **or** `sticker`, never both (422 `STICKER_SOURCE_AMBIGUOUS`); a `STICKER` message needs exactly one of them."
-          },
-          "sticker": {
-            "description": "For a `STICKER` taken from `GET /v1/stickers/search` — pass the search result back verbatim. Use this **or** `stickerId`, never both. The response renders both sources as the same `MessageDto.sticker`, so nothing downstream has to tell them apart.",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/StickerRefDto"
-              }
-            ]
-          },
-          "albumId": {
-            "type": "string",
-            "description": "Client-generated id shared by every image of one multi-image send (max 10). Each image is still its own message with its own `seq`; this only tells the client to draw them as a grid."
-          },
-          "clientMsgId": {
-            "type": "string",
-            "description": "Client-generated id — makes a retried send idempotent (C6)"
-          }
-        }
-      },
-      "MarkReadDto": {
-        "type": "object",
-        "properties": {
-          "seq": {
-            "type": "integer",
-            "format": "int32",
-            "minimum": 0,
-            "description": "Highest read `seq`"
-          }
-        },
-        "required": [
-          "seq"
-        ]
-      },
-      "MarkDeliveredDto": {
-        "type": "object",
-        "properties": {
-          "seq": {
-            "type": "integer",
-            "format": "int32",
-            "minimum": 0,
-            "description": "Highest delivered `seq`"
-          }
-        },
-        "required": [
-          "seq"
-        ]
-      },
-      "ClearHistoryResultDto": {
-        "type": "object",
-        "properties": {
-          "conversationId": {
-            "type": "string"
-          },
-          "clearedBeforeSeq": {
-            "type": "integer",
-            "format": "int32",
-            "description": "Everything with `seq <= clearedBeforeSeq` is gone for you. Drop it from the local cache; the server will never return it again. Messages sent after this keep climbing from here."
-          },
-          "unreadCount": {
-            "type": "integer",
-            "format": "int32",
-            "description": "Always 0 — nothing is left to read."
-          }
-        },
-        "required": [
-          "conversationId",
-          "clearedBeforeSeq",
-          "unreadCount"
-        ]
-      },
-      "DeleteScopeDto": {
-        "type": "string",
-        "description": "`EVERYONE` deletes for both members and is allowed only on your own messages — anyone else’s land in `skipped` as `NOT_OWN`. `ME` hides the message on every device you own and leaves it untouched for the other member, so it works on any message in the conversation.",
-        "enum": [
-          "ME",
-          "EVERYONE"
-        ]
-      },
-      "SkippedMessageDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "reason": {
-            "type": "string",
-            "enum": [
-              "NOT_OWN",
-              "NOT_FOUND",
-              "NOT_MEMBER"
-            ],
-            "description": "`NOT_OWN` — someone else’s message under `EVERYONE`. `NOT_FOUND` — no such id. `NOT_MEMBER` — the id belongs to a conversation you are not in."
-          }
-        },
-        "required": [
-          "id",
-          "reason"
-        ]
-      },
-      "BulkDeleteResultDto": {
-        "type": "object",
-        "properties": {
-          "conversationId": {
-            "type": "string"
-          },
-          "deleted": {
-            "description": "Ids actually deleted — or already deleted, which is the same result (idempotent).",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "skipped": {
-            "description": "Empty when everything was applied.",
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SkippedMessageDto"
-            }
-          },
-          "unreadCount": {
-            "type": "integer",
-            "format": "int32",
-            "description": "Your unread count, recomputed."
-          },
-          "lastMessage": {
-            "nullable": true,
-            "description": "The newest message still visible to **you**, or `null` if none is left. Under `scope=ME` the other member keeps seeing a different one — that is the feature working, not a bug.",
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/MessageDto"
-              }
-            ]
-          }
-        },
-        "required": [
-          "conversationId",
-          "deleted",
-          "skipped",
-          "unreadCount",
-          "lastMessage"
-        ]
-      },
-      "DeleteMessagesDto": {
-        "type": "object",
-        "properties": {
-          "ids": {
-            "description": "Message ids, 1–100, all from the same conversation (422 `MIXED_CONVERSATIONS` otherwise). Duplicates are collapsed. Ids that do not exist come back in `skipped` rather than failing the batch.",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "scope": {
-            "$ref": "#/components/schemas/DeleteScopeDto"
-          }
-        },
-        "required": [
-          "ids",
-          "scope"
-        ]
-      },
-      "DevicePlatformDto": {
-        "type": "string",
-        "enum": [
-          "IOS",
-          "ANDROID",
-          "WEB"
-        ]
-      },
-      "RegisterDeviceDto": {
-        "type": "object",
-        "properties": {
-          "token": {
-            "type": "string",
-            "description": "The device push token. `ANDROID`/`WEB`: the FCM registration token. `IOS`: the raw APNs device token — 64 lowercase hex characters; anything else is rejected with 422 `INVALID_DEVICE_TOKEN`.",
-            "example": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2"
-          },
-          "platform": {
-            "$ref": "#/components/schemas/DevicePlatformDto"
-          }
-        },
-        "required": [
-          "token",
-          "platform"
-        ]
-      },
-      "NotificationTargetDto": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string",
-            "example": "CHAT",
-            "description": "One of `CHAT | LISTING | CONNECTION_REQUESTS | MY_LISTINGS | PROFILE` — as a string, not an enum, so an unrecognised value can be treated as \"no destination\" instead of breaking the response."
-          },
-          "id": {
-            "type": "string",
-            "nullable": true,
-            "example": "cnv_01HX2E4Q7Z",
-            "description": "The id `type` addresses: `conversationId` for CHAT, `listingId` for LISTING. Null for the target types that name a screen (`CONNECTION_REQUESTS`, `MY_LISTINGS`, `PROFILE`)."
-          }
-        },
-        "required": [
-          "type",
-          "id"
-        ]
-      },
-      "NotificationDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string",
-            "example": "ntf_01HX2E4Q7Z"
-          },
-          "type": {
-            "type": "string",
-            "example": "CHAT",
-            "description": "One of `JOB | DISCOUNT | LISTING | CHAT | CONNECTION | SYSTEM` — a string, not an enum (see §1.1). Drives icon and colour only."
-          },
-          "title": {
-            "type": "string",
-            "example": "Yangi xabar",
-            "maxLength": 120
-          },
-          "body": {
-            "type": "string",
-            "nullable": true,
-            "maxLength": 300,
-            "example": "Dilnoza sizga xabar yozdi.",
-            "description": "Optional — a row with no body is drawn as a title-only card."
-          },
-          "target": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/NotificationTargetDto"
-              }
-            ],
-            "nullable": true,
-            "description": "Null when the row is informational and opens nothing."
-          },
-          "readAt": {
-            "type": "string",
-            "format": "date-time",
-            "nullable": true,
-            "example": "2026-08-04T08:00:00.000Z",
-            "description": "When it was read, or null. ISO-8601 UTC."
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time",
-            "example": "2026-08-04T09:12:33.000Z",
-            "description": "ISO-8601 UTC. Never a pre-rendered \"2 hours ago\" — that string would freeze at the moment it was written and still read \"2 hours ago\" the next day (§2.3)."
-          }
-        },
-        "required": [
-          "id",
-          "type",
-          "title",
-          "body",
-          "target",
-          "readAt",
-          "createdAt"
-        ]
-      },
-      "NotificationListDto": {
-        "type": "object",
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/NotificationDto"
-            }
-          },
-          "unreadCount": {
-            "type": "integer",
-            "format": "int32",
-            "example": 3,
-            "description": "Unread across the student’s **entire** history, not within `items` (§2.2). This is what the dot on the home screen shows, so it must not shrink just because the list was capped."
-          }
-        },
-        "required": [
-          "items",
-          "unreadCount"
-        ]
-      },
-      "MarkNotificationsReadDto": {
-        "type": "object",
-        "properties": {
-          "ids": {
-            "maxItems": 200,
-            "example": [
-              "ntf_01HX2E4Q7Z",
-              "ntf_01HW9B3K2M"
-            ],
-            "description": "The rows to mark, at most 200. Ids that are unknown, or belong to another student, are skipped silently rather than failing the batch (§3.3) — one stale id from the client’s cache must not cost the others their mark.",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "all": {
-            "type": "boolean",
-            "example": true,
-            "description": "Marks every unread notification. Mutually exclusive with `ids`."
-          }
-        }
       },
       "StickerDto": {
         "type": "object",

@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { StudentGuard } from '../../common/guards/student.guard';
+import { ChatDirectoryModule } from '../../infrastructure/chat-directory/chat-directory.module';
 import { PrismaModule } from '../../infrastructure/database/prisma.module';
 import { SocialGraphModule } from '../../infrastructure/social-graph/social-graph.module';
 import { CallEndedBus } from './application/call-ended.bus';
@@ -13,13 +14,11 @@ import { CALL_REPOSITORY } from './domain/call.repository';
 import { CALL_STATE_REPOSITORY } from './domain/call-state.repository';
 import { CALL_STAT_REPOSITORY } from './domain/call-stat.repository';
 import { CALL_TIMERS } from './domain/call-timers.repository';
-import { CONVERSATION_DIRECTORY } from './domain/conversation-directory.repository';
 import { CALL_STUDENT_DIRECTORY } from './domain/student-directory.repository';
 import { CallPrismaRepository } from './infrastructure/call.prisma.repository';
 import { CallStateRedisRepository } from './infrastructure/call-state.redis.repository';
 import { CallStatPrismaRepository } from './infrastructure/call-stat.prisma.repository';
 import { CallTimersQueue } from './infrastructure/call-timers.queue';
-import { ConversationDirectoryPrismaRepository } from './infrastructure/conversation-directory.prisma.repository';
 import { StudentDirectoryPrismaRepository } from './infrastructure/student-directory.prisma.repository';
 import { CallsController } from './presentation/calls.controller';
 
@@ -46,7 +45,7 @@ const CALL_TIMER_HANDLER = Symbol('CALL_TIMER_HANDLER');
  * `forwardRef` ever looks necessary here, something is wired backwards.
  */
 @Module({
-  imports: [PrismaModule, SocialGraphModule, JwtModule.register({})],
+  imports: [PrismaModule, SocialGraphModule, ChatDirectoryModule, JwtModule.register({})],
   controllers: [CallsController],
   providers: [
     CallsGateway,
@@ -61,7 +60,6 @@ const CALL_TIMER_HANDLER = Symbol('CALL_TIMER_HANDLER');
     { provide: CALL_STATE_REPOSITORY, useClass: CallStateRedisRepository },
     { provide: CALL_STAT_REPOSITORY, useClass: CallStatPrismaRepository },
     { provide: CALL_TIMERS, useExisting: CallTimersQueue },
-    { provide: CONVERSATION_DIRECTORY, useClass: ConversationDirectoryPrismaRepository },
     { provide: CALL_STUDENT_DIRECTORY, useClass: StudentDirectoryPrismaRepository },
     {
       provide: CALL_TIMER_HANDLER,

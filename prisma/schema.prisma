@@ -240,6 +240,17 @@ model Student {
   birthYear       Int?        @map("birth_year")
   courseYear      CourseYear? @map("course_year")
 
+  /// Where the student actually lives — the geo half of "is this job relevant to me" (push
+  /// catalogue §3.3 №9). Plain columns rather than FKs, exactly like `StudentListingBranch`: the
+  /// seeded district set and the client's GeoCatalog have not been reconciled, and a hard FK would
+  /// reject a legitimate value the moment the two lists drift.
+  ///
+  /// Null until the app starts collecting it, and the matcher treats null as "no geo signal" rather
+  /// than as a filter — a student who has not told us where they are still gets matched on
+  /// university and course instead of silently receiving nothing.
+  regionId        String?     @map("region_id")
+  districtId      String?     @map("district_id")
+
   createdAt          DateTime           @default(now()) @map("created_at")
   updatedAt          DateTime           @updatedAt @map("updated_at")
   lastSeenAt         DateTime?          @map("last_seen_at")
@@ -1657,6 +1668,11 @@ model Notification {
   /// target types that address a screen rather than an object, and for `targetType = null`.
   targetId   String?                 @map("target_id")
   readAt     DateTime?               @map("read_at")
+  /// Set when quiet hours (22:00–08:00 Tashkent) held the push back — the value is when it is owed
+  /// (push catalogue §5.3). Null means nothing is outstanding: either the push already went, or
+  /// this row never wanted one. The row itself carries everything the deferred send needs, which is
+  /// why the queue is this column rather than a second table that could disagree with it.
+  pushDeferredUntil DateTime? @map("push_deferred_until")
   createdAt  DateTime                @default(now()) @map("created_at")
 
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
@@ -1668,7 +1684,29 @@ model Notification {
   @@index([studentId, readAt])
   // The 90-day retention sweep, oldest first.
   @@index([createdAt])
+  // The quiet-hours flush: "everything owed a push by now". Almost every row is null, so this index
+  // stays tiny however large the table grows.
+  @@index([pushDeferredUntil])
   @@map("notifications")
+}
+
+/// "Have we already sent this one?" — the durable half of the frequency rules (push catalogue §5).
+///
+/// One table rather than a flag on each of `Listing`, `StudentListing` and `StudentFavorite`,
+/// because the question is the same in all three cases and the answer must survive a Redis flush:
+/// §5.2 says an expiry reminder goes out **once in a listing's life**, and a cache that forgets
+/// turns that into "once per deploy".
+///
+/// The key encodes what was sent and to whom — `expiry:student-listing:<id>`,
+/// `digest:job:<studentId>:<yyyy-mm-dd>`. Claiming is an insert: it either succeeds (first time) or
+/// hits the primary key (already sent), which makes it atomic across replicas without a lock.
+model NotificationDedup {
+  key       String   @id
+  createdAt DateTime @default(now()) @map("created_at")
+
+  // The sweep that keeps this table from growing forever, oldest first.
+  @@index([createdAt])
+  @@map("notification_dedup")
 }
 
 // ============================================================================

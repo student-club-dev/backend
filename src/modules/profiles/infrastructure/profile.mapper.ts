@@ -26,6 +26,8 @@ export function toStudentProfile(row: Student): Profile {
     gender: row.gender === null ? null : GENDER_TO_DOMAIN[row.gender],
     universityId: row.universityId,
     universityEmail: row.universityEmail,
+    regionId: row.regionId,
+    districtId: row.districtId,
     birthYear: row.birthYear,
     courseYear: row.courseYear === null ? null : COURSE_YEAR_TO_DOMAIN[row.courseYear],
     lastSeenVisibility: LAST_SEEN_VISIBILITY_TO_DOMAIN[row.lastSeenVisibility],
@@ -42,6 +44,9 @@ export function toBusinessProfile(row: BusinessOwner): Profile {
   return {
     id: row.id,
     role: ProfileRole.BUSINESS,
+    // Student-only, like the university/course fields — `business_owners` has no such column.
+    regionId: null,
+    districtId: null,
     firstName: row.firstName,
     lastName: row.lastName,
     username: null,

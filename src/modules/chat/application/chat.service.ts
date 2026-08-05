@@ -21,6 +21,9 @@ import {
 import { MediaKind, MediaStatus } from '../../media/domain/enums/media-kind.enum';
 import { isAllowedGifUrl } from '../../gifs/domain/gif-source';
 import { isAllowedStickerUrl } from '../../stickers/domain/sticker-source';
+// Type-only: the badge port NotificationsModule injects (push catalogue §4.2). Declaring it here
+// keeps the two modules' mutual need to one named interface instead of a runtime dependency.
+import type { MessageUnreadPort } from '../../notifications/domain/message-unread.port';
 import {
   BulkDeleteResult,
   CHAT_REPOSITORY,
@@ -60,7 +63,7 @@ const MAX_DELETE_IDS = 100;
  * job — the service returns domain data. Depends on repository interfaces only.
  */
 @Injectable()
-export class ChatService {
+export class ChatService implements MessageUnreadPort {
   constructor(
     @Inject(CHAT_REPOSITORY) private readonly chat: ChatRepository,
     @Inject(CONNECTION_CHECK) private readonly connectionCheck: ConnectionCheckRepository,

@@ -26,7 +26,8 @@ import { CallStatus } from '../calls/domain/enums/call-status.enum';
 import { MediaReadyBus } from '../media/application/media-ready.bus';
 import { MediaAsset } from '../media/domain/entities/media-asset.entity';
 import { AttachmentDto } from '../media/presentation/dto/attachment.dto';
-import { NotificationsService } from '../notifications/application/notifications.service';
+import { NotificationDispatcher } from '../notifications/application/notification-dispatcher.service';
+import { NotificationCatalog } from '../notifications/domain/events/notification-catalog';
 import {
   CHAT_EVENT,
   ConversationDeletedPayload,
@@ -62,7 +63,9 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
 
   constructor(
     private readonly chat: ChatService,
-    private readonly notifications: NotificationsService,
+    // The push catalogue's single entry point — it writes the in-app row and sends the push
+    // together, which is what keeps the two from disagreeing (catalogue §1.1).
+    private readonly dispatcher: NotificationDispatcher,
     private readonly jwt: JwtService,
     private readonly config: ConfigService<Env, true>,
     private readonly mediaReady: MediaReadyBus,
@@ -238,13 +241,15 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
         (await this.chat.countInAlbum(message.conversationId, message.albumId)) > 1;
       if (!isAlbumFollowUp) {
         // A SYSTEM row is written by the server, not by the person in `senderId`, so it carries no
-        // sender identity at all — neither in the title nor in `data`. Both lookups are needed
-        // unconditionally and neither depends on the other, so they overlap: `broadcastMessage` is
-        // awaited by the send path, and a second round trip here would be felt as send latency.
-        const [sender, badge] = await Promise.all([
-          message.type === MessageType.SYSTEM ? null : this.chat.pushSenderOf(message.senderId),
-          this.chat.unreadTotalFor(otherId),
-        ]);
+        // sender identity at all — neither in the title nor in `data`.
+        //
+        // The badge used to be fetched alongside this. It is the dispatcher's now: §4.2 makes it
+        // unread messages **plus** unread notifications, and a caller that only knew the first half
+        // would overwrite the combined figure every time it sent.
+        const sender =
+          message.type === MessageType.SYSTEM
+            ? null
+            : await this.chat.pushSenderOf(message.senderId);
         // Blank is not a name. `firstName` is stored untrimmed, so "   " would otherwise become a
         // notification with no visible title at all — worse than the generic fallback.
         //
@@ -255,23 +260,33 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
         // registration would be deleted and they would silently stop receiving push from everyone.
         // A sender could do that to anyone they are connected to, just by renaming themselves.
         const senderName = sender?.name?.trim().slice(0, MAX_PUSH_SENDER_NAME) || null;
-        await this.notifications.pushToStudent(otherId, {
-          title: pushTitleFor(message, senderName),
-          body: pushTextFor(message),
-          // iOS shows exactly this number on the app icon — it does not derive one from the
-          // notifications it received (§3.1). Android ignores it.
-          badge,
-          data: {
+        // Through the dispatcher rather than straight to the push provider (push catalogue §1.1):
+        // it writes the in-app list row and sends the push as one operation, so a notification the
+        // phone displayed can always be found in the list afterwards. Badge, grouping keys and the
+        // `data` envelope are its job now — only the message-specific keys are passed in.
+        // A call row groups under the call key, an ordinary message under its conversation's
+        // (catalogue §4.1) — otherwise a missed call would replace the unread message above it.
+        const build =
+          message.type === MessageType.CALL
+            ? NotificationCatalog.callMessage
+            : NotificationCatalog.newMessage;
+        await this.dispatcher.dispatch(
+          build({
+            recipientId: otherId,
             conversationId: message.conversationId,
-            messageType: message.type,
-            ...(message.albumId === null ? {} : { albumId: message.albumId }),
-            senderId: message.senderId,
-            // Omitted rather than sent empty: FCM rejects a non-string `data` value, and a client
-            // that trusts the key's presence would render "null" as a name or a broken avatar.
-            ...(senderName === null ? {} : { senderName }),
-            ...(sender?.avatarUrl == null ? {} : { senderAvatarUrl: sender.avatarUrl }),
-          },
-        });
+            senderName: pushTitleFor(message, senderName),
+            text: pushTextFor(message),
+            extraData: {
+              messageType: message.type,
+              senderId: message.senderId,
+              ...(message.albumId === null ? {} : { albumId: message.albumId }),
+              // Omitted rather than sent empty: FCM rejects a non-string `data` value, and a client
+              // that trusts the key's presence would render "null" as a name or a broken avatar.
+              ...(senderName === null ? {} : { senderName }),
+              ...(sender?.avatarUrl == null ? {} : { senderAvatarUrl: sender.avatarUrl }),
+            },
+          }),
+        );
       }
     }
   }

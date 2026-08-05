@@ -6,7 +6,7 @@ import { CallEndReason } from '../calls/domain/enums/call-end-reason.enum';
 import { CallMedia } from '../calls/domain/enums/call-media.enum';
 import { CallStatus } from '../calls/domain/enums/call-status.enum';
 import { MediaReadyBus } from '../media/application/media-ready.bus';
-import { NotificationsService } from '../notifications/application/notifications.service';
+import { NotificationDispatcher } from '../notifications/application/notification-dispatcher.service';
 import { CHAT_EVENT } from './application/chat-events';
 import { ChatService } from './application/chat.service';
 import { ChatGateway } from './chat.gateway';
@@ -47,9 +47,9 @@ function makeGateway(chat: ChatMocks): {
   gateway: ChatGateway;
   emit: jest.Mock;
   to: jest.Mock;
-  push: jest.Mock;
+  dispatch: jest.Mock;
 } {
-  const push = jest.fn();
+  const dispatch = jest.fn();
   const gateway = new ChatGateway(
     // The badge count and the sender's identity are asked for on every offline push; tests that
     // care override them.
@@ -58,7 +58,7 @@ function makeGateway(chat: ChatMocks): {
       pushSenderOf: jest.fn().mockResolvedValue(null),
       ...chat,
     } as unknown as ChatService,
-    { pushToStudent: push } as unknown as NotificationsService,
+    { dispatch } as unknown as NotificationDispatcher,
     {} as JwtService,
     { get: () => 'v1' } as unknown as ConfigService<never, true>,
     new MediaReadyBus(),
@@ -67,7 +67,7 @@ function makeGateway(chat: ChatMocks): {
   const emit = jest.fn();
   const to = jest.fn().mockReturnValue({ emit });
   (gateway as unknown as { server: Server }).server = { to } as unknown as Server;
-  return { gateway, emit, to, push };
+  return { gateway, emit, to, dispatch };
 }
 
 describe('ChatGateway — message:new fan-out (§17.1)', () => {
@@ -127,12 +127,12 @@ describe('ChatGateway — the offline push for a CALL message', () => {
   });
 
   async function pushBodyFor(call: Partial<CallSnapshot>): Promise<string> {
-    const { gateway, push } = makeGateway({
+    const { gateway, dispatch } = makeGateway({
       otherMemberId: jest.fn().mockResolvedValue(OTHER),
       isOnline: jest.fn().mockResolvedValue(false), // the callee is on /calls, not /chat
     });
     await gateway.broadcastMessage(callMessage(call));
-    return (push.mock.calls[0][1] as { body: string }).body;
+    return (dispatch.mock.calls[0][0] as { body: string }).body;
   }
 
   it('tells the callee an answered call is over, with its duration', async () => {
@@ -158,36 +158,33 @@ describe('ChatGateway — the offline push for a CALL message', () => {
 });
 
 /**
- * The number on the iOS app icon comes from the server and nowhere else — the app does not count
- * the notifications it received, so a push without it leaves the badge stale.
+ * The badge itself moved to `NotificationDispatcher` (push catalogue §4.2): it is now unread
+ * messages **plus** unread notifications, and a caller that knew only the first half would
+ * overwrite the combined figure on every send. `notification-dispatcher.service.spec.ts` covers
+ * the arithmetic; what remains the gateway's business is *whether* it notifies at all.
  */
-describe('ChatGateway — the badge on an offline push', () => {
-  it('sends the recipient’s total unread count', async () => {
-    const unreadTotalFor = jest.fn().mockResolvedValue(7);
-    const { gateway, push } = makeGateway({
+describe('ChatGateway — when an offline notification is raised', () => {
+  it('raises one for a recipient whose socket is closed', async () => {
+    const { gateway, dispatch } = makeGateway({
       otherMemberId: jest.fn().mockResolvedValue(OTHER),
       isOnline: jest.fn().mockResolvedValue(false),
-      unreadTotalFor,
     });
 
     await gateway.broadcastMessage(message);
 
-    expect(unreadTotalFor).toHaveBeenCalledWith(OTHER);
-    expect((push.mock.calls[0][1] as { badge: number }).badge).toBe(7);
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    expect((dispatch.mock.calls[0][0] as { recipientId: string }).recipientId).toBe(OTHER);
   });
 
-  it('asks for no badge when the recipient is online and gets no push at all', async () => {
-    const unreadTotalFor = jest.fn();
-    const { gateway, push } = makeGateway({
+  it('raises none at all when the recipient is online — they are already looking at it', async () => {
+    const { gateway, dispatch } = makeGateway({
       otherMemberId: jest.fn().mockResolvedValue(OTHER),
       isOnline: jest.fn().mockResolvedValue(true),
-      unreadTotalFor,
     });
 
     await gateway.broadcastMessage(message);
 
-    expect(push).not.toHaveBeenCalled();
-    expect(unreadTotalFor).not.toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalled();
   });
 });
 
@@ -199,35 +196,41 @@ describe('ChatGateway — the badge on an offline push', () => {
  * either. Requested by the mobile team in `PUSH_SENDER_NAME_BACKEND.md`.
  */
 describe('ChatGateway — who the offline push says it is from', () => {
-  type PushPayload = { title: string; data: Record<string, string> };
+  // What the gateway now produces: a catalogue event. `conversationId` is a first-class field
+  // on it (the dispatcher copies it into `data`), the rest travel as `extraData`.
+  type DispatchedEvent = {
+    title: string;
+    conversationId?: string;
+    extraData: Record<string, string>;
+  };
 
   async function pushFor(
     sender: { name: string | null; avatarUrl: string | null } | null,
     override: Partial<Message> = {},
-  ): Promise<PushPayload> {
-    const { gateway, push } = makeGateway({
+  ): Promise<DispatchedEvent> {
+    const { gateway, dispatch } = makeGateway({
       otherMemberId: jest.fn().mockResolvedValue(OTHER),
       isOnline: jest.fn().mockResolvedValue(false),
       pushSenderOf: jest.fn().mockResolvedValue(sender),
     });
     await gateway.broadcastMessage({ ...message, ...override });
-    return push.mock.calls[0][1] as PushPayload;
+    return dispatch.mock.calls[0][0] as DispatchedEvent;
   }
 
   it('titles the push with the sender’s name and repeats it in data', async () => {
     const payload = await pushFor({ name: 'Aziz Karimov', avatarUrl: 'https://cdn/a.jpg' });
 
     expect(payload.title).toBe('Aziz Karimov');
-    expect(payload.data.senderName).toBe('Aziz Karimov');
-    expect(payload.data.senderId).toBe(SENDER);
-    expect(payload.data.senderAvatarUrl).toBe('https://cdn/a.jpg');
+    expect(payload.extraData.senderName).toBe('Aziz Karimov');
+    expect(payload.extraData.senderId).toBe(SENDER);
+    expect(payload.extraData.senderAvatarUrl).toBe('https://cdn/a.jpg');
   });
 
   it('keeps the deep-link data the client already routes on', async () => {
     const payload = await pushFor({ name: 'Aziz Karimov', avatarUrl: null });
 
-    expect(payload.data.conversationId).toBe('cnv_1');
-    expect(payload.data.messageType).toBe(MessageType.TEXT);
+    expect(payload.conversationId).toBe('cnv_1');
+    expect(payload.extraData.messageType).toBe(MessageType.TEXT);
   });
 
   // FCM rejects a non-string `data` value, and a literal "null" would be rendered as a broken image
@@ -235,7 +238,7 @@ describe('ChatGateway — who the offline push says it is from', () => {
   it('omits senderAvatarUrl entirely when the sender has no avatar', async () => {
     const payload = await pushFor({ name: 'Aziz Karimov', avatarUrl: null });
 
-    expect(payload.data).not.toHaveProperty('senderAvatarUrl');
+    expect(payload.extraData).not.toHaveProperty('senderAvatarUrl');
   });
 
   // A deleted account, or one that never filled in a name or username. The notification must still
@@ -248,8 +251,8 @@ describe('ChatGateway — who the offline push says it is from', () => {
   it('omits senderName when there is none, but still sends senderId', async () => {
     const payload = await pushFor(null);
 
-    expect(payload.data).not.toHaveProperty('senderName');
-    expect(payload.data.senderId).toBe(SENDER);
+    expect(payload.extraData).not.toHaveProperty('senderName');
+    expect(payload.extraData.senderId).toBe(SENDER);
   });
 
   /**
@@ -264,7 +267,7 @@ describe('ChatGateway — who the offline push says it is from', () => {
     const payload = await pushFor({ name: 'A'.repeat(5000), avatarUrl: null });
 
     expect(payload.title).toBe('A'.repeat(64));
-    expect(payload.data.senderName).toBe('A'.repeat(64));
+    expect(payload.extraData.senderName).toBe('A'.repeat(64));
   });
 
   // A name is stored exactly as it was typed — `firstName` has no trim on the way in — so a title
@@ -273,7 +276,7 @@ describe('ChatGateway — who the offline push says it is from', () => {
     const payload = await pushFor({ name: '   ', avatarUrl: null });
 
     expect(payload.title).toBe('Yangi xabar');
-    expect(payload.data).not.toHaveProperty('senderName');
+    expect(payload.extraData).not.toHaveProperty('senderName');
   });
 
   // SYSTEM rows are written by the server, not by a person (`sendMessage` rejects the type from a
@@ -281,18 +284,18 @@ describe('ChatGateway — who the offline push says it is from', () => {
   // to agree with the title: the mobile contract says `senderName` and `title` are the same string.
   it('gives a SYSTEM message the product name and no sender identity at all', async () => {
     const pushSenderOf = jest.fn().mockResolvedValue({ name: 'Aziz Karimov', avatarUrl: 'x' });
-    const { gateway, push } = makeGateway({
+    const { gateway, dispatch } = makeGateway({
       otherMemberId: jest.fn().mockResolvedValue(OTHER),
       isOnline: jest.fn().mockResolvedValue(false),
       pushSenderOf,
     });
 
     await gateway.broadcastMessage({ ...message, type: MessageType.SYSTEM });
-    const payload = push.mock.calls[0][1] as PushPayload;
+    const payload = dispatch.mock.calls[0][0] as DispatchedEvent;
 
     expect(payload.title).toBe('StudentClub');
-    expect(payload.data).not.toHaveProperty('senderName');
-    expect(payload.data).not.toHaveProperty('senderAvatarUrl');
+    expect(payload.extraData).not.toHaveProperty('senderName');
+    expect(payload.extraData).not.toHaveProperty('senderAvatarUrl');
     // Nothing to look up — the row has no person behind it.
     expect(pushSenderOf).not.toHaveBeenCalled();
   });

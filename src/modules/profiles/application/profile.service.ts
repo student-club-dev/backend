@@ -96,6 +96,12 @@ export class ProfileService {
       if (input.universityId !== undefined) {
         patch.universityId = input.universityId;
       }
+      if (input.regionId !== undefined) {
+        patch.regionId = input.regionId;
+      }
+      if (input.districtId !== undefined) {
+        patch.districtId = input.districtId;
+      }
       if (input.universityEmail !== undefined) {
         patch.universityEmail = input.universityEmail;
       }

@@ -3,6 +3,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { BranchesModule } from '../branches/branches.module';
 import { BusinessModule } from '../business/business.module';
 import { ListingsModule } from '../listings/listings.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { ProfileModule } from '../profiles/profile.module';
 import { AdminAttributeSpecsService } from './application/admin-attribute-specs.service';
 import { AdminAuthService } from './application/admin-auth.service';
@@ -16,6 +17,7 @@ import { AdminCatalogGroupsService } from './application/admin-catalog-groups.se
 import { AdminCategoriesService } from './application/admin-categories.service';
 import { AdminDashboardService } from './application/admin-dashboard.service';
 import { AdminGeoService } from './application/admin-geo.service';
+import { AdminNotificationsService } from './application/admin-notifications.service';
 import { AdminListingsService } from './application/admin-listings.service';
 import { AdminListingsWriteService } from './application/admin-listings-write.service';
 import { AdminStudentsService } from './application/admin-students.service';
@@ -52,6 +54,7 @@ import { AdminCatalogGroupsController } from './presentation/admin-catalog-group
 import { AdminCategoriesController } from './presentation/admin-categories.controller';
 import { AdminDashboardController } from './presentation/admin-dashboard.controller';
 import { AdminDistrictsController } from './presentation/admin-districts.controller';
+import { AdminNotificationsController } from './presentation/admin-notifications.controller';
 import { AdminListingsController } from './presentation/admin-listings.controller';
 import { AdminRegionsController } from './presentation/admin-regions.controller';
 import { AdminStudentsController } from './presentation/admin-students.controller';
@@ -70,8 +73,17 @@ import { AdminRoleGuard } from './presentation/guards/admin-role.guard';
  * the owner-side services' `adminUpdate` (same validation, ownership skipped — Faza 3 part 2).
  */
 @Module({
-  imports: [JwtModule.register({}), ProfileModule, BusinessModule, BranchesModule, ListingsModule],
+  imports: [
+    JwtModule.register({}),
+    ProfileModule,
+    BusinessModule,
+    BranchesModule,
+    ListingsModule,
+    // System announcements go through the push catalogue's dispatcher like every other event.
+    NotificationsModule,
+  ],
   controllers: [
+    AdminNotificationsController,
     AdminAuthController,
     AdminStudentsController,
     AdminBusinessOwnersController,
@@ -87,6 +99,7 @@ import { AdminRoleGuard } from './presentation/guards/admin-role.guard';
     AdminAttributeSpecsController,
   ],
   providers: [
+    AdminNotificationsService,
     AdminAuthService,
     AdminStudentsService,
     AdminStudentsWriteService,

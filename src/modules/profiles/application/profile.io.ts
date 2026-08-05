@@ -16,6 +16,9 @@ export interface UpdateProfileInput {
   gender?: Gender;
   universityId?: string;
   universityEmail?: string;
+  /** Home region/district — the geo signal behind the job digest (push catalogue §3.3 №9). */
+  regionId?: string;
+  districtId?: string;
   birthYear?: number;
   courseYear?: CourseYear;
   lastSeenVisibility?: LastSeenVisibility;

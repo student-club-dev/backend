@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { PrismaService } from '../../../infrastructure/database/prisma.service';
+import { PrismaService } from '../database/prisma.service';
 import { ConversationDirectoryPrismaRepository } from './conversation-directory.prisma.repository';
 
 const A = 'std_a';

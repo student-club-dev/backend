@@ -11,6 +11,7 @@ import { ConnectionStatus } from '../domain/enums/connection-status.enum';
 import { ConnectionView } from '../domain/enums/connection-view.enum';
 import { StudentDirectoryRepository, StudentSort } from '../domain/student-directory.repository';
 import { StudentListQuery } from './connections.io';
+import type { NotificationDispatcher } from '../../notifications/application/notification-dispatcher.service';
 import { ConnectionsService } from './connections.service';
 
 const me: AuthenticatedUser = { id: 'me', type: AccountType.STUDENT };
@@ -106,12 +107,26 @@ function makePresence(overrides: Partial<PresenceRepository> = {}): PresenceRepo
   };
 }
 
+/**
+ * A request and its acceptance now raise a notification (push catalogue §3.1 №4/№5). Both stubs
+ * are inert by default: nothing in this file is about delivery, and a test that cared would pass
+ * its own. `dispatch` never rejecting matches the real dispatcher's contract — a failed
+ * notification must not fail the connection that caused it.
+ */
 function makeService(
   connections: ConnectionsRepository = makeConnections(),
   directory: StudentDirectoryRepository = makeDirectory(),
   presence: PresenceRepository = makePresence(),
+  conversations = { findOrCreateDirect: jest.fn().mockResolvedValue('cnv_1') },
+  notifications = { dispatch: jest.fn().mockResolvedValue(undefined) },
 ): ConnectionsService {
-  return new ConnectionsService(connections, directory, presence);
+  return new ConnectionsService(
+    connections,
+    directory,
+    presence,
+    conversations,
+    notifications as unknown as NotificationDispatcher,
+  );
 }
 
 describe('ConnectionsService', () => {
