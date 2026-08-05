@@ -84,16 +84,29 @@ Ikkilangan bildirishnoma — bir lahzalik bezovtalik; yo'qolgani — umuman bili
 almashtirish kerak bo'lsa ayting — lekin u holda foydalanuvchi ko'rmagan xabarlar tray'dan
 yo'qoladi.
 
-### Badge (§4.2)
+### Badge (§4.2) — formulaga bitta tuzatish kiritdik
 
 ```
-badge = o'qilmagan xabarlar + o'qilmagan bildirishnomalar
+badge = o'qilmagan xabarlar + o'qilmagan bildirishnomalar (CHAT turidan tashqari)
 ```
 
-⚠️ **Bir nuance:** formulangizda `unreadConversations` yozilgan, lekin matnda «bugun badge =
+⚠️ **`CHAT` qatorlari qo'shilmaydi, va bu majburiy tuzatish edi.** §4.2 formulasi ikkala to'plam
+kesishmaydi deb faraz qiladi — aslida kesishadi: chat push'i `CHAT` qatorini yozadi, o'sha xabarni
+esa xabarlar hisobi allaqachon sanaydi. Ya'ni bitta xabar uchun badge **2** ko'rsatardi.
+
+Va u shunchaki bir marta ko'p sanamasdi: qator faqat `POST /v1/notifications/read` bilan
+tozalanadi, uni esa `NOTIFICATIONS_REMOTE_ENABLED = false` bo'lgan klient **hech qachon
+chaqirmaydi**. Natijada badge har xabardan keyin o'sib borardi va **hech qachon nolga
+qaytmasdi** — bayroqni yoqmaguningizcha.
+
+Javobsiz qo'ng'iroq ham `CHAT` turida va u ham allaqachon o'qilmagan xabar sifatida sanaladi, ya'ni
+xuddi shu sabab bilan to'g'ri tushib qoladi.
+
+⚠️ **Yana bir nuance:** formulangizda `unreadConversations` yozilgan, lekin matnda «bugun badge =
 o'qilmagan **xabarlar** soni» deb turibdi. Biz **xabarlar** sonini oldik — bu bugun ishlayotgan va
-`GET /v1/conversations/unread-count` qaytaradigan raqam. Suhbatlar sonini xohlasangiz ayting, bir
-qatorlik o'zgarish.
+`GET /v1/conversations/unread-count` qaytaradigan raqam. Suhbatlar sonini xohlasangiz ayting.
+
+Ro'yxatdagi `unreadCount` (qo'ng'iroq ikonkasi) esa **hamma turni** sanaydi — u boshqa savol.
 
 ---
 

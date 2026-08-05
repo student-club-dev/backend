@@ -48,7 +48,8 @@ describe('NotificationDispatcher', () => {
       list: jest.fn(),
       markRead: jest.fn(),
       markAllRead: jest.fn(),
-      countUnread: jest.fn().mockResolvedValue(2),
+      countUnread: jest.fn().mockResolvedValue(9),
+      countUnreadForBadge: jest.fn().mockResolvedValue(2),
       findPushDue: jest.fn().mockResolvedValue([]),
       clearPushDeferred: jest.fn().mockResolvedValue(undefined),
       deleteOlderThan: jest.fn(),
@@ -144,6 +145,25 @@ describe('NotificationDispatcher', () => {
       await dispatcher.dispatch(anEvent(), AT_NOON);
 
       expect(push.pushToStudent.mock.calls[0][1].badge).toBe(7); // 5 messages + 2 notifications
+    });
+
+    /**
+     * §4.2's formula assumes messages and notifications are disjoint sets. They are not: a chat
+     * push writes a `CHAT` row for a message `unreadTotalFor` already counts, so adding the two
+     * naively shows 2 for one message.
+     *
+     * It does not merely over-count once. The row is cleared only by `POST /v1/notifications/read`,
+     * which a client whose notifications screen is still switched off never calls — so the badge
+     * would climb with every message and never come back down. That is why the badge asks a
+     * different question from the bell icon.
+     */
+    it('counts notifications for the badge WITHOUT the chat rows', async () => {
+      await dispatcher.dispatch(anEvent(), AT_NOON);
+
+      expect(notifications.countUnreadForBadge).toHaveBeenCalledWith('std_1');
+      // 9 is the bell-icon figure — it must not be the one that reaches the badge.
+      expect(notifications.countUnread).not.toHaveBeenCalled();
+      expect(push.pushToStudent.mock.calls[0][1].badge).toBe(7);
     });
 
     it('carries the §4.1 grouping keys', async () => {

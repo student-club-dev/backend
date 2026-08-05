@@ -12,6 +12,7 @@ describe('NotificationListService', () => {
       markRead: jest.fn().mockResolvedValue(undefined),
       markAllRead: jest.fn().mockResolvedValue(undefined),
       countUnread: jest.fn().mockResolvedValue(0),
+      countUnreadForBadge: jest.fn().mockResolvedValue(0),
       findPushDue: jest.fn().mockResolvedValue([]),
       clearPushDeferred: jest.fn().mockResolvedValue(undefined),
       deleteOlderThan: jest.fn().mockResolvedValue(0),

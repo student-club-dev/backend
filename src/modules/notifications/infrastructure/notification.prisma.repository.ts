@@ -1,8 +1,10 @@
 import { Injectable } from '@nestjs/common';
+// `NotificationType` is imported as a value, not just a type: the badge query compares against
+// `PrismaType.CHAT` at runtime.
+import { NotificationType as PrismaType } from '@prisma/client';
 import type {
   Notification as PrismaNotification,
   NotificationTargetType as PrismaTargetType,
-  NotificationType as PrismaType,
 } from '@prisma/client';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { Notification } from '../domain/entities/notification.entity';
@@ -36,6 +38,13 @@ export class NotificationPrismaRepository implements NotificationRepository {
 
   countUnread(studentId: string): Promise<number> {
     return this.prisma.notification.count({ where: { studentId, readAt: null } });
+  }
+
+  /** `not: CHAT` — those rows describe messages the unread-message counter already counts. */
+  countUnreadForBadge(studentId: string): Promise<number> {
+    return this.prisma.notification.count({
+      where: { studentId, readAt: null, type: { not: PrismaType.CHAT } },
+    });
   }
 
   /** `not: null` keeps this on the tiny `push_deferred_until` index instead of scanning the table. */

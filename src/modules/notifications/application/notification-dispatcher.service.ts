@@ -134,13 +134,15 @@ export class NotificationDispatcher {
   private async send(event: NotificationEvent, notificationId: string): Promise<void> {
     const [unreadMessages, unreadNotifications] = await Promise.all([
       this.messages.unreadTotalFor(event.recipientId),
-      this.notifications.countUnread(event.recipientId),
+      this.notifications.countUnreadForBadge(event.recipientId),
     ]);
 
     await this.push.pushToStudent(event.recipientId, {
       title: event.title,
       body: event.body ?? '',
       // §4.2 — iOS shows exactly this number; counting only one half would overwrite the other's.
+      // `ForBadge` excludes CHAT rows: those describe messages `unreadTotalFor` already counted,
+      // and adding both would show 2 for one message and never come back down.
       badge: unreadMessages + unreadNotifications,
       collapseKey: event.grouping.collapseKey,
       threadId: event.grouping.threadId,

@@ -50,8 +50,24 @@ export interface NotificationRepository {
   /** Stamps `readAt` on every unread row the student has. */
   markAllRead(studentId: string): Promise<void>;
 
-  /** Unread rows for a student — the notifications half of the app-icon badge (§4.2). */
+  /** Unread rows for a student — what the bell icon shows. Every type counts. */
   countUnread(studentId: string): Promise<number>;
+
+  /**
+   * Unread rows that are **not** about a chat message — the notifications half of the app-icon
+   * badge (§4.2).
+   *
+   * §4.2's formula, `unread messages + unread notifications`, assumes the two sets are disjoint.
+   * They are not: a chat push writes a `CHAT` row for a message the unread-message counter is
+   * already counting, so adding them naively shows 2 for one message. Worse, the row is only
+   * cleared by `POST /v1/notifications/read`, which a client with the notifications screen still
+   * switched off never calls — so the badge would climb and never come back down.
+   *
+   * Excluding `CHAT` is what makes the addition mean what it says. Missed calls are `CHAT` too, and
+   * they are also already counted as unread messages, so they fall out correctly for the same
+   * reason.
+   */
+  countUnreadForBadge(studentId: string): Promise<number>;
 
   /**
    * Rows whose held-back push is now due (§5.3), oldest first. Capped so one flush cannot try to
