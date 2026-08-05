@@ -75,13 +75,23 @@ export class CreateStudentListingDto {
   @IsEnum(StudentPriceUnit)
   priceUnit?: StudentPriceUnit;
 
-  @ApiPropertyOptional({ example: 1500000, description: 'Butun so‘m, tiyinsiz' })
+  @ApiPropertyOptional({
+    type: 'integer',
+    format: 'int64',
+    example: 1500000,
+    description:
+      'Butun so‘m, tiyinsiz. `int64` — bazada `BigInt`, va formatsiz `integer` generatorda `int32` bo‘lib chiqib klientni 2 147 483 647 da kesishga majbur qilardi.',
+  })
   @IsOptional()
   @IsInt()
   @Min(0)
   price?: number;
 
-  @ApiPropertyOptional({ description: 'Oraliqning yuqori chegarasi; `price` dan katta bo‘lsin' })
+  @ApiPropertyOptional({
+    type: 'integer',
+    format: 'int64',
+    description: 'Oraliqning yuqori chegarasi; `price` dan katta bo‘lsin',
+  })
   @IsOptional()
   @IsInt()
   @Min(0)

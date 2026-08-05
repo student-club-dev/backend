@@ -12,7 +12,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiExtraModels, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { ERROR_CODE } from '../../../common/errors/error-code';
 import { JwtAuthGuard } from '../../../common/guards/jwt-auth.guard';
@@ -26,6 +26,13 @@ import {
 import type { AuthenticatedUser } from '../../../common/types/authenticated-user';
 import { StudentListingsService } from '../application/student-listings.service';
 import { CreateStudentListingDto } from './dto/create-student-listing.dto';
+import {
+  JobDetailsDto,
+  JobScheduleDto,
+  RentalDetailsDto,
+  ServiceDetailsDto,
+  TaskDetailsDto,
+} from './dto/listing-details.dto';
 import { SetListingStatusDto } from './dto/set-status.dto';
 import {
   OwnListingsQueryDto,
@@ -44,6 +51,16 @@ import { UpdateStudentListingDto } from './dto/update-student-listing.dto';
  * Thin by design: bind the DTO, call the service, map the entity to a response. The global
  * interceptor applies the BaseResponse envelope, so nothing here wraps a result by hand.
  */
+/**
+ * ⚠️ The four `*DetailsDto` classes reach the document only through the `oneOf` that
+ * `CreateStudentListingDto.details` (and its siblings) declare with `getSchemaPath`. Nest's scanner
+ * does not follow that: it emits the `$ref`s and never emits the components they point at, so
+ * `components.schemas` had four dangling references and **every code generator stopped there**.
+ *
+ * `@ApiExtraModels` is what registers them. It emits nothing at runtime — it exists purely so the
+ * document describes the shape the API has always had.
+ */
+@ApiExtraModels(TaskDetailsDto, RentalDetailsDto, ServiceDetailsDto, JobDetailsDto, JobScheduleDto)
 @ApiTags('Student listings')
 @ApiBearerAuth()
 @ApiUnauthorizedEnvelope()

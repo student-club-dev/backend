@@ -240,6 +240,27 @@ describe('geoFilter (§7.2.3)', () => {
     expect(sql).toContain('ST_DWithin');
   });
 
+  /**
+   * ⚠️ Confirmed for the mobile team (integration spec §4): the app sends `lat`/`lng` whenever the
+   * `NEAREST` sort is chosen and sends `radiusMeters` only when the user explicitly asks for one.
+   *
+   * A coordinate is therefore an instruction about **order**, never about membership. If it ever
+   * started narrowing the result too, distant listings would disappear from a search nobody
+   * restricted — silently, with no message and nothing in the UI to explain it. That is exactly the
+   * kind of defect that is never reported, only felt, so it is pinned here rather than left to a
+   * reading of the SQL.
+   */
+  it('does NOT narrow the result when lat/lng arrive without a radius (§4)', () => {
+    const sql = sqlOf(geoFilter(geo({ lat: 41.31, lng: 69.24 })));
+
+    expect(sql).toBe('');
+    expect(sql).not.toContain('ST_DWithin');
+  });
+
+  it('still ignores a radius that arrives without a coordinate to centre it on', () => {
+    expect(sqlOf(geoFilter(geo({ radiusMeters: 5000 })))).toBe('');
+  });
+
   it('clamps the radius at 200 km rather than failing', () => {
     const fragment = geoFilter(geo({ lat: 41.31, lng: 69.24, radiusMeters: 999_999 }));
     expect(fragment.values).toContain(200_000);

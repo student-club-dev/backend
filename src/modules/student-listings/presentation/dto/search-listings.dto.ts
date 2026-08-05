@@ -39,7 +39,18 @@ import {
   UZ_LNG_MIN,
 } from '../../domain/validation/rules/location.rules';
 
-export class GeoBoxDto {
+/**
+ * ⚠️ These four classes were called `GeoBoxDto`, `SearchGeoDto`, `SearchFilterDto` and
+ * `SearchPageDto`. The discounts module has classes with those exact names, and an OpenAPI document
+ * has one flat schema namespace — so `components.schemas.SearchFilterDto` was whichever module
+ * happened to register last, and it was the discounts one. `POST /v1/student-listings/search` ended
+ * up documented with the business-discount filter (`groupKeys`, `businessIds`, …) and a page object
+ * with **no `cursor`**, which is why the app is still using the `GET` form.
+ *
+ * Nothing about the runtime was ever wrong — only the document generated from it. Unique names are
+ * the only thing that makes a shared namespace safe.
+ */
+export class StudentListingBboxDto {
   @ApiProperty({ type: Number }) @IsNumber() @Min(UZ_LAT_MIN) @Max(UZ_LAT_MAX) minLat!: number;
   @ApiProperty({ type: Number }) @IsNumber() @Min(UZ_LNG_MIN) @Max(UZ_LNG_MAX) minLng!: number;
   @ApiProperty({ type: Number }) @IsNumber() @Min(UZ_LAT_MIN) @Max(UZ_LAT_MAX) maxLat!: number;
@@ -47,7 +58,7 @@ export class GeoBoxDto {
 }
 
 /** §7.2.3 — all three narrowing modes; any combination, or none at all. */
-export class SearchGeoDto {
+export class StudentListingGeoDto {
   @ApiPropertyOptional({ type: Number, example: 41.31 })
   @IsOptional()
   @IsNumber()
@@ -80,11 +91,11 @@ export class SearchGeoDto {
   @IsString({ each: true })
   districtIds?: string[];
 
-  @ApiPropertyOptional({ type: GeoBoxDto })
+  @ApiPropertyOptional({ type: StudentListingBboxDto })
   @IsOptional()
   @ValidateNested()
-  @Type(() => GeoBoxDto)
-  bbox?: GeoBoxDto;
+  @Type(() => StudentListingBboxDto)
+  bbox?: StudentListingBboxDto;
 
   toDomain(): GeoFilter {
     return {
@@ -104,7 +115,7 @@ export class SearchGeoDto {
  * A parameter belonging to another kind is accepted and ignored rather than rejected: the app
  * keeps stale values when the user switches tabs, and §7.2.5 is explicit that this must not error.
  */
-export class SearchFilterDto {
+export class StudentListingFilterDto {
   // RENTAL
   @ApiPropertyOptional({ enum: TenantGender })
   @IsOptional()
@@ -207,7 +218,7 @@ export class SearchFilterDto {
   }
 }
 
-export class SearchPageDto {
+export class ListingPageRequestDto {
   @ApiPropertyOptional({ type: 'integer', default: PAGE_SIZE_DEFAULT, maximum: PAGE_SIZE_MAX })
   @IsOptional()
   @IsInt()
@@ -241,40 +252,40 @@ export class SearchListingsDto {
   @IsString()
   query?: string;
 
-  @ApiPropertyOptional({ type: SearchGeoDto })
+  @ApiPropertyOptional({ type: StudentListingGeoDto })
   @IsOptional()
   @ValidateNested()
-  @Type(() => SearchGeoDto)
-  geo?: SearchGeoDto;
+  @Type(() => StudentListingGeoDto)
+  geo?: StudentListingGeoDto;
 
-  @ApiPropertyOptional({ type: 'integer' })
+  @ApiPropertyOptional({ type: 'integer', format: 'int64' })
   @IsOptional()
   @IsInt()
   @Min(0)
   minPrice?: number;
 
-  @ApiPropertyOptional({ type: 'integer', example: 2000000 })
+  @ApiPropertyOptional({ type: 'integer', format: 'int64', example: 2000000 })
   @IsOptional()
   @IsInt()
   @Min(0)
   maxPrice?: number;
 
-  @ApiPropertyOptional({ type: SearchFilterDto })
+  @ApiPropertyOptional({ type: StudentListingFilterDto })
   @IsOptional()
   @ValidateNested()
-  @Type(() => SearchFilterDto)
-  filter?: SearchFilterDto;
+  @Type(() => StudentListingFilterDto)
+  filter?: StudentListingFilterDto;
 
   @ApiPropertyOptional({ enum: ListingSort, default: ListingSort.NEWEST })
   @IsOptional()
   @IsEnum(ListingSort)
   sort?: ListingSort;
 
-  @ApiPropertyOptional({ type: SearchPageDto })
+  @ApiPropertyOptional({ type: ListingPageRequestDto })
   @IsOptional()
   @ValidateNested()
-  @Type(() => SearchPageDto)
-  page?: SearchPageDto;
+  @Type(() => ListingPageRequestDto)
+  page?: ListingPageRequestDto;
 
   toCriteria(viewerId: string): SearchCriteria {
     return {
@@ -360,14 +371,14 @@ export class SearchListingsQueryDto {
   @IsString()
   districtIds?: string;
 
-  @ApiPropertyOptional({ type: 'integer' })
+  @ApiPropertyOptional({ type: 'integer', format: 'int64' })
   @IsOptional()
   @Type(() => Number)
   @IsInt()
   @Min(0)
   minPrice?: number;
 
-  @ApiPropertyOptional({ type: 'integer' })
+  @ApiPropertyOptional({ type: 'integer', format: 'int64' })
   @IsOptional()
   @Type(() => Number)
   @IsInt()

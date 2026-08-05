@@ -61,8 +61,15 @@ export class StudentListingDto {
   @ApiProperty({ enum: StudentPriceUnit, nullable: true })
   priceUnit!: StudentPriceUnit | null;
 
-  @ApiProperty({ type: 'integer', description: 'Butun so‘m, tiyinsiz' }) price!: number;
-  @ApiProperty({ type: 'integer', nullable: true }) priceMax!: number | null;
+  @ApiProperty({
+    type: 'integer',
+    format: 'int64',
+    description:
+      'Butun so‘m, tiyinsiz. `int64` — bazada `BigInt`, va formatsiz `integer` generatorda `int32` bo‘lib chiqib klientni 2 147 483 647 da kesishga majbur qilardi.',
+  })
+  price!: number;
+  @ApiProperty({ type: 'integer', format: 'int64', nullable: true })
+  priceMax!: number | null;
   @ApiProperty({ type: String, example: 'UZS' }) currency!: string;
   @ApiProperty({ type: Boolean }) isNegotiable!: boolean;
 

@@ -18631,10 +18631,12 @@
           },
           "price": {
             "type": "integer",
-            "description": "Butun so‘m, tiyinsiz"
+            "format": "int64",
+            "description": "Butun so‘m, tiyinsiz. `int64` — bazada `BigInt`, va formatsiz `integer` generatorda `int32` bo‘lib chiqib klientni 2 147 483 647 da kesishga majbur qilardi."
           },
           "priceMax": {
             "type": "integer",
+            "format": "int64",
             "nullable": true
           },
           "currency": {
@@ -18821,6 +18823,200 @@
           "total"
         ]
       },
+      "StudentListingBboxDto": {
+        "type": "object",
+        "properties": {
+          "minLat": {
+            "type": "number"
+          },
+          "minLng": {
+            "type": "number"
+          },
+          "maxLat": {
+            "type": "number"
+          },
+          "maxLng": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "minLat",
+          "minLng",
+          "maxLat",
+          "maxLng"
+        ]
+      },
+      "StudentListingGeoDto": {
+        "type": "object",
+        "properties": {
+          "lat": {
+            "type": "number",
+            "example": 41.31
+          },
+          "lng": {
+            "type": "number",
+            "example": 69.24
+          },
+          "radiusMeters": {
+            "type": "integer",
+            "example": 5000,
+            "description": "Maksimal 200 000 m"
+          },
+          "regionIds": {
+            "example": [
+              "TOSHKENT_SHAHRI"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "districtIds": {
+            "example": [
+              "CHILONZOR",
+              "UCHTEPA"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "bbox": {
+            "$ref": "#/components/schemas/StudentListingBboxDto"
+          }
+        }
+      },
+      "StudentListingFilterDto": {
+        "type": "object",
+        "properties": {
+          "gender": {
+            "type": "string",
+            "enum": [
+              "MALE",
+              "FEMALE",
+              "ANY"
+            ]
+          },
+          "propertyType": {
+            "type": "string",
+            "enum": [
+              "APARTMENT",
+              "ROOM",
+              "HOUSE",
+              "DORMITORY",
+              "BED_SPACE"
+            ]
+          },
+          "minRooms": {
+            "type": "integer"
+          },
+          "onlyAvailable": {
+            "type": "boolean",
+            "description": "neededTenants > 0"
+          },
+          "serviceType": {
+            "type": "string",
+            "enum": [
+              "TUTOR",
+              "PRINTING",
+              "IT_DEV",
+              "DESIGN",
+              "PHOTO_VIDEO",
+              "TRANSLATION",
+              "REPAIR",
+              "BEAUTY",
+              "TRANSPORT",
+              "EVENT",
+              "CLEANING",
+              "OTHER"
+            ]
+          },
+          "serviceFormat": {
+            "type": "string",
+            "enum": [
+              "OFFLINE",
+              "ONLINE",
+              "HYBRID"
+            ]
+          },
+          "onlyFreeTrial": {
+            "type": "boolean"
+          },
+          "employment": {
+            "type": "string",
+            "enum": [
+              "DAILY",
+              "PERMANENT"
+            ]
+          },
+          "jobCategoryKey": {
+            "type": "string",
+            "example": "COURIER"
+          },
+          "shift": {
+            "type": "string",
+            "enum": [
+              "MORNING",
+              "DAY",
+              "EVENING",
+              "NIGHT",
+              "SHIFT_2_2",
+              "SHIFT_1_2",
+              "FLEXIBLE"
+            ]
+          },
+          "noExperienceOnly": {
+            "type": "boolean"
+          },
+          "taskCategory": {
+            "type": "string",
+            "enum": [
+              "WRITTEN",
+              "PRESENTATION",
+              "EXACT",
+              "IT",
+              "DRAWING",
+              "HANDWRITING",
+              "TRANSLATION",
+              "CALC"
+            ]
+          },
+          "taskTypeKey": {
+            "type": "string",
+            "example": "MATH"
+          },
+          "taskFormat": {
+            "type": "string",
+            "enum": [
+              "ONLINE",
+              "IN_PERSON",
+              "ANY"
+            ]
+          },
+          "onlyOpenDeadline": {
+            "type": "boolean"
+          }
+        }
+      },
+      "ListingPageRequestDto": {
+        "type": "object",
+        "properties": {
+          "size": {
+            "type": "integer",
+            "default": 20,
+            "maximum": 50
+          },
+          "cursor": {
+            "type": "string",
+            "nullable": true
+          },
+          "number": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "1-dan boshlanadi. `cursor` bilan birga kelsa `cursor` ustun turadi (§7.2.2)"
+          }
+        }
+      },
       "SearchListingsDto": {
         "type": "object",
         "properties": {
@@ -18839,17 +19035,19 @@
             "example": "Chilonzor"
           },
           "geo": {
-            "$ref": "#/components/schemas/SearchGeoDto"
+            "$ref": "#/components/schemas/StudentListingGeoDto"
           },
           "minPrice": {
-            "type": "integer"
+            "type": "integer",
+            "format": "int64"
           },
           "maxPrice": {
             "type": "integer",
+            "format": "int64",
             "example": 2000000
           },
           "filter": {
-            "$ref": "#/components/schemas/SearchFilterDto"
+            "$ref": "#/components/schemas/StudentListingFilterDto"
           },
           "sort": {
             "type": "string",
@@ -18864,7 +19062,336 @@
             "default": "NEWEST"
           },
           "page": {
-            "$ref": "#/components/schemas/SearchPageDto"
+            "$ref": "#/components/schemas/ListingPageRequestDto"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "TaskDetailsDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "TASK"
+            ]
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "WRITTEN",
+              "PRESENTATION",
+              "EXACT",
+              "IT",
+              "DRAWING",
+              "HANDWRITING",
+              "TRANSLATION",
+              "CALC"
+            ]
+          },
+          "typeKey": {
+            "type": "string",
+            "example": "MATH"
+          },
+          "customTypeName": {
+            "type": "string",
+            "description": "`typeKey` = OTHER bo‘lsa majburiy"
+          },
+          "deadline": {
+            "type": "string",
+            "example": "2026-08-14T18:00:00Z"
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "ONLINE",
+              "IN_PERSON",
+              "ANY"
+            ]
+          },
+          "volume": {
+            "type": "string",
+            "example": "12 ta masala"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "RentalDetailsDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "RENTAL"
+            ]
+          },
+          "propertyType": {
+            "type": "string",
+            "enum": [
+              "APARTMENT",
+              "ROOM",
+              "HOUSE",
+              "DORMITORY",
+              "BED_SPACE"
+            ]
+          },
+          "roomCount": {
+            "type": "number",
+            "example": 3
+          },
+          "currentTenants": {
+            "type": "number",
+            "example": 2,
+            "description": "0 — uy bo‘sh"
+          },
+          "neededTenants": {
+            "type": "number",
+            "example": 2
+          },
+          "gender": {
+            "type": "string",
+            "enum": [
+              "MALE",
+              "FEMALE",
+              "ANY"
+            ]
+          },
+          "period": {
+            "type": "string",
+            "enum": [
+              "MONTHLY",
+              "DAILY"
+            ]
+          },
+          "utilitiesIncluded": {
+            "type": "boolean",
+            "default": false
+          },
+          "depositMonths": {
+            "type": "number",
+            "description": "null — depozit yo‘q"
+          },
+          "floor": {
+            "type": "number"
+          },
+          "totalFloors": {
+            "type": "number"
+          },
+          "amenities": {
+            "example": [
+              "WIFI",
+              "NEAR_METRO"
+            ],
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "availableFrom": {
+            "type": "string",
+            "description": "null — hoziroq"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "ServiceDetailsDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "SERVICE"
+            ]
+          },
+          "serviceType": {
+            "type": "string",
+            "enum": [
+              "TUTOR",
+              "PRINTING",
+              "IT_DEV",
+              "DESIGN",
+              "PHOTO_VIDEO",
+              "TRANSLATION",
+              "REPAIR",
+              "BEAUTY",
+              "TRANSPORT",
+              "EVENT",
+              "CLEANING",
+              "OTHER"
+            ]
+          },
+          "fields": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Sohaga xos maydonlar (ServiceCatalog kalitlari bo‘yicha)"
+          },
+          "format": {
+            "type": "string",
+            "enum": [
+              "OFFLINE",
+              "ONLINE",
+              "HYBRID"
+            ]
+          },
+          "experienceYears": {
+            "type": "number",
+            "example": 3
+          },
+          "workingHours": {
+            "type": "string",
+            "example": "09:00 — 21:00"
+          },
+          "hasHomeVisit": {
+            "type": "boolean",
+            "default": false
+          },
+          "hasFreeTrial": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "JobScheduleDto": {
+        "type": "object",
+        "properties": {
+          "days": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "MONDAY",
+                "TUESDAY",
+                "WEDNESDAY",
+                "THURSDAY",
+                "FRIDAY",
+                "SATURDAY",
+                "SUNDAY"
+              ]
+            }
+          },
+          "startTime": {
+            "type": "string",
+            "example": "08:00"
+          },
+          "endTime": {
+            "type": "string",
+            "example": "17:00"
+          },
+          "hoursPerDay": {
+            "type": "number",
+            "example": 8
+          }
+        }
+      },
+      "JobDetailsDto": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "JOB"
+            ]
+          },
+          "employment": {
+            "type": "string",
+            "enum": [
+              "DAILY",
+              "PERMANENT"
+            ]
+          },
+          "categoryKey": {
+            "type": "string",
+            "example": "COURIER"
+          },
+          "companyName": {
+            "type": "string",
+            "example": "Express Delivery"
+          },
+          "shift": {
+            "type": "string",
+            "enum": [
+              "MORNING",
+              "DAY",
+              "EVENING",
+              "NIGHT",
+              "SHIFT_2_2",
+              "SHIFT_1_2",
+              "FLEXIBLE"
+            ]
+          },
+          "schedule": {
+            "$ref": "#/components/schemas/JobScheduleDto"
+          },
+          "payPeriod": {
+            "type": "string",
+            "enum": [
+              "HOURLY",
+              "DAILY",
+              "WEEKLY",
+              "MONTHLY",
+              "PER_TASK"
+            ]
+          },
+          "vacancies": {
+            "type": "number",
+            "example": 3
+          },
+          "gender": {
+            "type": "string",
+            "enum": [
+              "MALE",
+              "FEMALE",
+              "ANY"
+            ],
+            "description": "null — farqi yo‘q"
+          },
+          "experience": {
+            "type": "string",
+            "enum": [
+              "NONE",
+              "LESS_THAN_YEAR",
+              "ONE_TO_THREE",
+              "MORE_THAN_THREE"
+            ]
+          },
+          "ageFrom": {
+            "type": "number",
+            "example": 18
+          },
+          "ageTo": {
+            "type": "number",
+            "example": 30
+          },
+          "requirements": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "benefits": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "workDate": {
+            "type": "string",
+            "description": "DAILY da majburiy, PERMANENT da null"
+          },
+          "payoutNote": {
+            "type": "string",
+            "example": "Ish kuni oxirida"
           }
         },
         "required": [
@@ -19014,12 +19541,14 @@
             ]
           },
           "price": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1500000,
-            "description": "Butun so‘m, tiyinsiz"
+            "description": "Butun so‘m, tiyinsiz. `int64` — bazada `BigInt`, va formatsiz `integer` generatorda `int32` bo‘lib chiqib klientni 2 147 483 647 da kesishga majbur qilardi."
           },
           "priceMax": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "description": "Oraliqning yuqori chegarasi; `price` dan katta bo‘lsin"
           },
           "isNegotiable": {
@@ -19166,12 +19695,14 @@
             ]
           },
           "price": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "example": 1500000,
-            "description": "Butun so‘m, tiyinsiz"
+            "description": "Butun so‘m, tiyinsiz. `int64` — bazada `BigInt`, va formatsiz `integer` generatorda `int32` bo‘lib chiqib klientni 2 147 483 647 da kesishga majbur qilardi."
           },
           "priceMax": {
-            "type": "number",
+            "type": "integer",
+            "format": "int64",
             "description": "Oraliqning yuqori chegarasi; `price` dan katta bo‘lsin"
           },
           "isNegotiable": {
