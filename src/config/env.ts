@@ -101,6 +101,10 @@ export const envSchema = z
     // reclaimed and the post stays as an empty cell — unbounded retention would grow the bucket by
     // roughly 3 TB a year at a thousand active students (archive spec §3).
     STORY_ARCHIVE_RETENTION_DAYS: z.coerce.number().int().positive().default(365),
+    // How long a row stays in the in-app notifications list before the sweep deletes it. Ninety days
+    // per spec §1.3: this is a list, not an archive — nobody scrolls back a quarter, and the table
+    // would otherwise grow without bound for every student who ever received a message.
+    NOTIFICATION_RETENTION_DAYS: z.coerce.number().int().positive().default(90),
     // Transcoding binaries. Present in the Docker image; override for a non-standard local install.
     FFMPEG_PATH: z.string().min(1).default('ffmpeg'),
     FFPROBE_PATH: z.string().min(1).default('ffprobe'),

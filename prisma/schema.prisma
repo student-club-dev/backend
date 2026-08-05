@@ -279,6 +279,7 @@ model Student {
   mediaAssets             MediaAsset[]
   uploadSessions          UploadSession[]
   deviceTokens            DeviceToken[]
+  notifications           Notification[]
 
   callsMade     Call[]     @relation("CallCaller")
   callsReceived Call[]     @relation("CallCallee")
@@ -1611,6 +1612,63 @@ model DeviceToken {
 
   @@index([studentId])
   @@map("device_tokens")
+}
+
+// ---- In-app notifications list (01-NOTIFICATIONS_BACKEND.md) ----
+
+/// Drives the list row's icon and colour and nothing else (§1.1). Adding a value here is safe: the
+/// client draws a type it does not recognise as SYSTEM rather than failing the list, which is why
+/// the DTO exposes this as a plain string instead of an OpenAPI enum.
+enum NotificationType {
+  JOB
+  DISCOUNT
+  LISTING
+  CHAT
+  CONNECTION
+  SYSTEM
+}
+
+/// Where tapping a row takes the user (§1.2). A `{type, id}` pair rather than a ready-made deep
+/// link, so mobile navigation can be reorganised without the backend moving.
+enum NotificationTargetType {
+  CHAT
+  LISTING
+  CONNECTION_REQUESTS
+  MY_LISTINGS
+  PROFILE
+}
+
+/// One row of the in-app notifications list — the history behind the bell icon.
+///
+/// Written by the same call that sends the push (§1.3): a notification the phone displayed but that
+/// cannot be found in the list is a defect, so the two must never have separate write paths.
+///
+/// Short-lived by design: the retention cron deletes rows past 90 days (§1.3). This is a list, not
+/// an archive.
+model Notification {
+  id         String                  @id @default(cuid())
+  studentId  String                  @map("student_id")
+  type       NotificationType
+  title      String                  @db.VarChar(120)
+  /// Optional — a row with no body is drawn as a title-only card (§2.5).
+  body       String?                 @db.VarChar(300)
+  targetType NotificationTargetType? @map("target_type")
+  /// The id `targetType` needs: `conversationId` for CHAT, `listingId` for LISTING. Null for the
+  /// target types that address a screen rather than an object, and for `targetType = null`.
+  targetId   String?                 @map("target_id")
+  readAt     DateTime?               @map("read_at")
+  createdAt  DateTime                @default(now()) @map("created_at")
+
+  student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  // Covers the list query exactly: the `id DESC` tiebreak is part of the index because without it
+  // two rows born in the same millisecond swap places between requests (§2.1).
+  @@index([studentId, createdAt(sort: Desc), id(sort: Desc)])
+  // `unreadCount` — a count of `read_at IS NULL` for one student, on every home screen open (§2.2).
+  @@index([studentId, readAt])
+  // The 90-day retention sweep, oldest first.
+  @@index([createdAt])
+  @@map("notifications")
 }
 
 // ============================================================================

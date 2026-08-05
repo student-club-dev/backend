@@ -19595,6 +19595,126 @@
           "platform"
         ]
       },
+      "NotificationTargetDto": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "example": "CHAT",
+            "description": "One of `CHAT | LISTING | CONNECTION_REQUESTS | MY_LISTINGS | PROFILE` — as a string, not an enum, so an unrecognised value can be treated as \"no destination\" instead of breaking the response."
+          },
+          "id": {
+            "type": "string",
+            "nullable": true,
+            "example": "cnv_01HX2E4Q7Z",
+            "description": "The id `type` addresses: `conversationId` for CHAT, `listingId` for LISTING. Null for the target types that name a screen (`CONNECTION_REQUESTS`, `MY_LISTINGS`, `PROFILE`)."
+          }
+        },
+        "required": [
+          "type",
+          "id"
+        ]
+      },
+      "NotificationDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "ntf_01HX2E4Q7Z"
+          },
+          "type": {
+            "type": "string",
+            "example": "CHAT",
+            "description": "One of `JOB | DISCOUNT | LISTING | CHAT | CONNECTION | SYSTEM` — a string, not an enum (see §1.1). Drives icon and colour only."
+          },
+          "title": {
+            "type": "string",
+            "example": "Yangi xabar",
+            "maxLength": 120
+          },
+          "body": {
+            "type": "string",
+            "nullable": true,
+            "maxLength": 300,
+            "example": "Dilnoza sizga xabar yozdi.",
+            "description": "Optional — a row with no body is drawn as a title-only card."
+          },
+          "target": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/NotificationTargetDto"
+              }
+            ],
+            "nullable": true,
+            "description": "Null when the row is informational and opens nothing."
+          },
+          "readAt": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true,
+            "example": "2026-08-04T08:00:00.000Z",
+            "description": "When it was read, or null. ISO-8601 UTC."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "example": "2026-08-04T09:12:33.000Z",
+            "description": "ISO-8601 UTC. Never a pre-rendered \"2 hours ago\" — that string would freeze at the moment it was written and still read \"2 hours ago\" the next day (§2.3)."
+          }
+        },
+        "required": [
+          "id",
+          "type",
+          "title",
+          "body",
+          "target",
+          "readAt",
+          "createdAt"
+        ]
+      },
+      "NotificationListDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NotificationDto"
+            }
+          },
+          "unreadCount": {
+            "type": "integer",
+            "format": "int32",
+            "example": 3,
+            "description": "Unread across the student’s **entire** history, not within `items` (§2.2). This is what the dot on the home screen shows, so it must not shrink just because the list was capped."
+          }
+        },
+        "required": [
+          "items",
+          "unreadCount"
+        ]
+      },
+      "MarkNotificationsReadDto": {
+        "type": "object",
+        "properties": {
+          "ids": {
+            "maxItems": 200,
+            "example": [
+              "ntf_01HX2E4Q7Z",
+              "ntf_01HW9B3K2M"
+            ],
+            "description": "The rows to mark, at most 200. Ids that are unknown, or belong to another student, are skipped silently rather than failing the batch (§3.3) — one stale id from the client’s cache must not cost the others their mark.",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "all": {
+            "type": "boolean",
+            "example": true,
+            "description": "Marks every unread notification. Mutually exclusive with `ids`."
+          }
+        }
+      },
       "StickerDto": {
         "type": "object",
         "properties": {
