@@ -345,6 +345,8 @@ export class StudentListingsService {
   private toCandidate(ownerId: string, input: CreateListingInput, now: Date): StudentListing {
     return {
       id: '',
+      // Nothing is persisted yet, so it cannot be deleted — the field exists for the admin reads.
+      deletedAt: null,
       ownerId,
       kind: input.kind,
       title: input.title,

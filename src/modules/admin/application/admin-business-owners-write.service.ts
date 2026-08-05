@@ -9,6 +9,7 @@ import {
   ADMIN_BUSINESS_OWNER_WRITE_REPOSITORY,
   AdminBusinessOwnerWriteRepository,
 } from '../domain/admin-business-owner-write.repository';
+import { AdminUserStatus } from '../domain/enums/admin-user-status.enum';
 import { AdminBusinessOwner } from '../domain/entities/admin-business-owner.entity';
 import { AdminBusinessOwnersService } from './admin-business-owners.service';
 import { AdminCreateOwnerInput } from './admin-user-write.io';
@@ -69,6 +70,22 @@ export class AdminBusinessOwnersWriteService {
   }
 
   /** Un-bans the owner: status=ACTIVE, clears bannedAt/banReason. 404 when the id is unknown. */
+  /**
+   * Closes the owner's account and archives their businesses and listings (15-deletion.md §4).
+   * Refused when it is already closed — rewriting `deletedAt` would lose when it actually happened.
+   */
+  async softDelete(id: string, reason: string | null): Promise<AdminBusinessOwner> {
+    const owner = await this.reads.getById(id);
+    if (owner.status === AdminUserStatus.DELETED) {
+      throw AppException.conflict(
+        ERROR_CODE.INVALID_STATUS_TRANSITION,
+        'Bu hisob allaqachon o‘chirilgan',
+      );
+    }
+    await this.owners.softDelete(id, reason);
+    return this.reads.getById(id);
+  }
+
   async unban(id: string): Promise<AdminBusinessOwner> {
     await this.reads.getById(id);
     await this.owners.unban(id);

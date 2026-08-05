@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { ERROR_CODE } from '../../../common/errors/error-code';
 import {
@@ -15,6 +15,7 @@ import { AdminStudentsWriteService } from '../application/admin-students-write.s
 import { AdminRole } from '../domain/enums/admin-role.enum';
 import { Roles } from './decorators/roles.decorator';
 import { AdminBanUserDto } from './dto/admin-ban-user.dto';
+import { AdminDeleteAccountDto } from './dto/admin-delete-account.dto';
 import { AdminCreateStudentDto } from './dto/admin-create-student.dto';
 import { AdminStudentListQueryDto } from './dto/admin-student-list-query.dto';
 import { AdminStudentDto, AdminStudentPageDto } from './dto/admin-student.dto';
@@ -152,5 +153,47 @@ export class AdminStudentsController {
   async unban(@Param('id') id: string): Promise<AdminStudentDto> {
     const student = await this.adminStudentsWriteService.unban(id);
     return AdminStudentDto.fromDomain(student);
+  }
+
+  /**
+   * ⚠️ ADMIN only, and one-way. `MODERATOR` may ban (reversible) but not close an account.
+   */
+  @Delete(':id')
+  // AdminJwtGuard is applied at the controller level; without AdminRoleGuard here the `@Roles`
+  // below would be decoration and a MODERATOR could close accounts.
+  @UseGuards(AdminRoleGuard)
+  @Roles(AdminRole.ADMIN)
+  @ApiOperation({
+    summary: 'Close a student account',
+    description:
+      'Sets `status=DELETED`, records the reason, revokes every session, removes their push device tokens and archives their own student listings.\n\n' +
+      '**Not a row delete, and cannot be undone.** The row stays because deleting it would cascade ' +
+      'through 21 tables, two of which are not this account’s to erase: chat messages live inside ' +
+      'the *other* party’s conversation, and abuse reports are the record of what this account was ' +
+      'accused of. There is no restore endpoint — warn before calling this.\n\n' +
+      'A `DELETED` account cannot log in, refresh, or sign in with Google/Apple (403 ' +
+      '`ACCOUNT_BANNED`). ADMIN only.',
+  })
+  @ApiParam({ name: 'id', description: 'student id' })
+  @ApiOkEnvelope(AdminStudentDto)
+  @ApiValidationEnvelope()
+  @ApiNotFoundEnvelope(
+    ERROR_CODE.STUDENT_NOT_FOUND,
+    'No student with this id.',
+    'Student topilmadi',
+  )
+  @ApiErrorEnvelope(
+    409,
+    ERROR_CODE.INVALID_STATUS_TRANSITION,
+    'The account is already closed.',
+    'Bu hisob allaqachon o‘chirilgan',
+  )
+  async remove(
+    @Param('id') id: string,
+    @Body() body: AdminDeleteAccountDto,
+  ): Promise<AdminStudentDto> {
+    return AdminStudentDto.fromDomain(
+      await this.adminStudentsWriteService.softDelete(id, body?.reason ?? null),
+    );
   }
 }

@@ -159,4 +159,10 @@ export interface StudentListing {
   publishedAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
+  /**
+   * Soft-delete marker. Not part of the student-facing contract — every read a student can reach
+   * already filters on it — but the admin surface needs it: it is the difference between "this
+   * listing is gone" and "this listing can still be taken down".
+   */
+  deletedAt: Date | null;
 }

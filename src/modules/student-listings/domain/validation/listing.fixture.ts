@@ -40,6 +40,7 @@ export function pin(
 export function validRental(overrides: Partial<StudentListing> = {}): StudentListing {
   return {
     id: 'lst_1',
+    deletedAt: null,
     ownerId: 'usr_1',
     kind: StudentListingKind.RENTAL,
     title: 'Chilonzorda 3 xonali kvartiraga sherik kerak',

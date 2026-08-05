@@ -21066,6 +21066,337 @@
           "code"
         ]
       },
+      "ListingBranchResponseDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "lat": {
+            "type": "number",
+            "example": 41.2856
+          },
+          "lng": {
+            "type": "number",
+            "example": 69.2034
+          },
+          "address": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string",
+            "nullable": true
+          },
+          "landmark": {
+            "type": "string",
+            "nullable": true
+          },
+          "regionId": {
+            "type": "string",
+            "nullable": true
+          },
+          "districtId": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "id",
+          "lat",
+          "lng",
+          "address",
+          "name",
+          "landmark",
+          "regionId",
+          "districtId"
+        ]
+      },
+      "ListingOptionResponseDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "priceDelta": {
+            "type": "integer",
+            "description": "Butun so‘m; manfiy ham bo‘lishi mumkin"
+          },
+          "isAvailable": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "priceDelta",
+          "isAvailable"
+        ]
+      },
+      "ListingOptionGroupResponseDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "selectionType": {
+            "type": "string",
+            "enum": [
+              "SINGLE",
+              "MULTIPLE"
+            ]
+          },
+          "isRequired": {
+            "type": "boolean"
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ListingOptionResponseDto"
+            }
+          }
+        },
+        "required": [
+          "name",
+          "selectionType",
+          "isRequired",
+          "options"
+        ]
+      },
+      "StudentListingDto": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "ownerId": {
+            "type": "string"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "RENTAL",
+              "SERVICE",
+              "JOB",
+              "TASK"
+            ]
+          },
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "images": {
+            "description": "Birinchisi — muqova",
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "priceUnit": {
+            "type": "string",
+            "enum": [
+              "PER_ITEM",
+              "PER_HOUR",
+              "PER_KG",
+              "PER_DAY",
+              "PER_MONTH",
+              "PER_COURSE",
+              "PER_LESSON",
+              "PER_TICKET",
+              "PER_PERSON",
+              "PER_SESSION",
+              "PER_PAGE"
+            ],
+            "nullable": true
+          },
+          "price": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Butun so‘m, tiyinsiz. `int64` — bazada `BigInt`, va formatsiz `integer` generatorda `int32` bo‘lib chiqib klientni 2 147 483 647 da kesishga majbur qilardi."
+          },
+          "priceMax": {
+            "type": "integer",
+            "format": "int64",
+            "nullable": true
+          },
+          "currency": {
+            "type": "string",
+            "example": "UZS"
+          },
+          "isNegotiable": {
+            "type": "boolean"
+          },
+          "contactPhone": {
+            "type": "string",
+            "nullable": true,
+            "description": "Faqat ACTIVE e’londa qaytariladi; aks holda null (§7.2.0)"
+          },
+          "universityId": {
+            "type": "string",
+            "nullable": true
+          },
+          "audience": {
+            "type": "string",
+            "enum": [
+              "ALL",
+              "NEARBY_UNIVERSITIES",
+              "MY_UNIVERSITY"
+            ]
+          },
+          "branches": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ListingBranchResponseDto"
+            }
+          },
+          "validFrom": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "validTo": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
+          },
+          "attributes": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "optionGroups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ListingOptionGroupResponseDto"
+            }
+          },
+          "details": {
+            "description": "Turga xos qism; `details.kind` tashqi `kind` bilan bir xil bo‘ladi (§4)",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TaskDetailsDto"
+              },
+              {
+                "$ref": "#/components/schemas/RentalDetailsDto"
+              },
+              {
+                "$ref": "#/components/schemas/ServiceDetailsDto"
+              },
+              {
+                "$ref": "#/components/schemas/JobDetailsDto"
+              }
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "DRAFT",
+              "PENDING_REVIEW",
+              "REJECTED",
+              "SCHEDULED",
+              "ACTIVE",
+              "PAUSED",
+              "EXPIRED",
+              "SOLD_OUT",
+              "ARCHIVED"
+            ]
+          },
+          "rejectionReason": {
+            "type": "string",
+            "nullable": true,
+            "description": "Phase 1 da moderatsiya yo‘q — doim null"
+          },
+          "viewsCount": {
+            "type": "integer"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "isMine": {
+            "type": "boolean",
+            "description": "So‘rovchi — e’lon egasimi (§7.2.0)"
+          },
+          "distanceMeters": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Qidiruv bilan keladi (Phase 1b); bu yerda doim null"
+          },
+          "isFavorite": {
+            "type": "boolean",
+            "description": "Sevimlilar Phase 2 da; hozircha doim false"
+          }
+        },
+        "required": [
+          "id",
+          "ownerId",
+          "kind",
+          "title",
+          "description",
+          "images",
+          "priceUnit",
+          "price",
+          "priceMax",
+          "currency",
+          "isNegotiable",
+          "contactPhone",
+          "universityId",
+          "audience",
+          "branches",
+          "validFrom",
+          "validTo",
+          "attributes",
+          "optionGroups",
+          "details",
+          "status",
+          "rejectionReason",
+          "viewsCount",
+          "createdAt",
+          "updatedAt",
+          "isMine",
+          "distanceMeters",
+          "isFavorite"
+        ]
+      },
+      "AdminStudentListingPageDto": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StudentListingDto"
+            }
+          },
+          "page": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "size": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "total": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "hasNext": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "items",
+          "page",
+          "size",
+          "total",
+          "hasNext"
+        ]
+      },
       "AdminSendNotificationDto": {
         "type": "object",
         "properties": {
@@ -21542,6 +21873,17 @@
         "required": [
           "reason"
         ]
+      },
+      "AdminDeleteAccountDto": {
+        "type": "object",
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 500,
+            "example": "Foydalanuvchi so‘rovi bo‘yicha",
+            "description": "Recorded on the row for support to read later. There is no way to reopen the account, so this is the only lasting record of why it was closed."
+          }
+        }
       },
       "AdminBusinessOwnerSummaryDto": {
         "type": "object",
@@ -26269,304 +26611,6 @@
         },
         "required": [
           "candidateType"
-        ]
-      },
-      "ListingBranchResponseDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "lat": {
-            "type": "number",
-            "example": 41.2856
-          },
-          "lng": {
-            "type": "number",
-            "example": 69.2034
-          },
-          "address": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string",
-            "nullable": true
-          },
-          "landmark": {
-            "type": "string",
-            "nullable": true
-          },
-          "regionId": {
-            "type": "string",
-            "nullable": true
-          },
-          "districtId": {
-            "type": "string",
-            "nullable": true
-          }
-        },
-        "required": [
-          "id",
-          "lat",
-          "lng",
-          "address",
-          "name",
-          "landmark",
-          "regionId",
-          "districtId"
-        ]
-      },
-      "ListingOptionResponseDto": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "priceDelta": {
-            "type": "integer",
-            "description": "Butun so‘m; manfiy ham bo‘lishi mumkin"
-          },
-          "isAvailable": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "name",
-          "priceDelta",
-          "isAvailable"
-        ]
-      },
-      "ListingOptionGroupResponseDto": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "selectionType": {
-            "type": "string",
-            "enum": [
-              "SINGLE",
-              "MULTIPLE"
-            ]
-          },
-          "isRequired": {
-            "type": "boolean"
-          },
-          "options": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ListingOptionResponseDto"
-            }
-          }
-        },
-        "required": [
-          "name",
-          "selectionType",
-          "isRequired",
-          "options"
-        ]
-      },
-      "StudentListingDto": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "ownerId": {
-            "type": "string"
-          },
-          "kind": {
-            "type": "string",
-            "enum": [
-              "RENTAL",
-              "SERVICE",
-              "JOB",
-              "TASK"
-            ]
-          },
-          "title": {
-            "type": "string"
-          },
-          "description": {
-            "type": "string",
-            "nullable": true
-          },
-          "images": {
-            "description": "Birinchisi — muqova",
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "priceUnit": {
-            "type": "string",
-            "enum": [
-              "PER_ITEM",
-              "PER_HOUR",
-              "PER_KG",
-              "PER_DAY",
-              "PER_MONTH",
-              "PER_COURSE",
-              "PER_LESSON",
-              "PER_TICKET",
-              "PER_PERSON",
-              "PER_SESSION",
-              "PER_PAGE"
-            ],
-            "nullable": true
-          },
-          "price": {
-            "type": "integer",
-            "format": "int64",
-            "description": "Butun so‘m, tiyinsiz. `int64` — bazada `BigInt`, va formatsiz `integer` generatorda `int32` bo‘lib chiqib klientni 2 147 483 647 da kesishga majbur qilardi."
-          },
-          "priceMax": {
-            "type": "integer",
-            "format": "int64",
-            "nullable": true
-          },
-          "currency": {
-            "type": "string",
-            "example": "UZS"
-          },
-          "isNegotiable": {
-            "type": "boolean"
-          },
-          "contactPhone": {
-            "type": "string",
-            "nullable": true,
-            "description": "Faqat ACTIVE e’londa qaytariladi; aks holda null (§7.2.0)"
-          },
-          "universityId": {
-            "type": "string",
-            "nullable": true
-          },
-          "audience": {
-            "type": "string",
-            "enum": [
-              "ALL",
-              "NEARBY_UNIVERSITIES",
-              "MY_UNIVERSITY"
-            ]
-          },
-          "branches": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ListingBranchResponseDto"
-            }
-          },
-          "validFrom": {
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
-          },
-          "validTo": {
-            "type": "string",
-            "format": "date-time",
-            "nullable": true
-          },
-          "attributes": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "string"
-            }
-          },
-          "optionGroups": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ListingOptionGroupResponseDto"
-            }
-          },
-          "details": {
-            "description": "Turga xos qism; `details.kind` tashqi `kind` bilan bir xil bo‘ladi (§4)",
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/TaskDetailsDto"
-              },
-              {
-                "$ref": "#/components/schemas/RentalDetailsDto"
-              },
-              {
-                "$ref": "#/components/schemas/ServiceDetailsDto"
-              },
-              {
-                "$ref": "#/components/schemas/JobDetailsDto"
-              }
-            ]
-          },
-          "status": {
-            "type": "string",
-            "enum": [
-              "DRAFT",
-              "PENDING_REVIEW",
-              "REJECTED",
-              "SCHEDULED",
-              "ACTIVE",
-              "PAUSED",
-              "EXPIRED",
-              "SOLD_OUT",
-              "ARCHIVED"
-            ]
-          },
-          "rejectionReason": {
-            "type": "string",
-            "nullable": true,
-            "description": "Phase 1 da moderatsiya yo‘q — doim null"
-          },
-          "viewsCount": {
-            "type": "integer"
-          },
-          "createdAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "updatedAt": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "isMine": {
-            "type": "boolean",
-            "description": "So‘rovchi — e’lon egasimi (§7.2.0)"
-          },
-          "distanceMeters": {
-            "type": "integer",
-            "nullable": true,
-            "description": "Qidiruv bilan keladi (Phase 1b); bu yerda doim null"
-          },
-          "isFavorite": {
-            "type": "boolean",
-            "description": "Sevimlilar Phase 2 da; hozircha doim false"
-          }
-        },
-        "required": [
-          "id",
-          "ownerId",
-          "kind",
-          "title",
-          "description",
-          "images",
-          "priceUnit",
-          "price",
-          "priceMax",
-          "currency",
-          "isNegotiable",
-          "contactPhone",
-          "universityId",
-          "audience",
-          "branches",
-          "validFrom",
-          "validTo",
-          "attributes",
-          "optionGroups",
-          "details",
-          "status",
-          "rejectionReason",
-          "viewsCount",
-          "createdAt",
-          "updatedAt",
-          "isMine",
-          "distanceMeters",
-          "isFavorite"
         ]
       },
       "ListingSearchPageDto": {

@@ -69,7 +69,7 @@ node -e "require('@node-rs/argon2').hash(process.argv[1]).then(h=>console.log(h)
 
 ---
 
-## Faza 3 — Write: edit + create ✅ (ban/delete keyingi)
+## Faza 3 — Write: create · edit · ban · delete ✅ BAJARILDI
 
 Ruxsat: **PUT (edit) = ADMIN + MODERATOR**; **POST (create) = faqat ADMIN**.
 
@@ -104,8 +104,40 @@ Ruxsat: ADMIN + MODERATOR. Migration: `students`/`business_owners` → `status`,
 - **Auth:** BANNED/DELETED hisob **login / refresh / OAuth** qila olmaydi → **403 `ACCOUNT_BANNED`**.
 - **Filtr/DTO:** `GET /admin/students · /business-owners` endi `status` filtri + `status`/`bannedAt`/`banReason` maydonlari; dashboard'da `banned` soni.
 
-### Qolgan (Faza 3) — 🔴 hali yo'q
-**Delete** (student & owner) — soft/anonymize (Run 9). Owner ban → bizneslarni feed'dan yashirish (ixtiyoriy).
+### O'chirish ✅
+Ruxsat: **ADMIN only** (hisoblar), ADMIN + MODERATOR (e'lonlar). To'liq: [`15-deletion.md`](./15-deletion.md).
+Migration: `students`/`business_owners` → `deletedAt`, `deletedReason`.
+
+| METHOD + path | Nima |
+|---|---|
+| `DELETE /v1/admin/students/:id` | `{ reason? }` → status=DELETED, sessiyalar bekor, push tokenlari o'chadi, **o'z e'lonlari ARCHIVED**. 404 `STUDENT_NOT_FOUND`, 409 allaqachon o'chirilgan. → `AdminStudentDto` |
+| `DELETE /v1/admin/business-owners/:id` | `{ reason? }` → o'sha + **bizneslari va ulardagi barcha e'lonlar ARCHIVED**. 404 `BUSINESS_OWNER_NOT_FOUND` |
+| `DELETE /v1/admin/listings/:id` | → status=ARCHIVED (owner'ning o'z DELETE'i bilan bir xil holat). 404 `LISTING_NOT_FOUND`, 409 allaqachon arxivlangan. ADMIN + MODERATOR |
+
+⚠️ **Hech qanday qator bazadan o'chirilmaydi va tiklash endpointi YO'Q.** `Student` ga 21 ta jadval
+`onDelete: Cascade` — jumladan `Message` (boshqa odamning suhbat tarixi) va `Report` (o'sha odam
+ustidan yozilgan shikoyatlar). Sabab va tafsilotlar: [`15-deletion.md`](./15-deletion.md) §2.
+
+### Talaba e'lonlari ✅ **(yangi surface)**
+Ruxsat: ADMIN + MODERATOR. Ilgari bu yo'nalishda **umuman hech narsa yo'q edi**.
+
+| METHOD + path | Nima |
+|---|---|
+| `GET /v1/admin/student-listings` | Filtrlar: `q`, `kind`, `status` (vergul bilan; berilmasa **hamma** status), `ownerId`, `includeDeleted`, `page`, `size`. → `{ items, page, size, total, hasNext }` |
+| `GET /v1/admin/student-listings/:id` | Har qanday statusda, **o'chirilgani ham**. 404 `LISTING_NOT_FOUND` |
+| `DELETE /v1/admin/student-listings/:id` | Soft (`deletedAt`). 409 allaqachon o'chirilgan |
+
+⚠️ Talaba e'lonlari **moderatsiyadan o'tmaydi** — yuborilgan zahoti chop etiladi. `approve`/`reject`
+yo'q va bo'lmaydi; o'chirish — yagona chora.
+
+### Tizim bildirishnomalari ✅
+Ruxsat: **ADMIN only**.
+
+| METHOD + path | Nima |
+|---|---|
+| `POST /v1/admin/notifications` | `{ studentIds[1..500], title, body?, kind?: ANNOUNCEMENT\|PROFILE, sendPush?: false }` → talabalarning ilova ichidagi ro'yxatiga yozadi. `ANNOUNCEMENT` **sukut bo'yicha push yubormaydi**; `PROFILE` doim yuboradi. Ikkalasi ham tungi jimlikka (22:00–08:00) bo'ysunadi. → `null` |
+
+«Hammaga yubor» bayrog'i ataylab yo'q — ro'yxat qo'lda tuzilsin.
 
 ---
 

@@ -33,6 +33,18 @@ export class AdminListingsWriteService {
     return this.reads.getById(id);
   }
 
+  /**
+   * Archives a listing (admin-panel 15-deletion.md §5.1) — the moderator's way to take something
+   * out of the feed. Soft: `ARCHIVED` is what the owner's own DELETE produces, so the two agree.
+   *
+   * `MODERATOR` may do this, unlike closing an account: removing one listing is everyday
+   * moderation and it is reversible by re-creating, whereas an account closure is not.
+   */
+  async archive(id: string): Promise<AdminListing> {
+    await this.listings.adminArchive(id);
+    return this.reads.getById(id);
+  }
+
   /** Rejects a listing awaiting review (§6.2), recording the verdict. Same errors as {@link approve}. */
   async reject(id: string, reason: string): Promise<AdminListing> {
     await this.listings.adminReject(id, reason);

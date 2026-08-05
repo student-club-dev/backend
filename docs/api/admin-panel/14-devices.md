@@ -91,6 +91,6 @@ Push token'ni o'chiradi (odatda logout paytida).
 
 Admin panel istalgan foydalanuvchining qurilmalarini ko'rish yoki push yuborish (masalan, targetli bildirishnoma, debug) uchun mavjud endpointlar **yetarli emas**. Backend permission bilan cross-user variant ochishi kerak, masalan:
 - `GET /admin/users/:id/devices` (foydalanuvchi token'lari ro'yxati),
-- `POST /admin/notifications` (targetli/broadcast push jo'natish).
+- ✅ `POST /admin/notifications` — **qurildi**. Tafsilot: [`ADMIN-API.md`](./ADMIN-API.md) → «Tizim bildirishnomalari».
 
 To'liq ro'yxat: [`BACKEND-TASKS.md`](./BACKEND-TASKS.md).

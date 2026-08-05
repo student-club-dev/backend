@@ -265,6 +265,12 @@ model Student {
   status    StudentStatus @default(ACTIVE)
   bannedAt  DateTime?     @map("banned_at")
   banReason String?       @map("ban_reason")
+  /// Admin account deletion (admin-panel 15-deletion.md). The row stays: 21 tables cascade from
+  /// here, two of which are not this person's to erase — `Message` lives in the OTHER party's
+  /// conversation, and `Report` is the record of what they were accused of. `status = DELETED`
+  /// closes the account; these two say when and why.
+  deletedAt     DateTime? @map("deleted_at")
+  deletedReason String?   @map("deleted_reason")
 
   oauthAccounts StudentOAuthAccount[]
   refreshTokens StudentRefreshToken[]
@@ -330,6 +336,11 @@ model BusinessOwner {
   status    BusinessOwnerStatus @default(ACTIVE)
   bannedAt  DateTime?           @map("banned_at")
   banReason String?             @map("ban_reason")
+  /// Admin account deletion (admin-panel 15-deletion.md). Same reasoning as `Student`: the row
+  /// stays and the status closes the account. Deleting an owner also archives their businesses,
+  /// so a shop with nobody behind it stops offering discounts nobody will honour.
+  deletedAt     DateTime?       @map("deleted_at")
+  deletedReason String?         @map("deleted_reason")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")

@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { StudentStatus } from '@prisma/client';
+import { ListingStatus, StudentStatus } from '@prisma/client';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import {
   COURSE_YEAR_TO_PRISMA,
@@ -59,6 +59,35 @@ export class AdminStudentWritePrismaRepository implements AdminStudentWriteRepos
       this.prisma.studentRefreshToken.updateMany({
         where: { studentId: id, revokedAt: null },
         data: { revokedAt: new Date() },
+      }),
+    ]);
+  }
+
+  /**
+   * Everything the closure has to be true of, atomically (15-deletion.md §3).
+   *
+   * Each statement closes a different way the account could keep acting after it is gone:
+   * a live refresh token, a phone that keeps ringing with pushes, or a listing still sitting in
+   * the feed with nobody behind it.
+   */
+  async softDelete(id: string, reason: string | null): Promise<void> {
+    const now = new Date();
+    await this.prisma.$transaction([
+      this.prisma.student.update({
+        where: { id },
+        data: { status: StudentStatus.DELETED, deletedAt: now, deletedReason: reason },
+      }),
+      this.prisma.studentRefreshToken.updateMany({
+        where: { studentId: id, revokedAt: null },
+        data: { revokedAt: now },
+      }),
+      // Not soft: a token addresses a handset, and a closed account must stop reaching it.
+      this.prisma.deviceToken.deleteMany({ where: { studentId: id } }),
+      // Their own listings leave the feed. `deletedAt` rather than a status change, matching what
+      // the owner's own DELETE does — an archived-but-not-deleted listing would still be findable.
+      this.prisma.studentListing.updateMany({
+        where: { ownerId: id, deletedAt: null },
+        data: { deletedAt: now, status: ListingStatus.ARCHIVED },
       }),
     ]);
   }

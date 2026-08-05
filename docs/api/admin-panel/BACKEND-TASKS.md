@@ -54,14 +54,18 @@ Bu ro'yxat — admin panel **to'liq** ishlashi uchun backend qurishi kerak bo'lg
 - [ ] **E'lon:** `POST /v1/admin/listings/:id/approve · /reject(reason)`, force `/pause · /activate · /archive`. (Havola `06-listings`)
 - [ ] **Shikoyatlar navbati (reports):** `GET /v1/admin/reports` (filtr: status OPEN/REVIEWED/ACTIONED/DISMISSED, reason), `GET /:id` (target/message/note ko'rinsin), `POST /:id/transition` (status o'zgartirish). Hozir `POST /reports` bor, lekin **list/transition yo'q** — hamma `OPEN`da qotib qoladi. (Havola `11-connections`)
 
-## Faza 3 — Foydalanuvchi boshqaruvi (yaratish / tahrirlash / ban / delete) 🔴
+## Faza 3 — Foydalanuvchi boshqaruvi (yaratish / tahrirlash / ban / delete) — ✅ BAJARILDI (sessiyalar bundan mustasno)
 
 > Migratsiyalar (ban maydonlari) shart.
 
 - [x] **Yaratish (ADMIN only):** `POST /v1/admin/students`, `POST /v1/admin/business-owners` — argon2 parol bilan yangi akkaunt. ✅
 - [x] **Tahrirlash (admin override):** `PUT /v1/admin/students/:id`, `/business-owners/:id`, `/businesses/:id`, `/branches/:id`, `/listings/:id` — mavjud validatsiyani qayta ishlatib, ownership bypass. ✅
 - [x] **Ban/suspend:** `POST /v1/admin/students/:id/ban(reason) · /unban` (+ owners). Ban → status=BANNED + sessiyalar bekor + **auth login/refresh/oauth bloklanadi** (403 `ACCOUNT_BANNED`). ✅ *(owner ban → bizneslarni feed'dan yashirish — ixtiyoriy, hali yo'q)*
-- [ ] **Delete (`ADMIN`):** foydalanuvchi → soft/anonymize; biznes → archive.
+- [x] **Delete** ✅ **BAJARILDI** — to'liq kontrakt: [`15-deletion.md`](./15-deletion.md). ⚠️ **Hard delete QILINMASIN:** `Student` ga 21 ta jadval `onDelete: Cascade` — jumladan `Message` (boshqa odamning suhbat tarixi) va `Report` (o'sha odam ustidan yozilgan shikoyatlar). `StudentStatus.DELETED` / `BusinessOwnerStatus.DELETED` enumlarda allaqachon bor, hech kim yozmaydi.
+  - [x] `DELETE /v1/admin/students/:id` (`ADMIN`) — `status=DELETED` + sessiyalar bekor + `DeviceToken` o'chirish + e'lonlari `ARCHIVED`, bitta tranzaksiyada (`ban` naqshi).
+  - [x] `DELETE /v1/admin/business-owners/:id` (`ADMIN`) — o'sha + bizneslari va ulardagi e'lonlar `ARCHIVED` ga o'tadi.
+  - [x] `DELETE /v1/admin/listings/:id` (`ADMIN`+`MODERATOR`) — owner tomondagi `ARCHIVED` mantiqini ownership'siz qayta ishlatish.
+  - [x] **`/v1/admin/student-listings/*`** — `GET` ro'yxat (q/kind/status/ownerId/includeDeleted/page/size) + `GET :id` + `DELETE :id`. Talaba e'lonlari moderatsiyadan o'tmaydi (`student-listings.service.ts:23`), shuning uchun `approve`/`reject` yo'q — o'chirish yagona chora.
 - [ ] **Sessiyalar:** `GET /v1/admin/students/:id/sessions`, `DELETE /.../sessions` (force logout); owners uchun ham. `GET /:id/devices` (student). (Havola `02-profile`, `14-devices`, `01-auth`)
 
 ## Faza 4 — Reference data admin CRUD — ✅ BAJARILDI

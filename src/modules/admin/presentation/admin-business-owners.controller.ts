@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiParam, ApiTags } from '@nestjs/swagger';
 import { ERROR_CODE } from '../../../common/errors/error-code';
 import {
@@ -15,6 +15,7 @@ import { AdminBusinessOwnersWriteService } from '../application/admin-business-o
 import { AdminRole } from '../domain/enums/admin-role.enum';
 import { Roles } from './decorators/roles.decorator';
 import { AdminBanUserDto } from './dto/admin-ban-user.dto';
+import { AdminDeleteAccountDto } from './dto/admin-delete-account.dto';
 import { AdminCreateOwnerDto } from './dto/admin-create-owner.dto';
 import {
   AdminBusinessOwnerDto,
@@ -173,5 +174,47 @@ export class AdminBusinessOwnersController {
   async unban(@Param('id') id: string): Promise<AdminBusinessOwnerDto> {
     const owner = await this.adminBusinessOwnersWriteService.unban(id);
     return AdminBusinessOwnerDto.fromDomain(owner);
+  }
+
+  /**
+   * ⚠️ ADMIN only, and one-way. `MODERATOR` may ban (reversible) but not close an account.
+   */
+  @Delete(':id')
+  // AdminJwtGuard is applied at the controller level; without AdminRoleGuard here the `@Roles`
+  // below would be decoration and a MODERATOR could close accounts.
+  @UseGuards(AdminRoleGuard)
+  @Roles(AdminRole.ADMIN)
+  @ApiOperation({
+    summary: 'Close a business owner account',
+    description:
+      'Sets `status=DELETED`, records the reason, revokes every session, and archives every business they own together with those businesses’ listings — an owner who cannot log in must not leave discounts in the feed that nobody is left to honour.\n\n' +
+      '**Not a row delete, and cannot be undone.** The row stays because deleting it would cascade ' +
+      'through many tables, two of which are not this account’s to erase: chat messages live inside ' +
+      'the *other* party’s conversation, and abuse reports are the record of what this account was ' +
+      'accused of. There is no restore endpoint — warn before calling this.\n\n' +
+      'A `DELETED` account cannot log in, refresh, or sign in with Google/Apple (403 ' +
+      '`ACCOUNT_BANNED`). ADMIN only.',
+  })
+  @ApiParam({ name: 'id', description: 'business owner id' })
+  @ApiOkEnvelope(AdminBusinessOwnerDto)
+  @ApiValidationEnvelope()
+  @ApiNotFoundEnvelope(
+    ERROR_CODE.BUSINESS_OWNER_NOT_FOUND,
+    'No business owner with this id.',
+    'Biznes egasi topilmadi',
+  )
+  @ApiErrorEnvelope(
+    409,
+    ERROR_CODE.INVALID_STATUS_TRANSITION,
+    'The account is already closed.',
+    'Bu hisob allaqachon o‘chirilgan',
+  )
+  async remove(
+    @Param('id') id: string,
+    @Body() body: AdminDeleteAccountDto,
+  ): Promise<AdminBusinessOwnerDto> {
+    return AdminBusinessOwnerDto.fromDomain(
+      await this.adminBusinessOwnersWriteService.softDelete(id, body?.reason ?? null),
+    );
   }
 }

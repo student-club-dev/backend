@@ -48,6 +48,7 @@ function makeWriteRepo(
     create: jest.fn().mockResolvedValue('own-1'),
     ban: jest.fn().mockResolvedValue(undefined),
     unban: jest.fn().mockResolvedValue(undefined),
+    softDelete: jest.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }

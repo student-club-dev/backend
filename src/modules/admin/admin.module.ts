@@ -1,9 +1,12 @@
+import { ADMIN_STUDENT_LISTING_READ_REPOSITORY } from './domain/admin-student-listing-read.repository';
+import { AdminStudentListingReadPrismaRepository } from './infrastructure/admin-student-listing-read.prisma.repository';
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { BranchesModule } from '../branches/branches.module';
 import { BusinessModule } from '../business/business.module';
 import { ListingsModule } from '../listings/listings.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { StudentListingsModule } from '../student-listings/student-listings.module';
 import { ProfileModule } from '../profiles/profile.module';
 import { AdminAttributeSpecsService } from './application/admin-attribute-specs.service';
 import { AdminAuthService } from './application/admin-auth.service';
@@ -18,6 +21,7 @@ import { AdminCategoriesService } from './application/admin-categories.service';
 import { AdminDashboardService } from './application/admin-dashboard.service';
 import { AdminGeoService } from './application/admin-geo.service';
 import { AdminNotificationsService } from './application/admin-notifications.service';
+import { AdminStudentListingsService } from './application/admin-student-listings.service';
 import { AdminListingsService } from './application/admin-listings.service';
 import { AdminListingsWriteService } from './application/admin-listings-write.service';
 import { AdminStudentsService } from './application/admin-students.service';
@@ -55,6 +59,7 @@ import { AdminCategoriesController } from './presentation/admin-categories.contr
 import { AdminDashboardController } from './presentation/admin-dashboard.controller';
 import { AdminDistrictsController } from './presentation/admin-districts.controller';
 import { AdminNotificationsController } from './presentation/admin-notifications.controller';
+import { AdminStudentListingsController } from './presentation/admin-student-listings.controller';
 import { AdminListingsController } from './presentation/admin-listings.controller';
 import { AdminRegionsController } from './presentation/admin-regions.controller';
 import { AdminStudentsController } from './presentation/admin-students.controller';
@@ -81,8 +86,11 @@ import { AdminRoleGuard } from './presentation/guards/admin-role.guard';
     ListingsModule,
     // System announcements go through the push catalogue's dispatcher like every other event.
     NotificationsModule,
+    // For `STUDENT_LISTING_REPOSITORY` — the admin delete reuses the owner-facing soft delete.
+    StudentListingsModule,
   ],
   controllers: [
+    AdminStudentListingsController,
     AdminNotificationsController,
     AdminAuthController,
     AdminStudentsController,
@@ -99,6 +107,11 @@ import { AdminRoleGuard } from './presentation/guards/admin-role.guard';
     AdminAttributeSpecsController,
   ],
   providers: [
+    AdminStudentListingsService,
+    {
+      provide: ADMIN_STUDENT_LISTING_READ_REPOSITORY,
+      useClass: AdminStudentListingReadPrismaRepository,
+    },
     AdminNotificationsService,
     AdminAuthService,
     AdminStudentsService,

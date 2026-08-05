@@ -10,9 +10,6 @@ import {
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import { ListingStatus } from '../../listings/domain/enums/listing-status.enum';
 import type { StudentListing } from '../domain/entities/student-listing.entity';
-import { ListingAudience } from '../domain/enums/listing-audience.enum';
-import { StudentListingKind } from '../domain/enums/student-listing-kind.enum';
-import { StudentPriceUnit } from '../domain/enums/student-price-unit.enum';
 import type {
   CreateStudentListingData,
   DuplicateProbe,
@@ -26,18 +23,10 @@ import type {
 import type { CursorPosition } from '../domain/search/cursor';
 import type { SearchCriteria, SearchPage } from '../domain/search/search-criteria';
 import { searchCountQuery, searchQuery } from './search/search.sql';
-import {
-  parseAttributes,
-  parseDetails,
-  parseOptionGroups,
-  toBranchEntity,
-  toDetailColumns,
-} from './student-listing.mapper';
+import { toDetailColumns, toListingEntity } from './student-listing.mapper';
 
 /** Pins always travel with their listing — nothing reads one on its own. */
 const LISTING_INCLUDE = { branches: { orderBy: { createdAt: 'asc' } } } as const;
-
-type ListingRow = Prisma.StudentListingGetPayload<{ include: typeof LISTING_INCLUDE }>;
 
 /**
  * Prisma-backed store for student listings.
@@ -62,7 +51,7 @@ export class StudentListingPrismaRepository implements StudentListingRepository 
       },
       include: LISTING_INCLUDE,
     });
-    return this.toEntity(row);
+    return toListingEntity(row);
   }
 
   async findByIdempotencyKey(ownerId: string, key: string): Promise<StudentListing | null> {
@@ -70,7 +59,7 @@ export class StudentListingPrismaRepository implements StudentListingRepository 
       where: { ownerId, idempotencyKey: key, deletedAt: null },
       include: LISTING_INCLUDE,
     });
-    return row === null ? null : this.toEntity(row);
+    return row === null ? null : toListingEntity(row);
   }
 
   async findById(id: string): Promise<StudentListing | null> {
@@ -78,7 +67,7 @@ export class StudentListingPrismaRepository implements StudentListingRepository 
       where: { id, deletedAt: null },
       include: LISTING_INCLUDE,
     });
-    return row === null ? null : this.toEntity(row);
+    return row === null ? null : toListingEntity(row);
   }
 
   /**
@@ -99,7 +88,7 @@ export class StudentListingPrismaRepository implements StudentListingRepository 
         include: LISTING_INCLUDE,
       });
     });
-    return this.toEntity(row);
+    return toListingEntity(row);
   }
 
   async setStatus(
@@ -116,7 +105,7 @@ export class StudentListingPrismaRepository implements StudentListingRepository 
       },
       include: LISTING_INCLUDE,
     });
-    return this.toEntity(row);
+    return toListingEntity(row);
   }
 
   async softDelete(id: string): Promise<void> {
@@ -140,7 +129,7 @@ export class StudentListingPrismaRepository implements StudentListingRepository 
       }),
       this.prisma.studentListing.count({ where }),
     ]);
-    return { items: rows.map((row) => this.toEntity(row)), total };
+    return { items: rows.map((row) => toListingEntity(row)), total };
   }
 
   async incrementViews(id: string): Promise<void> {
@@ -235,7 +224,7 @@ export class StudentListingPrismaRepository implements StudentListingRepository 
       where: { id: { in: ids }, deletedAt: null },
       include: LISTING_INCLUDE,
     });
-    return rows.map((row) => this.toEntity(row));
+    return rows.map((row) => toListingEntity(row));
   }
 
   /**
@@ -328,38 +317,6 @@ export class StudentListingPrismaRepository implements StudentListingRepository 
       details: data.details as unknown as Prisma.InputJsonValue,
       searchText: data.searchText,
       ...toDetailColumns(data.details),
-    };
-  }
-
-  private toEntity(row: ListingRow): StudentListing {
-    return {
-      id: row.id,
-      ownerId: row.ownerId,
-      kind: row.kind as StudentListingKind,
-      title: row.title,
-      description: row.description,
-      images: row.images,
-      priceUnit: row.priceUnit === null ? null : (row.priceUnit as StudentPriceUnit),
-      // BigInt is how Postgres stores so'm; the wire contract is a plain integer.
-      price: Number(row.price),
-      priceMax: row.priceMax === null ? null : Number(row.priceMax),
-      currency: row.currency,
-      isNegotiable: row.isNegotiable,
-      contactPhone: row.contactPhone,
-      universityId: row.universityId,
-      audience: row.audience as ListingAudience,
-      branches: row.branches.map(toBranchEntity),
-      validFrom: row.validFrom,
-      validTo: row.validTo,
-      attributes: parseAttributes(row.attributes),
-      optionGroups: parseOptionGroups(row.optionGroups),
-      details: parseDetails(row.kind as StudentListingKind, row.details),
-      status: row.status as ListingStatus,
-      rejectionReason: row.rejectionReason,
-      viewsCount: row.viewsCount,
-      publishedAt: row.publishedAt,
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
     };
   }
 }

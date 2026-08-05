@@ -1,3 +1,7 @@
+import { StudentPriceUnit } from '../domain/enums/student-price-unit.enum';
+import { ListingAudience } from '../domain/enums/listing-audience.enum';
+import { ListingStatus } from '../../listings/domain/enums/listing-status.enum';
+import { Prisma } from '@prisma/client';
 import type { StudentListingBranch } from '../domain/entities/student-listing-branch.entity';
 import type {
   JobDetails,
@@ -329,5 +333,52 @@ export function toBranchEntity(row: {
     landmark: row.landmark,
     regionId: row.regionId,
     districtId: row.districtId,
+  };
+}
+
+/** The row shape both repositories read: the listing plus its branches. */
+export const STUDENT_LISTING_INCLUDE = { branches: { orderBy: { createdAt: 'asc' } } } as const;
+
+export type StudentListingRow = Prisma.StudentListingGetPayload<{
+  include: typeof STUDENT_LISTING_INCLUDE;
+}>;
+
+/**
+ * Prisma row -> domain entity.
+ *
+ * Exported rather than kept private on the owner-facing repository because the admin read
+ * repository returns the same entity from the same table. Two copies of this would drift the first
+ * time a column is added, and the drift would be invisible: both would compile.
+ */
+export function toListingEntity(row: StudentListingRow): StudentListing {
+  return {
+    id: row.id,
+    ownerId: row.ownerId,
+    kind: row.kind as StudentListingKind,
+    title: row.title,
+    description: row.description,
+    images: row.images,
+    priceUnit: row.priceUnit === null ? null : (row.priceUnit as StudentPriceUnit),
+    // BigInt is how Postgres stores so'm; the wire contract is a plain integer.
+    price: Number(row.price),
+    priceMax: row.priceMax === null ? null : Number(row.priceMax),
+    currency: row.currency,
+    isNegotiable: row.isNegotiable,
+    contactPhone: row.contactPhone,
+    universityId: row.universityId,
+    audience: row.audience as ListingAudience,
+    branches: row.branches.map(toBranchEntity),
+    validFrom: row.validFrom,
+    validTo: row.validTo,
+    attributes: parseAttributes(row.attributes),
+    optionGroups: parseOptionGroups(row.optionGroups),
+    details: parseDetails(row.kind as StudentListingKind, row.details),
+    status: row.status as ListingStatus,
+    rejectionReason: row.rejectionReason,
+    viewsCount: row.viewsCount,
+    publishedAt: row.publishedAt,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+    deletedAt: row.deletedAt,
   };
 }

@@ -31,6 +31,7 @@ Admin panel frontendi ikki manbani birga ishlatadi:
 | 12 | [`12-chat.md`](./12-chat.md) | Chat: conversations, xabarlar, o'qildi kursori |
 | 13 | [`13-media.md`](./13-media.md) | Media yuklash (`POST /media/upload`) |
 | 14 | [`14-devices.md`](./14-devices.md) | Push qurilma tokenlari (student) |
+| 15 | [`15-deletion.md`](./15-deletion.md) | **O'chirish** (talaba, biznes egasi, e'lonlar) — ⚠️ hali qurilmagan, kelishilishi kerak bo'lgan kontrakt |
 | — | [`BACKEND-TASKS.md`](./BACKEND-TASKS.md) | Backend TODO: admin panel to'liq ishlashi uchun qurilishi kerak bo'lganlar |
 
 ## Har fayl ichida

@@ -10,6 +10,7 @@ import {
   AdminStudentWriteRepository,
 } from '../domain/admin-student-write.repository';
 import { AdminStudent } from '../domain/entities/admin-student.entity';
+import { AdminUserStatus } from '../domain/enums/admin-user-status.enum';
 import { AdminCreateStudentInput } from './admin-user-write.io';
 import { AdminStudentsService } from './admin-students.service';
 
@@ -73,6 +74,23 @@ export class AdminStudentsWriteService {
   async ban(id: string, reason: string): Promise<AdminStudent> {
     await this.reads.getById(id);
     await this.students.ban(id, reason);
+    return this.reads.getById(id);
+  }
+
+  /**
+   * Closes the account (15-deletion.md §3). `getById` first, so an unknown id is a 404 rather than
+   * a silent no-op, and an already-closed one is refused rather than having its `deletedAt`
+   * rewritten — the first closure is the one that happened.
+   */
+  async softDelete(id: string, reason: string | null): Promise<AdminStudent> {
+    const student = await this.reads.getById(id);
+    if (student.status === AdminUserStatus.DELETED) {
+      throw AppException.conflict(
+        ERROR_CODE.INVALID_STATUS_TRANSITION,
+        'Bu hisob allaqachon o‘chirilgan',
+      );
+    }
+    await this.students.softDelete(id, reason);
     return this.reads.getById(id);
   }
 

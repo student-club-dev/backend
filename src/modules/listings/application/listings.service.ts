@@ -244,6 +244,24 @@ export class ListingsService {
     return listing;
   }
 
+  /**
+   * Soft-deletes (ARCHIVED) any listing, ownership skipped — the admin path
+   * (admin-panel 15-deletion.md §5.1).
+   *
+   * Reuses the same `archive` the owner's own DELETE calls rather than writing a second one: two
+   * paths to the same status is how they end up disagreeing about what archiving means.
+   */
+  async adminArchive(listingId: string): Promise<void> {
+    const { listing } = await this.loadListingWithBusiness(listingId);
+    if (listing.status === ListingStatus.ARCHIVED) {
+      throw AppException.conflict(
+        ERROR_CODE.INVALID_STATUS_TRANSITION,
+        'Bu e’lon allaqachon arxivlangan',
+      );
+    }
+    await this.listings.archive(listingId);
+  }
+
   /** Soft-deletes (ARCHIVED) a listing the caller owns. */
   async archive(user: AuthenticatedUser, listingId: string): Promise<void> {
     await this.loadOwnedListing(user, listingId);

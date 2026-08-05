@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   Param,
@@ -138,5 +139,32 @@ export class AdminListingsController {
   async reject(@Param('id') id: string, @Body() body: AdminRejectDto): Promise<AdminListingDto> {
     const listing = await this.adminListingsWriteService.reject(id, body.toReason());
     return AdminListingDto.fromDomain(listing);
+  }
+
+  /**
+   * Takes a listing out of the feed (admin-panel 15-deletion.md §5.1).
+   *
+   * `MODERATOR` too, unlike closing an account: removing one listing is everyday moderation, and
+   * `ARCHIVED` is the same soft state the owner's own DELETE produces — nothing is erased.
+   */
+  @Delete(':id')
+  @ApiOperation({
+    summary: 'Archive a listing',
+    description:
+      'Soft-delete: the listing becomes `ARCHIVED` and leaves every feed and search. The row and ' +
+      'its stats stay. Same state the owner’s own `DELETE /v1/listings/:id` produces. ADMIN and ' +
+      'MODERATOR.',
+  })
+  @ApiParam({ name: 'id', description: 'Listing id' })
+  @ApiOkEnvelope(AdminListingDto)
+  @ApiNotFoundEnvelope(ERROR_CODE.LISTING_NOT_FOUND, 'No listing with this id.', 'E’lon topilmadi')
+  @ApiErrorEnvelope(
+    409,
+    ERROR_CODE.INVALID_STATUS_TRANSITION,
+    'The listing is already archived.',
+    'Bu e’lon allaqachon arxivlangan',
+  )
+  async remove(@Param('id') id: string): Promise<AdminListingDto> {
+    return AdminListingDto.fromDomain(await this.adminListingsWriteService.archive(id));
   }
 }
