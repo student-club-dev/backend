@@ -49,7 +49,7 @@ function conversationEvent(
   };
 }
 
-/** Shared shape of the owner's own-listing rows (§3.3 №6–8). Not urgent — these can wait for 08:00. */
+/** Shared shape of the owner's own-listing rows (§3.3 №8). Not urgent — these can wait for 08:00. */
 function myListingEvent(
   recipientId: string,
   title: string,
@@ -89,12 +89,30 @@ export const NotificationCatalog = {
     );
   },
 
-  // №2 (album) has no factory of its own yet. The requirement that matters — **one** push and
-  // **one** row for a ten-photo send, not ten — is met by the gateway suppressing every message
-  // after the first, so an album arrives through `newMessage` above. The wording `📷 N ta rasm`
-  // is what is missing, and it cannot be produced: the count is 1 at the moment the first image is
-  // processed, and the client sends no album size. See the response document — this needs
-  // `albumSize` on the first message of an album before it can be written honestly.
+  /**
+   * №2 — an album. **One** push and **one** row for the whole send, never one per image: ten photos
+   * would otherwise buzz the recipient's phone ten times.
+   *
+   * `count` comes from the sender's `albumSize`, not from counting rows. At the moment this push
+   * goes out only the first image has arrived — the rest are still in flight — so counting would
+   * always say 1. That is why the field had to exist before this wording could be written.
+   */
+  album(params: {
+    recipientId: string;
+    conversationId: string;
+    senderName: string;
+    count: number;
+    extraData?: Record<string, string>;
+  }): NotificationEvent {
+    return conversationEvent(
+      params.recipientId,
+      params.conversationId,
+      params.senderName,
+      `📷 ${params.count} ta rasm`,
+      NotificationType.CHAT,
+      params.extraData,
+    );
+  },
 
   /**
    * №3 — how a finished call is reported, the missed one included.
@@ -162,13 +180,14 @@ export const NotificationCatalog = {
 
   // ---- §3.3 Listings -----------------------------------------------------------------------
 
-  // №6 and №7 (moderation passed / refused) have no factory, because this backend raises no such
-  // event: a student listing is published the moment it is submitted — `student-listings.service.ts`
-  // is explicit that REJECTED and PENDING_REVIEW are "contract-only states this phase never
-  // writes", and there is no admin surface for them. The only moderation that exists is for
-  // *business* listings, whose owner is a `BusinessOwner` and not a row this table can address.
-  // Writing the factories now would be writing for a caller that cannot exist. See the response
-  // document.
+  // №6 and №7 (moderation passed / refused) are **removed from the catalogue for good**, not
+  // merely unimplemented — the product settled it in `01-QOLGAN_ISHLAR_BACKEND.md`: student
+  // listings do not go through moderation at all. Making them wait hours for a moderator would
+  // gut the feature, since a listing is usually about that same day; reports
+  // (`POST /v1/reports`) are the reactive control instead.
+  //
+  // So there is no event to raise and no caller that could exist. Do not add these back without
+  // reopening that decision first.
 
   /** №8 — closing soon. Sent once in a listing's life (§5.2), not every day. */
   listingExpiring(params: {

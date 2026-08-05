@@ -125,6 +125,11 @@ export class ChatService implements MessageUnreadPort {
       stickerId: sticker.stickerId,
       externalSticker: sticker.externalSticker,
       albumId: input.albumId ?? null,
+      // Only meaningful with an album, and only on its first message. A size sent without an
+      // `albumId` is dropped rather than rejected: it describes a grouping that does not exist,
+      // and refusing the send over it would be a worse outcome than ignoring it.
+      albumSize:
+        input.albumId === undefined || input.albumId === null ? null : (input.albumSize ?? null),
     });
   }
 
@@ -153,6 +158,7 @@ export class ChatService implements MessageUnreadPort {
       stickerId: null,
       externalSticker: null,
       albumId: null,
+      albumSize: null,
       reply: null,
       callId: call.id,
       callMedia: call.media,

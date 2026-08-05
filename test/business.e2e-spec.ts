@@ -30,6 +30,12 @@ function otpKeys(phone: string): string[] {
     `otp:business:phone_verify:${phone}`,
     `otp:cooldown:business:phone_verify:${phone}`,
     `otp:resend:business:phone_verify:${phone}`,
+    // The registration gate's own namespace. Without these the 60s resend cooldown from a previous
+    // run survives in Redis and the next run's `register/otp` answers 429 — a failure that has
+    // nothing to do with the code under test.
+    `otp:business:registration:${phone}`,
+    `otp:cooldown:business:registration:${phone}`,
+    `otp:resend:business:registration:${phone}`,
   ];
 }
 
@@ -80,23 +86,24 @@ describe('Business (owner CRUD) + admin business types — e2e', () => {
 
   describe('owner CRUD (phone-verified business account)', () => {
     it('create → get → my → update → immutable-type → archive → 404', async () => {
-      // Register a business owner and verify the phone (D1 gate).
-      const registered = await request(app.getHttpServer())
-        .post('/v1/auth/business/register')
-        .send({ email: OWNER_EMAIL, phoneNumber: OWNER_PHONE, password: 'password123' })
-        .expect(201);
-      const auth = `Bearer ${registered.body.result.accessToken as string}`;
-
+      // Register a business owner. The phone is proven up front — a unique column claimed without
+      // proof locks out its real owner — and that also satisfies the D1 gate, so the separate
+      // verify round this test used to need is gone.
       await request(app.getHttpServer())
-        .post('/v1/auth/business/otp/request')
-        .set('Authorization', auth)
+        .post('/v1/auth/business/register/otp')
         .send({ phoneNumber: OWNER_PHONE })
         .expect(200);
-      await request(app.getHttpServer())
-        .post('/v1/auth/business/otp/verify')
-        .set('Authorization', auth)
-        .send({ phoneNumber: OWNER_PHONE, code: DEV_CODE })
-        .expect(200);
+
+      const registered = await request(app.getHttpServer())
+        .post('/v1/auth/business/register')
+        .send({
+          email: OWNER_EMAIL,
+          phoneNumber: OWNER_PHONE,
+          password: 'password123',
+          otpCode: DEV_CODE,
+        })
+        .expect(201);
+      const auth = `Bearer ${registered.body.result.accessToken as string}`;
 
       // Create — starts as DRAFT.
       const created = await request(app.getHttpServer())

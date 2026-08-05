@@ -48,6 +48,8 @@ export interface Message {
   deletedAt: Date | null;
   /** Groups the messages of one multi-image send. Presentation only — each keeps its own `seq`. */
   albumId: string | null;
+  /** Album size as the sender declared it, on the first message only; null everywhere else. */
+  albumSize: number | null;
   /** The uploaded (or provider) attachment, when this message carries one. */
   attachment: MediaAsset | null;
   /** The sticker, for `STICKER` messages. Catalogue content, not an upload. */

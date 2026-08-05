@@ -253,6 +253,17 @@ export class MessageDto {
   albumId!: string | null;
 
   @ApiProperty({
+    type: 'integer',
+    format: 'int32',
+    nullable: true,
+    example: 10,
+    description:
+      'How many images the album holds, echoed back from the sender. Set on the **first** message ' +
+      'of an album only; null on the rest and on every non-album message.',
+  })
+  albumSize!: number | null;
+
+  @ApiProperty({
     type: () => AttachmentDto,
     nullable: true,
     description: 'Set for IMAGE, GIF, VIDEO, VOICE and FILE messages; null otherwise.',
@@ -298,6 +309,7 @@ export class MessageDto {
     dto.clientMsgId = message.senderId === viewerId ? message.clientMsgId : null;
     dto.deletedAt = message.deletedAt === null ? null : message.deletedAt.toISOString();
     dto.albumId = message.albumId;
+    dto.albumSize = message.albumSize;
     dto.attachment =
       message.attachment === null ? null : AttachmentDto.fromDomain(message.attachment, apiBase);
     dto.sticker = message.sticker === null ? null : MessageStickerDto.fromDomain(message.sticker);

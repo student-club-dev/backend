@@ -2,12 +2,43 @@
 
 Bu **kod emas** — server, DNS va sertifikat ishi. `04-CALLS_BACKEND.md` §6 ning bajarilishi.
 
+> ## ⚡ Avval o'qing: coturn **shart emas**
+>
+> Backend ikkita TURN provayderini qo'llab-quvvatlaydi va tanlov bitta env o'zgaruvchisi:
+>
+> | | `ICE_PROVIDER=metered` | `ICE_PROVIDER=static` (coturn) |
+> |---|---|---|
+> | Kerak bo'lgani | **faqat kalit** | server + alohida IP + DNS + sertifikat |
+> | Vaqt | **5 daqiqa** | 1–2 soat |
+> | Kredensial | uzoq umrli, hamma uchun bitta | har talabaga alohida, 1 soatda eskiradi |
+> | Kvota nazorati | yo'q | `user-quota` ishlaydi |
+>
+> **Metered kalitingiz bo'lsa — qo'ng'iroqlar bugunoq ishlaydi**, bu hujjatdagi hech narsani
+> qilmasdan. `turn.studentclub.uz` domeni ham, alohida IP ham, sertifikat ham kerak emas: Metered
+> o'z hostlarini ishlatadi (`global.relay.metered.ca`).
+>
+> ```dotenv
+> CALLS_ENABLED=true
+> ICE_PROVIDER=metered
+> METERED_TURN_USERNAME=<kalit>
+> METERED_TURN_CREDENTIAL=<parol>
+> ```
+>
+> Keyin `docker compose up -d --force-recreate backend` (`.env` o'zgargani uchun `--force-recreate`).
+>
+> **Bu hujjatning qolgan qismi — coturn'ga o'tmoqchi bo'lganingizda.** Sabab: Metered kredensiali
+> bitta va uzoq umrli, ya'ni chiqib ketsa siz qo'lda almashtirmaguningizcha yashaydi va relay
+> trafigini kim yeyayotganini cheklab bo'lmaydi. coturn har talabaga o'zi eskiradigan kredensial
+> beradi. Bu **sifat yaxshilanishi, shoshilinch ish emas** — Metered bilan qo'ng'iroq to'liq
+> ishlaydi.
+
 Backend tomoni tayyor: `GET /v1/calls/ice-servers` coturn'ning `use-auth-secret` sxemasi bo'yicha
 vaqtinchalik kredensial chiqaradi. Faqat quyidagilar bajarilgach u `503` o'rniga haqiqiy javob
 qaytara boshlaydi.
 
-> ⚠️ **Bu navbatni kutmasin.** Server, IP va DNS bir kunda bo'lmaydi; sertifikat esa DNS'ga bog'liq.
-> Buni birinchi buyurtma qiling — qolgan hamma narsa parallel ketaveradi.
+**Qancha vaqt oladi:** serverga va DNS'ga kirish huquqingiz bo'lsa — **1–2 soat**. IP va A yozuvi
+daqiqalar, coturn o'rnatish ~15 daqiqa, sertifikat ~30 soniya. Cho'zilishi mumkin bo'lgan yagona
+joy — IP'ni provayderdan qo'lda so'rash kerak bo'lsa yoki DNS boshqa odamning qo'lida bo'lsa.
 
 ---
 

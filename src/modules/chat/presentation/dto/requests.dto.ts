@@ -1,5 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
+import { MAX_ALBUM_SIZE } from '../../domain/message-composition';
 import {
   ArrayMinSize,
   IsArray,
@@ -8,6 +9,7 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
+  Max,
   MaxLength,
   Min,
   ValidateNested,
@@ -232,6 +234,27 @@ export class SendMessageDto {
   @IsOptional()
   @IsString()
   albumId?: string;
+
+  @ApiPropertyOptional({
+    type: 'integer',
+    format: 'int32',
+    minimum: 2,
+    maximum: MAX_ALBUM_SIZE,
+    example: 10,
+    description:
+      'How many images this album will contain. Send it on the **first** message of the album ' +
+      'only — that is the one whose push goes out, and at that moment the rest have not arrived ' +
+      'yet, so nothing else can tell us the count.\n\n' +
+      'Without it the notification can only describe the first picture (`📷 Rasm`); with it, it ' +
+      'reads `📷 10 ta rasm`. Optional, and ignored when `albumId` is absent — a client that never ' +
+      'sends it keeps working exactly as before.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  @Min(2)
+  @Max(MAX_ALBUM_SIZE)
+  albumSize?: number;
 
   @ApiPropertyOptional({
     description: 'Client-generated id — makes a retried send idempotent (C6)',

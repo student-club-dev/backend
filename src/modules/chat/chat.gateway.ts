@@ -264,28 +264,31 @@ export class ChatGateway implements OnGatewayConnection, OnGatewayDisconnect, On
         // it writes the in-app list row and sends the push as one operation, so a notification the
         // phone displayed can always be found in the list afterwards. Badge, grouping keys and the
         // `data` envelope are its job now — only the message-specific keys are passed in.
-        // A call row groups under the call key, an ordinary message under its conversation's
-        // (catalogue §4.1) — otherwise a missed call would replace the unread message above it.
-        const build =
-          message.type === MessageType.CALL
-            ? NotificationCatalog.callMessage
-            : NotificationCatalog.newMessage;
+        // Which of the three wordings this is (catalogue §3.1). A call row also groups under the
+        // call key rather than the conversation's (§4.1), so a missed call cannot replace the
+        // unread message sitting above it in the tray.
+        const common = {
+          recipientId: otherId,
+          conversationId: message.conversationId,
+          senderName: pushTitleFor(message, senderName),
+          extraData: {
+            messageType: message.type,
+            senderId: message.senderId,
+            ...(message.albumId === null ? {} : { albumId: message.albumId }),
+            // Omitted rather than sent empty: FCM rejects a non-string `data` value, and a client
+            // that trusts the key's presence would render "null" as a name or a broken avatar.
+            ...(senderName === null ? {} : { senderName }),
+            ...(sender?.avatarUrl == null ? {} : { senderAvatarUrl: sender.avatarUrl }),
+          },
+        };
         await this.dispatcher.dispatch(
-          build({
-            recipientId: otherId,
-            conversationId: message.conversationId,
-            senderName: pushTitleFor(message, senderName),
-            text: pushTextFor(message),
-            extraData: {
-              messageType: message.type,
-              senderId: message.senderId,
-              ...(message.albumId === null ? {} : { albumId: message.albumId }),
-              // Omitted rather than sent empty: FCM rejects a non-string `data` value, and a client
-              // that trusts the key's presence would render "null" as a name or a broken avatar.
-              ...(senderName === null ? {} : { senderName }),
-              ...(sender?.avatarUrl == null ? {} : { senderAvatarUrl: sender.avatarUrl }),
-            },
-          }),
+          message.type === MessageType.CALL
+            ? NotificationCatalog.callMessage({ ...common, text: pushTextFor(message) })
+            : // `albumSize` is only ever set on the first message of an album — the one this push
+              // is for — so its presence is exactly the signal that "N photos" is the honest text.
+              message.albumSize !== null
+              ? NotificationCatalog.album({ ...common, count: message.albumSize })
+              : NotificationCatalog.newMessage({ ...common, text: pushTextFor(message) }),
         );
       }
     }

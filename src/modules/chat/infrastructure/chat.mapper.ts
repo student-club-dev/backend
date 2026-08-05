@@ -79,6 +79,7 @@ export class ChatMapper {
       clientMsgId: row.clientMsgId,
       deletedAt: row.deletedAt,
       albumId: row.albumId,
+      albumSize: row.albumSize,
       attachment:
         row.attachment === undefined || row.attachment === null
           ? null

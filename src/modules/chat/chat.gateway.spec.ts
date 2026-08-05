@@ -26,6 +26,7 @@ const message: Message = {
   clientMsgId: 'cmid-1',
   deletedAt: null,
   albumId: null,
+  albumSize: null,
   attachment: null,
   sticker: null,
   replyTo: null,
@@ -41,6 +42,7 @@ interface ChatMocks {
   markDelivered?: jest.Mock;
   unreadTotalFor?: jest.Mock;
   pushSenderOf?: jest.Mock;
+  countInAlbum?: jest.Mock;
 }
 
 function makeGateway(chat: ChatMocks): {
@@ -410,5 +412,71 @@ describe('ChatGateway — token freshness (§17.3) and cursor acks (§17.8)', ()
       error: { code: 'TOKEN_EXPIRED', message: 'Sessiya muddati tugadi' },
     });
     expect(chat.markRead).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * `albumSize` (mobile 01-QOLGAN_ISHLAR §1) — the field the client could not send until it existed.
+ *
+ * ⚠️ It has to be *declared* rather than counted. When this push goes out only the first image has
+ * arrived — the rest are still in flight — so `countInAlbum` would always answer 1, and the
+ * notification could only ever describe one photo.
+ */
+describe('ChatGateway — the album push', () => {
+  const album = (albumSize: number | null): Message => ({
+    ...message,
+    type: MessageType.IMAGE,
+    body: null,
+    albumId: 'alb_1',
+    albumSize,
+  });
+
+  async function bodyFor(msg: Message): Promise<string> {
+    const { gateway, dispatch } = makeGateway({
+      otherMemberId: jest.fn().mockResolvedValue(OTHER),
+      isOnline: jest.fn().mockResolvedValue(false),
+      countInAlbum: jest.fn().mockResolvedValue(1),
+      pushSenderOf: jest.fn().mockResolvedValue({ name: 'Aziz', avatarUrl: null }),
+    });
+    await gateway.broadcastMessage(msg);
+    return (dispatch.mock.calls[0][0] as { body: string }).body;
+  }
+
+  it('names the number of photos when the sender declared it', async () => {
+    expect(await bodyFor(album(10))).toBe('📷 10 ta rasm');
+  });
+
+  it('still names the sender, not the album', async () => {
+    const { gateway, dispatch } = makeGateway({
+      otherMemberId: jest.fn().mockResolvedValue(OTHER),
+      isOnline: jest.fn().mockResolvedValue(false),
+      countInAlbum: jest.fn().mockResolvedValue(1),
+      pushSenderOf: jest.fn().mockResolvedValue({ name: 'Aziz Karimov', avatarUrl: null }),
+    });
+
+    await gateway.broadcastMessage(album(3));
+
+    expect((dispatch.mock.calls[0][0] as { title: string }).title).toBe('Aziz Karimov');
+  });
+
+  // The pre-existing behaviour, and what an older client still gets: the first image's own wording.
+  it('falls back to the single-image text when no size was declared', async () => {
+    expect(await bodyFor(album(null))).toBe('📷 Rasm');
+  });
+
+  /**
+   * The requirement that mattered even before the wording: ten photos must buzz the phone once.
+   * Every message after the first is suppressed, so only the one carrying `albumSize` gets here.
+   */
+  it('raises nothing for the images that follow the first', async () => {
+    const { gateway, dispatch } = makeGateway({
+      otherMemberId: jest.fn().mockResolvedValue(OTHER),
+      isOnline: jest.fn().mockResolvedValue(false),
+      countInAlbum: jest.fn().mockResolvedValue(4), // the album already has images in it
+    });
+
+    await gateway.broadcastMessage(album(null));
+
+    expect(dispatch).not.toHaveBeenCalled();
   });
 });

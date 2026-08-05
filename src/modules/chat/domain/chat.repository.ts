@@ -78,6 +78,8 @@ export interface AppendMessageInput {
   /** A sticker from provider search, stored on the row — there is no catalogue row to point at. */
   externalSticker: ExternalStickerRow | null;
   albumId: string | null;
+  /** Album size, first message only; null otherwise. */
+  albumSize: number | null;
   /** The frozen reply snapshot, or null when this message is not a reply (§C1). */
   reply: ReplyColumns | null;
   /** The call snapshot columns, set only when writing a `CALL` message (`appendCallMessage`). */

@@ -24262,6 +24262,18 @@
             "type": "string",
             "nullable": true
           },
+          "regionId": {
+            "type": "string",
+            "nullable": true,
+            "example": "TOSHKENT_SHAHRI",
+            "description": "Where the student lives. Writable through `PATCH /v1/profile/me` and now returned here too — without it the value was written and never came back, so a reinstall or a second device showed an empty address the user had already filled in.\n\nNull for a business-owner profile and for a student who has not set it."
+          },
+          "districtId": {
+            "type": "string",
+            "nullable": true,
+            "example": "CHILONZOR",
+            "description": "The finer half of the same address; preferred over `regionId` when both are set."
+          },
           "birthYear": {
             "type": "integer",
             "format": "int32",
@@ -24303,6 +24315,8 @@
           "role",
           "universityId",
           "universityEmail",
+          "regionId",
+          "districtId",
           "birthYear",
           "courseYear",
           "lastSeenVisibility",
@@ -25780,6 +25794,13 @@
             "nullable": true,
             "description": "Shared by every image of one multi-image send — draw consecutive messages with the same value as a grid. Each is still its own message with its own `seq`."
           },
+          "albumSize": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true,
+            "example": 10,
+            "description": "How many images the album holds, echoed back from the sender. Set on the **first** message of an album only; null on the rest and on every non-album message."
+          },
           "attachment": {
             "nullable": true,
             "description": "Set for IMAGE, GIF, VIDEO, VOICE and FILE messages; null otherwise.",
@@ -25831,6 +25852,7 @@
           "clientMsgId",
           "deletedAt",
           "albumId",
+          "albumSize",
           "attachment",
           "sticker",
           "replyTo",
@@ -26103,6 +26125,14 @@
           "albumId": {
             "type": "string",
             "description": "Client-generated id shared by every image of one multi-image send (max 10). Each image is still its own message with its own `seq`; this only tells the client to draw them as a grid."
+          },
+          "albumSize": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 2,
+            "maximum": 10,
+            "example": 10,
+            "description": "How many images this album will contain. Send it on the **first** message of the album only — that is the one whose push goes out, and at that moment the rest have not arrived yet, so nothing else can tell us the count.\n\nWithout it the notification can only describe the first picture (`📷 Rasm`); with it, it reads `📷 10 ta rasm`. Optional, and ignored when `albumId` is absent — a client that never sends it keeps working exactly as before."
           },
           "clientMsgId": {
             "type": "string",

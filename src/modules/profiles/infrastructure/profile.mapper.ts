@@ -79,6 +79,12 @@ export function toStudentUpdateData(patch: ProfilePatch): Prisma.StudentUpdateIn
   if (patch.universityEmail !== undefined) {
     data.universityEmail = patch.universityEmail;
   }
+  if (patch.regionId !== undefined) {
+    data.regionId = patch.regionId;
+  }
+  if (patch.districtId !== undefined) {
+    data.districtId = patch.districtId;
+  }
   if (patch.birthYear !== undefined) {
     data.birthYear = patch.birthYear;
   }

@@ -33,6 +33,8 @@ export interface SendMessageInput {
   /** A sticker chosen from provider search — referenced, never re-hosted. */
   sticker?: ExternalStickerRef | null;
   albumId?: string | null;
+  /** How many images the album will hold; set on the first message only. */
+  albumSize?: number | null;
   clientMsgId?: string | null;
   /** The message being replied to — must be in the same conversation (§C1). */
   replyToMessageId?: string | null;

@@ -1182,6 +1182,13 @@ model Message {
   // Groups the messages of one multi-image send. Purely presentational: each image stays its own
   // message with its own `seq`, or unread counts and `?after=` paging would break (chat spec §3).
   albumId String? @map("album_id")
+  /// How many images the sender is about to put in this album, set on the FIRST message only
+  /// (mobile 01-QOLGAN_ISHLAR §1).
+  ///
+  /// Stored rather than counted because the count is what the push needs, and at the moment the
+  /// push is sent only one image has arrived — the rest are still in flight. Without the sender
+  /// telling us up front, the notification can only describe the first picture.
+  albumSize Int? @map("album_size")
 
   // Quoted reply (§C). Denormalised like the sticker columns: a snapshot taken at send time, so it
   // keeps rendering after the target is deleted. `replyToMessageId` exists only for "jump to

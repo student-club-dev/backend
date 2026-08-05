@@ -43,6 +43,7 @@ function message(overrides: Partial<Message> = {}): Message {
     clientMsgId: null,
     deletedAt: null,
     albumId: null,
+    albumSize: null,
     attachment: null,
     sticker: null,
     replyTo: null,

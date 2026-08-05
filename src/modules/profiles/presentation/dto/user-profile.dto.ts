@@ -46,6 +46,26 @@ export class UserProfileDto {
   @ApiProperty({ type: String, nullable: true })
   universityEmail!: string | null;
 
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    example: 'TOSHKENT_SHAHRI',
+    description:
+      'Where the student lives. Writable through `PATCH /v1/profile/me` and now returned here too ' +
+      '— without it the value was written and never came back, so a reinstall or a second device ' +
+      'showed an empty address the user had already filled in.\n\n' +
+      'Null for a business-owner profile and for a student who has not set it.',
+  })
+  regionId!: string | null;
+
+  @ApiProperty({
+    type: String,
+    nullable: true,
+    example: 'CHILONZOR',
+    description: 'The finer half of the same address; preferred over `regionId` when both are set.',
+  })
+  districtId!: string | null;
+
   @ApiProperty({ type: 'integer', format: 'int32', nullable: true, example: 2004 })
   birthYear!: number | null;
 
@@ -102,6 +122,8 @@ export class UserProfileDto {
     dto.role = profile.role;
     dto.universityId = profile.universityId;
     dto.universityEmail = profile.universityEmail;
+    dto.regionId = profile.regionId;
+    dto.districtId = profile.districtId;
     dto.birthYear = profile.birthYear;
     dto.courseYear = profile.courseYear;
     dto.lastSeenVisibility = profile.lastSeenVisibility;

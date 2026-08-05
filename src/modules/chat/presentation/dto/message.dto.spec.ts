@@ -12,6 +12,7 @@ const message: Message = {
   clientMsgId: 'cmid-1',
   deletedAt: null,
   albumId: null,
+  albumSize: null,
   attachment: null,
   sticker: null,
   replyTo: null,

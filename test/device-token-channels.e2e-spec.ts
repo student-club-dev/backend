@@ -102,9 +102,7 @@ describe('Device token channels — e2e', () => {
     expect(rows).toHaveLength(3);
     // The ordinary iOS row survived: replacing one with the other is what silently disables either
     // messages or calls.
-    expect(rows.map((row) => row.token).sort()).toEqual(
-      [APNS_TOKEN, FCM_TOKEN, VOIP_TOKEN].sort(),
-    );
+    expect(rows.map((row) => row.token).sort()).toEqual([APNS_TOKEN, FCM_TOKEN, VOIP_TOKEN].sort());
   });
 
   it('⛔ never hands a VoIP token to an ordinary notification', async () => {

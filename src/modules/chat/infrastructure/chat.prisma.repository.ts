@@ -203,6 +203,7 @@ export class ChatPrismaRepository implements ChatRepository {
             stickerWidth: input.externalSticker?.width ?? null,
             stickerHeight: input.externalSticker?.height ?? null,
             albumId: input.albumId,
+            albumSize: input.albumSize,
             replyToMessageId: input.reply?.replyToMessageId ?? null,
             replyToSenderId: input.reply?.replyToSenderId ?? null,
             replyToSenderName: input.reply?.replyToSenderName ?? null,

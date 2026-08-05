@@ -31,6 +31,8 @@ export interface SendMessagePayload {
   mediaId?: string;
   stickerId?: string;
   albumId?: string;
+  /** Album size, first message only (mobile 01-QOLGAN_ISHLAR §1). Mirrors the REST DTO. */
+  albumSize?: number;
   /** Reply target (§C1) — same validation as REST. */
   replyToMessageId?: string;
   quote?: { text: string; offset: number };

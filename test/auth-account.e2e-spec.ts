@@ -48,6 +48,12 @@ function resetKeys(phone: string): string[] {
     `otp:student:password_reset:${phone}`,
     `otp:cooldown:student:password_reset:${phone}`,
     `otp:resend:student:password_reset:${phone}`,
+    // The registration gate's own namespace. Without these the 60s resend cooldown from a previous
+    // run survives in Redis and the next run's `register/otp` answers 429 — a failure that has
+    // nothing to do with the code under test.
+    `otp:student:registration:${phone}`,
+    `otp:cooldown:student:registration:${phone}`,
+    `otp:resend:student:registration:${phone}`,
   ];
 }
 
@@ -211,25 +217,23 @@ describe('Auth account (student) — sessions, set/reset password — e2e', () =
   });
 
   describe('password reset via SMS (D5)', () => {
-    it('register → verify phone → forgot → reset → login with the new password; old refresh token revoked', async () => {
-      const registered = await request(app.getHttpServer())
-        .post('/v1/auth/student/register')
-        .send({ phoneNumber: PHONE_RESET, password: 'password123' })
-        .expect(201);
-      const auth = `Bearer ${registered.body.result.accessToken as string}`;
-      const oldRefreshToken = registered.body.result.refreshToken as string;
-
-      // Verify the phone so a reset OTP is allowed to be sent.
+    it('register with a proven phone → forgot → reset → login with the new password; old refresh token revoked', async () => {
+      // A phone number is unique, so registering one now requires proving it first — otherwise the
+      // number's real owner would be locked out by whoever typed it. No token on this call: there
+      // is no account yet.
       await request(app.getHttpServer())
-        .post('/v1/auth/student/otp/request')
-        .set('Authorization', auth)
+        .post('/v1/auth/student/register/otp')
         .send({ phoneNumber: PHONE_RESET })
         .expect(200);
-      await request(app.getHttpServer())
-        .post('/v1/auth/student/otp/verify')
-        .set('Authorization', auth)
-        .send({ phoneNumber: PHONE_RESET, code: DEV_CODE })
-        .expect(200);
+
+      const registered = await request(app.getHttpServer())
+        .post('/v1/auth/student/register')
+        .send({ phoneNumber: PHONE_RESET, password: 'password123', otpCode: DEV_CODE })
+        .expect(201);
+      const oldRefreshToken = registered.body.result.refreshToken as string;
+
+      // The separate `otp/request` + `otp/verify` round the old flow needed here is gone: the
+      // registration itself proved the phone, so it is already verified and a reset OTP is allowed.
 
       // Forgot always succeeds (anti-enumeration) and sends a password_reset OTP here.
       await request(app.getHttpServer())
