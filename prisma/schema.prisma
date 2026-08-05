@@ -1436,8 +1436,17 @@ model UploadSession {
   quality        MediaQuality?
   /// Sanitised at `init` — the same treatment a one-shot upload's filename gets.
   fileName       String?       @map("file_name")
-  /// BigInt: the whole point of this endpoint is files that do not fit in an Int of bytes.
+  /// The ceiling this session may not exceed — BigInt because the whole point of this endpoint is
+  /// files that do not fit in an Int of bytes.
+  ///
+  /// For an ordinary session it is what the client declared. For a **streaming** one it is the
+  /// reserve taken on its behalf, because a client still encoding the video cannot know the size
+  /// yet. Either way it is what bounds the part index, the disk check and the quota.
   totalBytes     BigInt        @map("total_bytes")
+  /// True when `init` was called without `totalBytes` (streaming upload spec §1). It changes one
+  /// thing: `complete` then *requires* `totalBytes` and `parts`, because nothing else in the
+  /// session can say where the file ends.
+  streaming      Boolean       @default(false)
   chunkSize      Int           @map("chunk_size")
   expiresAt      DateTime      @map("expires_at")
   createdAt      DateTime      @default(now()) @map("created_at")

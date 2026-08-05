@@ -86,6 +86,9 @@ function makeMedia(overrides: Partial<ChatMediaService> = {}): ChatMediaService 
   } as unknown as ChatMediaService;
 }
 
+/** The reserve a streaming session is charged against in these tests. */
+const STREAM_RESERVE = 1_000;
+
 function makeService(
   sessions: UploadSessionRepository = makeSessions(),
   media: ChatMediaService = makeMedia(),
@@ -95,8 +98,10 @@ function makeService(
     tempDir: root,
     sweepStaleTemp: jest.fn(async () => 0),
   } as unknown as ChatMediaStorage;
+  // Key-aware: the streaming reserve and the TTL are different numbers, and a mock that returns
+  // one value for both would let a reserve bug pass unnoticed.
   const config = {
-    get: () => 24,
+    get: (key: string) => (key === 'CHAT_UPLOAD_STREAM_RESERVE_BYTES' ? STREAM_RESERVE : 24),
   } as unknown as ConfigService<never, true>;
   return {
     service: new UploadSessionService(sessions, parts, storage, media, config),
@@ -114,6 +119,7 @@ function session(overrides: Partial<UploadSession> = {}): UploadSession {
     quality: null,
     fileName: 'video.mp4',
     totalBytes: 10,
+    streaming: false,
     chunkSize: 4,
     expiresAt: new Date(Date.now() + 60_000),
     createdAt: new Date(),
@@ -360,7 +366,7 @@ describe('UploadSessionService — complete', () => {
     await service.writePart(me, 'upl_seed', 0, bytes('aaaa'));
     await service.writePart(me, 'upl_seed', 1, bytes('bbbb'));
 
-    await service.complete(me, 'upl_seed', 8);
+    await service.complete(me, 'upl_seed', { totalBytes: 8 });
 
     expect(media.upload).toHaveBeenCalledWith(
       me,
@@ -373,7 +379,7 @@ describe('UploadSessionService — complete', () => {
     await service.writePart(me, 'upl_seed', 0, bytes('aaaa'));
     await service.writePart(me, 'upl_seed', 1, bytes('bbbb')); // 8 on disk, 6 claimed
 
-    await expect(service.complete(me, 'upl_seed', 6)).rejects.toMatchObject({
+    await expect(service.complete(me, 'upl_seed', { totalBytes: 6 })).rejects.toMatchObject({
       code: ERROR_CODE.UPLOAD_SIZE_MISMATCH,
       status: 422,
     });
@@ -384,7 +390,7 @@ describe('UploadSessionService — complete', () => {
     const { service } = makeService(makeSessions(session({ totalBytes: 40, chunkSize: 4 })));
     await service.writePart(me, 'upl_seed', 0, bytes('aaaa'));
 
-    await expect(service.complete(me, 'upl_seed', 8)).rejects.toMatchObject({
+    await expect(service.complete(me, 'upl_seed', { totalBytes: 8 })).rejects.toMatchObject({
       code: ERROR_CODE.UPLOAD_INCOMPLETE,
       status: 422,
     });
@@ -397,7 +403,7 @@ describe('UploadSessionService — complete', () => {
     await service.writePart(me, 'upl_seed', 0, bytes('aaaa'));
     await service.writePart(me, 'upl_seed', 1, bytes('bbbb'));
 
-    await expect(service.complete(me, 'upl_seed', 8)).rejects.toMatchObject({
+    await expect(service.complete(me, 'upl_seed', { totalBytes: 8 })).rejects.toMatchObject({
       code: ERROR_CODE.UPLOAD_SIZE_MISMATCH,
       status: 422,
     });
@@ -512,5 +518,162 @@ describe('UploadSessionService — cleanup', () => {
   it('does nothing when there is nothing expired', async () => {
     const { service } = makeService(makeSessions(session()));
     expect(await service.sweepExpired()).toBe(0);
+  });
+});
+
+/**
+ * Streaming sessions (streaming upload spec §1–§2) — `init` with no `totalBytes` at all.
+ *
+ * The point is that the client can start sending **before the encoder knows the size**, so nothing
+ * in the session says where the file ends. `complete` carries that knowledge instead, and these
+ * cover what happens when it does not.
+ */
+describe('UploadSessionService — streaming sessions', () => {
+  it('opens without totalBytes and still returns what the client needs to send', async () => {
+    const { service, sessions } = makeService();
+
+    const progress = await service.init(me, {
+      kind: MediaKind.VIDEO,
+      conversationId: CONVERSATION,
+    });
+
+    expect(progress.uploadId).toBeDefined();
+    expect(progress.chunkSize).toBeGreaterThan(0);
+    expect(sessions.create).toHaveBeenCalledWith(expect.objectContaining({ streaming: true }));
+  });
+
+  /**
+   * §1 is explicit that a full quota must still be refused at `init` — "bu `init` ning asosiy
+   * foydasi va u yo'qolmasligi kerak". Without a declared size the reserve is what makes that
+   * check possible at all.
+   */
+  it('still charges the quota at init, against the reserve', async () => {
+    const media = makeMedia();
+    const { service } = makeService(makeSessions(), media);
+
+    await service.init(me, { kind: MediaKind.VIDEO, conversationId: CONVERSATION });
+
+    expect(media.assertWithinQuota).toHaveBeenCalledWith(me.id, STREAM_RESERVE);
+  });
+
+  it('refuses at init when the quota is already spent — before a single byte arrives', async () => {
+    const media = makeMedia({
+      assertWithinQuota: jest.fn().mockRejectedValue(new Error('quota spent')),
+    });
+    const { service, sessions } = makeService(makeSessions(), media);
+
+    await expect(
+      service.init(me, { kind: MediaKind.VIDEO, conversationId: CONVERSATION }),
+    ).rejects.toBeDefined();
+    expect(sessions.create).not.toHaveBeenCalled();
+  });
+
+  it('assembles when complete reports both the size and the part count', async () => {
+    const media = makeMedia();
+    const { service } = makeService(
+      makeSessions(session({ streaming: true, totalBytes: STREAM_RESERVE, chunkSize: 4 })),
+      media,
+    );
+    await service.writePart(me, 'upl_seed', 0, bytes('aaaa'));
+    await service.writePart(me, 'upl_seed', 1, bytes('bb'));
+
+    await service.complete(me, 'upl_seed', { totalBytes: 6, parts: 2 });
+
+    expect(media.upload).toHaveBeenCalledWith(
+      me,
+      expect.objectContaining({ file: expect.objectContaining({ size: 6 }) }),
+    );
+  });
+
+  it('refuses to complete a streaming session with no totalBytes or parts', async () => {
+    const { service } = makeService(
+      makeSessions(session({ streaming: true, totalBytes: STREAM_RESERVE, chunkSize: 4 })),
+    );
+    await service.writePart(me, 'upl_seed', 0, bytes('aaaa'));
+
+    await expect(service.complete(me, 'upl_seed', {})).rejects.toMatchObject({
+      code: ERROR_CODE.VALIDATION_ERROR,
+      status: 422,
+    });
+  });
+
+  /**
+   * The failure `parts` exists to prevent: an unbroken run 0..k that simply stopped early looks
+   * exactly like a finished upload when nothing says how many there should be. Without this the
+   * server would assemble a truncated video and call it a success.
+   */
+  it('catches a short run that has no hole in it', async () => {
+    const { service } = makeService(
+      makeSessions(session({ streaming: true, totalBytes: STREAM_RESERVE, chunkSize: 4 })),
+    );
+    await service.writePart(me, 'upl_seed', 0, bytes('aaaa'));
+    await service.writePart(me, 'upl_seed', 1, bytes('bbbb'));
+
+    await expect(
+      service.complete(me, 'upl_seed', { totalBytes: 12, parts: 3 }),
+    ).rejects.toMatchObject({ code: ERROR_CODE.UPLOAD_INCOMPLETE, status: 422 });
+  });
+
+  it('catches a size that disagrees with what arrived', async () => {
+    const { service } = makeService(
+      makeSessions(session({ streaming: true, totalBytes: STREAM_RESERVE, chunkSize: 4 })),
+    );
+    await service.writePart(me, 'upl_seed', 0, bytes('aaaa'));
+    await service.writePart(me, 'upl_seed', 1, bytes('bbbb'));
+
+    await expect(
+      service.complete(me, 'upl_seed', { totalBytes: 6, parts: 2 }),
+    ).rejects.toMatchObject({ code: ERROR_CODE.UPLOAD_SIZE_MISMATCH, status: 422 });
+  });
+
+  /** §Qabul mezonlari — a failed `complete` must leave the session resumable, not destroyed. */
+  it('leaves the session intact after a failed complete, so the retry works', async () => {
+    const { service, sessions } = makeService(
+      makeSessions(session({ streaming: true, totalBytes: STREAM_RESERVE, chunkSize: 4 })),
+    );
+    await service.writePart(me, 'upl_seed', 0, bytes('aaaa'));
+
+    await expect(
+      service.complete(me, 'upl_seed', { totalBytes: 8, parts: 2 }),
+    ).rejects.toBeDefined();
+    expect(sessions.delete).not.toHaveBeenCalled();
+
+    // The missing part arrives and the same call now succeeds.
+    await service.writePart(me, 'upl_seed', 1, bytes('bbbb'));
+    await expect(
+      service.complete(me, 'upl_seed', { totalBytes: 8, parts: 2 }),
+    ).resolves.toBeDefined();
+  });
+
+  /**
+   * The MP4 muxer rewrites the `mdat` header at the very end, so part 0 is re-sent after the rest
+   * (§"Bitta nozik joy"). The later bytes must be the ones that get assembled.
+   */
+  it('keeps the newer bytes when part 0 is re-sent before complete', async () => {
+    const media = makeMedia();
+    const { service, parts } = makeService(
+      makeSessions(session({ streaming: true, totalBytes: STREAM_RESERVE, chunkSize: 4 })),
+      media,
+    );
+    await service.writePart(me, 'upl_seed', 0, bytes('AAAA'));
+    await service.writePart(me, 'upl_seed', 1, bytes('bbbb'));
+    await service.writePart(me, 'upl_seed', 0, bytes('ZZZZ')); // the muxer's fixed header
+
+    expect(await parts.receivedParts('upl_seed')).toEqual([0, 1]);
+    await expect(
+      service.complete(me, 'upl_seed', { totalBytes: 8, parts: 2 }),
+    ).resolves.toBeDefined();
+  });
+
+  it('never lets a streaming upload exceed the reserve it was charged for', async () => {
+    const { service } = makeService(
+      makeSessions(session({ streaming: true, totalBytes: 6, chunkSize: 4 })),
+    );
+    await service.writePart(me, 'upl_seed', 0, bytes('aaaa'));
+    await service.writePart(me, 'upl_seed', 1, bytes('bbbb')); // 8 on disk, reserve is 6
+
+    await expect(
+      service.complete(me, 'upl_seed', { totalBytes: 8, parts: 2 }),
+    ).rejects.toMatchObject({ code: ERROR_CODE.UPLOAD_SIZE_MISMATCH, status: 422 });
   });
 });

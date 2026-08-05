@@ -54,6 +54,7 @@ function toDomain(row: PrismaUploadSession): UploadSession {
     // narrowed here because the rest of the app counts bytes as numbers, and Number holds every
     // integer below 9 PB exactly.
     totalBytes: Number(row.totalBytes),
+    streaming: row.streaming,
     chunkSize: row.chunkSize,
     expiresAt: row.expiresAt,
     createdAt: row.createdAt,

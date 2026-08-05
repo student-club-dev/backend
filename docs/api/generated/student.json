@@ -5650,7 +5650,7 @@
             }
           },
           "422": {
-            "description": "Unknown `kind` or `quality`, or a missing/invalid `totalBytes`.",
+            "description": "Unknown `kind` or `quality`, or a `totalBytes` that is not a positive integer.",
             "content": {
               "application/json": {
                 "schema": {
@@ -6489,7 +6489,7 @@
       "post": {
         "operationId": "UploadSessionController_complete",
         "summary": "Finish the upload",
-        "description": "Joins the parts and processes them exactly as `POST /v1/media/chat-upload` would — same type detection, same EXIF stripping, same transcoding. Returns the same `AttachmentDto`, and its `id` is the `mediaId` to send with a message.\n\nSend `totalBytes` here when the figure given to `init` was an estimate — which is what lets you upload a video **while it is still encoding**: bound the session by the source size, push parts as the muxer writes them, and report the real size once it closes. Omit the body entirely if `init` already had the exact number.\n\nA video may come back `PROCESSING`; wait for `media:ready` as usual. An H.264/AAC file — which is what every client encoder produces — is not re-encoded and comes back `READY` immediately. The session and its parts are removed once this succeeds.",
+        "description": "Joins the parts and processes them exactly as `POST /v1/media/chat-upload` would — same type detection, same EXIF stripping, same transcoding. Returns the same `AttachmentDto`, and its `id` is the `mediaId` to send with a message.\n\nSend `totalBytes` here when the figure given to `init` was an estimate. If `init` was called with **no** `totalBytes` at all — a streaming session — then `totalBytes` **and** `parts` are both required: nothing else in the session says where the file ends, and without the part count a run that simply stopped early is indistinguishable from a finished one.\n\nOmit the body entirely if `init` already had the exact number.\n\nA video may come back `PROCESSING`; wait for `media:ready` as usual. An H.264/AAC file — which is what every client encoder produces — is not re-encoded and comes back `READY` immediately. The session and its parts are removed once this succeeds.",
         "parameters": [
           {
             "name": "uploadId",
@@ -6675,7 +6675,7 @@
             }
           },
           "422": {
-            "description": "A part is missing (`UPLOAD_INCOMPLETE`), the assembled size does not match the one declared or exceeds the bound set at `init` (`UPLOAD_SIZE_MISMATCH`), or the finished file fails the checks for its `kind`.",
+            "description": "A part is missing or the count disagrees with `parts` (`UPLOAD_INCOMPLETE`), the assembled size does not match the one declared or exceeds the bound set at `init` (`UPLOAD_SIZE_MISMATCH`), a streaming session was completed without `totalBytes`/`parts` (`VALIDATION_ERROR`), or the finished file fails the checks for its `kind`.\n\nNone of these destroys the session: send the missing part and call `complete` again.",
             "content": {
               "application/json": {
                 "schema": {
@@ -24022,7 +24022,8 @@
           },
           "totalBytes": {
             "type": "integer",
-            "format": "int64"
+            "format": "int64",
+            "description": "The ceiling this session may not exceed — what you declared at `init`, or the server-side reserve when you opened a streaming session. Not a promise about your file’s final size."
           },
           "expiresAt": {
             "type": "string",
@@ -24066,12 +24067,11 @@
           "totalBytes": {
             "type": "integer",
             "format": "int64",
-            "description": "An **upper bound** on the finished file, used to reserve your daily quota and to bound the part index. It does not have to be exact.\n\nIf you know the size, send it. If you are still encoding, send something you are certain not to exceed — the source file’s size — and send the real figure to `complete`. Going over this bound is the one thing `complete` will refuse."
+            "description": "An **upper bound** on the finished file, used to reserve your daily quota and to bound the part index. It does not have to be exact.\n\nIf you know the size, send it. If you are still encoding, send something you are certain not to exceed — the source file’s size — and send the real figure to `complete`. Going over this bound is the one thing `complete` will refuse.\n\n**Omit it entirely** to open a *streaming* session, for when the size is not knowable yet because encoding has not started. The session is charged against a server-side reserve, and `complete` then requires both `totalBytes` and `parts`. Quota is still checked here: a student with none left is refused at `init`, exactly as before."
           }
         },
         "required": [
-          "kind",
-          "totalBytes"
+          "kind"
         ]
       },
       "CompleteUploadDto": {
@@ -24081,6 +24081,12 @@
             "type": "integer",
             "format": "int64",
             "description": "The finished file’s real size. Send this when `init` was given an estimate — it is what the assembled parts are checked against. Omit it and the figure from `init` is used instead, which is what a client that knew the size all along should do."
+          },
+          "parts": {
+            "type": "integer",
+            "format": "int32",
+            "example": 6,
+            "description": "How many parts the file was cut into — indexes `0 … parts-1`.\n\n**Required for a streaming session** (one opened without `totalBytes`) and the field that marks the last part: with the size unknown up front, an unbroken run of parts that simply stopped early is indistinguishable from a finished upload, and the server would happily assemble a truncated video. Optional otherwise, and checked when sent."
           }
         }
       },

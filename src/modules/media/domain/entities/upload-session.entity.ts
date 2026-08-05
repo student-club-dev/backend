@@ -15,8 +15,17 @@ export interface UploadSession {
   kind: MediaKind;
   quality: MediaQuality | null;
   fileName: string | null;
-  /** The size the client promised. Checked against what actually arrived before `complete` runs. */
+  /**
+   * The ceiling this session may not exceed: the size the client promised, or — for a streaming
+   * session — the reserve taken on its behalf. Checked against what actually arrived before
+   * `complete` runs.
+   */
   totalBytes: number;
+  /**
+   * `init` was called without `totalBytes` (streaming upload spec §1), so the final size is not
+   * known yet and `complete` must be told both it and the part count.
+   */
+  streaming: boolean;
   chunkSize: number;
   expiresAt: Date;
   createdAt: Date;

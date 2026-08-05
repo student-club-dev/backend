@@ -28,7 +28,7 @@ export class InitUploadDto {
   @MaxLength(255)
   fileName?: string;
 
-  @ApiProperty({
+  @ApiPropertyOptional({
     type: 'integer',
     format: 'int64',
     description:
@@ -36,12 +36,17 @@ export class InitUploadDto {
       'part index. It does not have to be exact.\n\n' +
       'If you know the size, send it. If you are still encoding, send something you are certain ' +
       'not to exceed — the source file’s size — and send the real figure to `complete`. Going over ' +
-      'this bound is the one thing `complete` will refuse.',
+      'this bound is the one thing `complete` will refuse.\n\n' +
+      '**Omit it entirely** to open a *streaming* session, for when the size is not knowable yet ' +
+      'because encoding has not started. The session is charged against a server-side reserve, and ' +
+      '`complete` then requires both `totalBytes` and `parts`. Quota is still checked here: a ' +
+      'student with none left is refused at `init`, exactly as before.',
   })
+  @IsOptional()
   @Type(() => Number)
   @IsInt({ message: 'Fayl hajmini yuboring' })
   @IsPositive({ message: 'Fayl hajmini yuboring' })
-  totalBytes!: number;
+  totalBytes?: number;
 }
 
 /** Body of `POST /v1/media/upload/{uploadId}/complete`. Optional — an empty body is valid. */
@@ -59,6 +64,23 @@ export class CompleteUploadDto {
   @IsInt({ message: 'Fayl hajmini yuboring' })
   @IsPositive({ message: 'Fayl hajmini yuboring' })
   totalBytes?: number;
+
+  @ApiPropertyOptional({
+    type: 'integer',
+    format: 'int32',
+    example: 6,
+    description:
+      'How many parts the file was cut into — indexes `0 … parts-1`.\n\n' +
+      '**Required for a streaming session** (one opened without `totalBytes`) and the field that ' +
+      'marks the last part: with the size unknown up front, an unbroken run of parts that simply ' +
+      'stopped early is indistinguishable from a finished upload, and the server would happily ' +
+      'assemble a truncated video. Optional otherwise, and checked when sent.',
+  })
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt({ message: "Bo'laklar sonini yuboring" })
+  @IsPositive({ message: "Bo'laklar sonini yuboring" })
+  parts?: number;
 }
 
 /** The state of an upload — returned by `init`, every `PUT part`, and `GET`. */
@@ -81,7 +103,13 @@ export class UploadProgressDto {
   })
   chunkSize!: number;
 
-  @ApiProperty({ type: 'integer', format: 'int64' })
+  @ApiProperty({
+    type: 'integer',
+    format: 'int64',
+    description:
+      'The ceiling this session may not exceed — what you declared at `init`, or the server-side ' +
+      'reserve when you opened a streaming session. Not a promise about your file’s final size.',
+  })
   totalBytes!: number;
 
   @ApiProperty({

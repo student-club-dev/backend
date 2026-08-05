@@ -38,13 +38,19 @@ export const UPLOAD_CHUNK_SIZE = 5 * 1024 * 1024;
  */
 export const MAX_OPEN_UPLOADS = 20;
 
-/** What `init` was asked for. */
+/** What `init` was asked for. `totalBytes` absent opens a **streaming** session (§1). */
 export interface InitUploadInput {
   kind: MediaKind;
   conversationId: string | null;
   quality?: MediaQuality;
   fileName?: string;
-  totalBytes: number;
+  totalBytes?: number;
+}
+
+/** What `complete` was told. Both are mandatory for a streaming session and ignored otherwise. */
+export interface CompleteUploadInput {
+  totalBytes?: number;
+  parts?: number;
 }
 
 /** What the client needs to resume. */
@@ -71,6 +77,7 @@ export interface UploadProgress {
 export class UploadSessionService {
   private readonly logger = new Logger(UploadSessionService.name);
   private readonly ttlMs: number;
+  private readonly streamReserveBytes: number;
 
   constructor(
     @Inject(UPLOAD_SESSION_REPOSITORY) private readonly sessions: UploadSessionRepository,
@@ -80,6 +87,7 @@ export class UploadSessionService {
     config: ConfigService<Env, true>,
   ) {
     this.ttlMs = config.get('CHAT_UPLOAD_SESSION_TTL_HOURS', { infer: true }) * 60 * 60 * 1000;
+    this.streamReserveBytes = config.get('CHAT_UPLOAD_STREAM_RESERVE_BYTES', { infer: true });
   }
 
   /**
@@ -95,12 +103,20 @@ export class UploadSessionService {
    * against the bound, so declaring one costs the same as declaring an exact size.
    */
   async init(user: AuthenticatedUser, input: InitUploadInput): Promise<UploadProgress> {
-    if (!Number.isInteger(input.totalBytes) || input.totalBytes <= 0) {
+    const streaming = input.totalBytes === undefined;
+    if (!streaming && (!Number.isInteger(input.totalBytes) || (input.totalBytes ?? 0) <= 0)) {
       throw AppException.validation({ totalBytes: 'Fayl hajmini yuboring' });
     }
+
+    // A streaming session has no size yet, so it is charged against a reserve instead. Everything
+    // below still measures against a real number, which is what keeps `init`'s guarantees intact:
+    // §1 is explicit that a full quota must still be refused **here** rather than at `complete`,
+    // and that is the whole reason this endpoint exists.
+    const bound = streaming ? this.streamReserveBytes : (input.totalBytes as number);
+
     await this.media.assertMayUpload(user, input.kind, input.conversationId);
     await this.media.assertStorageAvailable();
-    await this.media.assertWithinQuota(user.id, input.totalBytes);
+    await this.media.assertWithinQuota(user.id, bound);
 
     // Quota is only charged at `complete`, so opening sessions is the one way to put bytes on disk
     // without ever being billed for them. Each one is capped at the size it declared; this is what
@@ -119,7 +135,8 @@ export class UploadSessionService {
       kind: input.kind,
       quality: input.quality ?? null,
       fileName: sanitizeFileName(input.fileName),
-      totalBytes: input.totalBytes,
+      totalBytes: bound,
+      streaming,
       chunkSize: UPLOAD_CHUNK_SIZE,
       expiresAt: new Date(Date.now() + this.ttlMs),
     });
@@ -192,9 +209,25 @@ export class UploadSessionService {
   async complete(
     user: AuthenticatedUser,
     uploadId: string,
-    finalTotalBytes?: number,
+    input: CompleteUploadInput = {},
   ): Promise<MediaAsset> {
     const session = await this.require(uploadId, user.id);
+
+    // A streaming session has nothing that says where the file ends — not a declared size, and not
+    // a part count derived from one. `complete` is the only place that knowledge exists, so both
+    // figures are mandatory here and refusing early beats assembling a truncated video (§2).
+    if (session.streaming) {
+      const missing: Record<string, string> = {};
+      if (input.totalBytes === undefined) {
+        missing.totalBytes = 'Oqimli yuklashda yakuniy hajm majburiy';
+      }
+      if (input.parts === undefined) {
+        missing.parts = "Oqimli yuklashda bo'laklar soni majburiy";
+      }
+      if (Object.keys(missing).length > 0) {
+        throw AppException.validation(missing);
+      }
+    }
 
     // Completeness is a question about the parts themselves — 0,1,2,… with no hole — rather than
     // about a count derived from `totalBytes`. That is what lets a client start sending before it
@@ -209,9 +242,22 @@ export class UploadSessionService {
       );
     }
 
+    // `parts` is what closes the one hole the contiguity check above cannot see: an unbroken run
+    // 0..k that simply stops early looks complete when nothing says how long it should be. Only a
+    // streaming session carries that risk — an ordinary one is measured against its declared size.
+    if (input.parts !== undefined && received.length !== input.parts) {
+      throw new AppException(
+        ERROR_CODE.UPLOAD_INCOMPLETE,
+        422,
+        received.length < input.parts
+          ? `Yuklash tugallanmagan — ${input.parts} ta bo'lakdan ${received.length} tasi keldi`
+          : `Bo'laklar soni mos kelmadi — ${input.parts} deyildi, ${received.length} ta keldi`,
+      );
+    }
+
     // Absent, the declared size stands — which is exactly the old behaviour for a client that
     // knew the size up front and never sends this.
-    const declared = finalTotalBytes ?? session.totalBytes;
+    const declared = input.totalBytes ?? session.totalBytes;
     const actualBytes = await this.parts.receivedBytes(uploadId);
 
     // Short, with no hole in the middle, means the parts simply stop early — the tail has not

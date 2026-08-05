@@ -96,6 +96,17 @@ export const envSchema = z
     // How long an unfinished resumable upload survives before the sweep removes its parts. A day, so
     // that a send interrupted on the metro can be resumed after it (parity spec §7).
     CHAT_UPLOAD_SESSION_TTL_HOURS: z.coerce.number().int().positive().default(24),
+    // What a *streaming* upload session (one opened with no `totalBytes`) is charged against until
+    // `complete` reports the real figure. A client still encoding cannot declare a size, but the
+    // quota check at `init` must stay meaningful — refusing a student with no quota left is the
+    // whole reason that endpoint exists. 2 GB is far above any phone-encoded video and far below
+    // the daily allowance, so it never refuses a legitimate send and never lets one session eat
+    // the day.
+    CHAT_UPLOAD_STREAM_RESERVE_BYTES: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(2 * 1024 * 1024 * 1024),
     // How long an expired story keeps its file in the author's archive. A year: the archive is a
     // keepsake, and "my post from last spring" is the whole reason it exists. Past this the bytes are
     // reclaimed and the post stays as an empty cell — unbounded retention would grow the bucket by

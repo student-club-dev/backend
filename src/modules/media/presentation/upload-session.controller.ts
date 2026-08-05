@@ -85,7 +85,9 @@ export class UploadSessionController {
   })
   @ApiOkEnvelope(UploadProgressDto)
   @ApiForbiddenEnvelope('Not a member, not connected any more, or blocked (`NOT_CONNECTED`).')
-  @ApiValidationEnvelope('Unknown `kind` or `quality`, or a missing/invalid `totalBytes`.')
+  @ApiValidationEnvelope(
+    'Unknown `kind` or `quality`, or a `totalBytes` that is not a positive integer.',
+  )
   @ApiErrorEnvelope(429, ERROR_CODE.UPLOAD_RATE_LIMIT, 'The daily byte quota is spent.')
   @ApiErrorEnvelope(503, ERROR_CODE.STORAGE_FULL, 'The media volume is nearly full. Retry later.')
   async init(
@@ -171,10 +173,11 @@ export class UploadSessionController {
       'Joins the parts and processes them exactly as `POST /v1/media/chat-upload` would — same ' +
       'type detection, same EXIF stripping, same transcoding. Returns the same `AttachmentDto`, and ' +
       'its `id` is the `mediaId` to send with a message.\n\n' +
-      'Send `totalBytes` here when the figure given to `init` was an estimate — which is what lets ' +
-      'you upload a video **while it is still encoding**: bound the session by the source size, ' +
-      'push parts as the muxer writes them, and report the real size once it closes. Omit the body ' +
-      'entirely if `init` already had the exact number.\n\n' +
+      'Send `totalBytes` here when the figure given to `init` was an estimate. If `init` was called ' +
+      'with **no** `totalBytes` at all — a streaming session — then `totalBytes` **and** `parts` ' +
+      'are both required: nothing else in the session says where the file ends, and without the ' +
+      'part count a run that simply stopped early is indistinguishable from a finished one.\n\n' +
+      'Omit the body entirely if `init` already had the exact number.\n\n' +
       'A video may come back `PROCESSING`; wait for `media:ready` as usual. An H.264/AAC file — ' +
       'which is what every client encoder produces — is not re-encoded and comes back `READY` ' +
       'immediately. The session and its parts are removed once this succeeds.',
@@ -187,16 +190,21 @@ export class UploadSessionController {
     'Yuklash sessiyasi topilmadi',
   )
   @ApiValidationEnvelope(
-    'A part is missing (`UPLOAD_INCOMPLETE`), the assembled size does not match the one declared ' +
-      'or exceeds the bound set at `init` (`UPLOAD_SIZE_MISMATCH`), or the finished file fails the ' +
-      'checks for its `kind`.',
+    'A part is missing or the count disagrees with `parts` (`UPLOAD_INCOMPLETE`), the assembled ' +
+      'size does not match the one declared or exceeds the bound set at `init` ' +
+      '(`UPLOAD_SIZE_MISMATCH`), a streaming session was completed without `totalBytes`/`parts` ' +
+      '(`VALIDATION_ERROR`), or the finished file fails the checks for its `kind`.\n\n' +
+      'None of these destroys the session: send the missing part and call `complete` again.',
   )
   async complete(
     @CurrentUser() user: AuthenticatedUser,
     @Param('uploadId') uploadId: string,
     @Body() body: CompleteUploadDto,
   ): Promise<AttachmentDto> {
-    const asset = await this.uploads.complete(user, uploadId, body?.totalBytes);
+    const asset = await this.uploads.complete(user, uploadId, {
+      totalBytes: body?.totalBytes,
+      parts: body?.parts,
+    });
     return AttachmentDto.fromDomain(asset, this.apiBase);
   }
 

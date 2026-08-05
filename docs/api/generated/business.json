@@ -16516,7 +16516,8 @@
           },
           "totalBytes": {
             "type": "integer",
-            "format": "int64"
+            "format": "int64",
+            "description": "The ceiling this session may not exceed — what you declared at `init`, or the server-side reserve when you opened a streaming session. Not a promise about your file’s final size."
           },
           "expiresAt": {
             "type": "string",
@@ -16560,12 +16561,11 @@
           "totalBytes": {
             "type": "integer",
             "format": "int64",
-            "description": "An **upper bound** on the finished file, used to reserve your daily quota and to bound the part index. It does not have to be exact.\n\nIf you know the size, send it. If you are still encoding, send something you are certain not to exceed — the source file’s size — and send the real figure to `complete`. Going over this bound is the one thing `complete` will refuse."
+            "description": "An **upper bound** on the finished file, used to reserve your daily quota and to bound the part index. It does not have to be exact.\n\nIf you know the size, send it. If you are still encoding, send something you are certain not to exceed — the source file’s size — and send the real figure to `complete`. Going over this bound is the one thing `complete` will refuse.\n\n**Omit it entirely** to open a *streaming* session, for when the size is not knowable yet because encoding has not started. The session is charged against a server-side reserve, and `complete` then requires both `totalBytes` and `parts`. Quota is still checked here: a student with none left is refused at `init`, exactly as before."
           }
         },
         "required": [
-          "kind",
-          "totalBytes"
+          "kind"
         ]
       },
       "CompleteUploadDto": {
@@ -16575,6 +16575,12 @@
             "type": "integer",
             "format": "int64",
             "description": "The finished file’s real size. Send this when `init` was given an estimate — it is what the assembled parts are checked against. Omit it and the figure from `init` is used instead, which is what a client that knew the size all along should do."
+          },
+          "parts": {
+            "type": "integer",
+            "format": "int32",
+            "example": 6,
+            "description": "How many parts the file was cut into — indexes `0 … parts-1`.\n\n**Required for a streaming session** (one opened without `totalBytes`) and the field that marks the last part: with the size unknown up front, an unbroken run of parts that simply stopped early is indistinguishable from a finished upload, and the server would happily assemble a truncated video. Optional otherwise, and checked when sent."
           }
         }
       },
