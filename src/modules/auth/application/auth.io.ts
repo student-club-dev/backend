@@ -15,6 +15,8 @@ export interface RegisterInput extends DeviceContext {
   email: string | null;
   phoneNumber: string | null;
   password: string;
+  /** The `registration` OTP proving the phone belongs to the caller. Null when none was sent. */
+  otpCode: string | null;
 }
 
 export interface LoginInput extends DeviceContext {

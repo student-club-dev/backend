@@ -14,13 +14,13 @@ import { Business } from '../domain/entities/business.entity';
 import { BusinessStatus } from '../domain/enums/business-status.enum';
 import { CreateBusinessInput, UpdateBusinessInput } from './business.io';
 
-/** DISCOUNTS_BUSINESS_API §6.4 — "Bir foydalanuvchidagi biznes: 5". */
-export const MAX_BUSINESSES_PER_OWNER = 5;
-
 /**
  * Business use-cases for a business-owner account. The BUSINESS-account gate lives in
  * BusinessAccountGuard; here we enforce the business rules: the type must exist in the catalog,
  * the owner's phone must be verified before a first business is created (D1), `type` is immutable,
+ * and there is deliberately NO cap on how many businesses one owner may have — `DISCOUNTS_BUSINESS_API`
+ * §6.4 suggested five, and the product decided against it: a franchise owner with six locations is a
+ * customer, not an abuser, and the phone-verification gate above is what actually bounds this.
  * and DELETE archives (soft-delete) instead of removing. Depends on repository interfaces only.
  */
 @Injectable()
@@ -47,13 +47,6 @@ export class BusinessService {
       });
     }
     await this.assertPhoneVerified(user.id);
-    if ((await this.businesses.countByOwner(user.id)) >= MAX_BUSINESSES_PER_OWNER) {
-      throw new AppException(
-        ERROR_CODE.RATE_LIMITED,
-        429,
-        `Bitta hisobda ${MAX_BUSINESSES_PER_OWNER} tadan ko‘p biznes bo‘lmaydi`,
-      );
-    }
     return this.businesses.create({
       ownerId: user.id,
       status: this.moderationEnabled() ? BusinessStatus.DRAFT : BusinessStatus.APPROVED,

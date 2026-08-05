@@ -16,6 +16,9 @@ const DEFAULT_DEV_CODE = '111111';
 /** Rolling window for the per-phone resend counter — enforces the D8 "~5/hour" SMS-budget cap. */
 const RESEND_WINDOW_SECONDS = 3_600;
 
+/** The registration budget counter is keyed on the UTC day; this only reclaims the key afterwards. */
+const GLOBAL_BUDGET_WINDOW_SECONDS = 26 * 3_600;
+
 /**
  * OTP core (D1 phone-verification gate, D8 abuse limits). Redis-backed and wired per account type:
  * the module binds ACCOUNT_TYPE + the matching account repository, so one class serves both students
@@ -41,6 +44,7 @@ export class OtpService {
     const e164 = this.normalizePhone(phoneNumber);
     await this.assertNotInCooldown(e164, purpose);
     await this.assertResendAllowed(e164, purpose);
+    await this.assertWithinGlobalBudget(purpose);
 
     const code = this.generateCode();
     const ttl = this.config.get('OTP_TTL_SECONDS', { infer: true });
@@ -73,6 +77,20 @@ export class OtpService {
    * (one-time). No phone-verified side effect. Returns the normalised phone for the caller to
    * resolve the account. Throws the usual OTP_* errors on failure.
    */
+  /**
+   * Registration gate: verifies the `registration` code for a phone that has **no account yet** and
+   * consumes it (one-time). Returns the normalised phone so the caller stores the same string the
+   * code was issued against.
+   *
+   * This is what stops anyone typing a stranger's number into `register`. Without it the row is
+   * created anyway, the number is taken by a unique index, and its real owner can never sign up.
+   */
+  async verifyRegistration(phoneNumber: string, code: string): Promise<string> {
+    const e164 = this.normalizePhone(phoneNumber);
+    await this.consumeCode(e164, code, 'registration');
+    return e164;
+  }
+
   async verifyPasswordReset(phoneNumber: string, code: string): Promise<string> {
     const e164 = this.normalizePhone(phoneNumber);
     await this.consumeCode(e164, code, 'password_reset');
@@ -118,6 +136,43 @@ export class OtpService {
         'Iltimos, biroz kutib qaytadan urinib ko‘ring',
       );
     }
+  }
+
+  /**
+   * The platform-wide daily ceiling on **registration** codes.
+   *
+   * The per-phone cooldown and hourly cap above bound what one number can cost. They bound nothing
+   * about an attacker who simply keeps typing *different* numbers — and unlike the other two
+   * purposes, `registration` is requested by an anonymous caller, so there is no account to
+   * rate-limit instead. Every one of those requests sends a real SMS that we pay for.
+   *
+   * Per-IP throttling is not a substitute here: Express `trust proxy` is off and production sits
+   * behind Nginx, so every request appears to come from the proxy's address.
+   *
+   * Hitting this ceiling stops new signups until midnight, which is bad — but it is bounded and
+   * visible, whereas an emptied SMS balance stops signups *and* password resets *and* gives no
+   * warning. Watch for it in the logs; the limit is env-tunable.
+   */
+  private async assertWithinGlobalBudget(purpose: OtpPurpose): Promise<void> {
+    if (purpose !== 'registration') {
+      return;
+    }
+    const key = `otp:budget:${this.accountType}:registration:${this.utcDay()}`;
+    const count = await this.redis.incr(key);
+    if (count === 1) {
+      await this.redis.expire(key, GLOBAL_BUDGET_WINDOW_SECONDS);
+    }
+    if (count > this.config.get('OTP_REGISTRATION_DAILY_CAP', { infer: true })) {
+      throw new AppException(
+        ERROR_CODE.RATE_LIMITED,
+        429,
+        'Hozircha yangi ro‘yxatdan o‘tish qabul qilinmayapti, keyinroq urinib ko‘ring',
+      );
+    }
+  }
+
+  private utcDay(): string {
+    return new Date().toISOString().slice(0, 10);
   }
 
   private async assertResendAllowed(e164: string, purpose: OtpPurpose): Promise<void> {

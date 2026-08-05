@@ -19,6 +19,14 @@ export interface CreateAccountData {
   email: string | null;
   phoneNumber: string | null;
   passwordHash: string;
+  /**
+   * Whether the phone was proven by an OTP during registration (D1).
+   *
+   * The account is written verified rather than verified afterwards because there is no window in
+   * between: the code is consumed and the row is created in the same request, and a row that was
+   * created unverified would be one more unverified row holding a number.
+   */
+  phoneVerified?: boolean;
 }
 
 /**

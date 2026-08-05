@@ -104,6 +104,7 @@ function makeOtpService(overrides: Partial<OtpService> = {}): OtpService {
       .mockResolvedValue({ sent: true, expiresInSeconds: 300, resendCooldownSeconds: 60 }),
     verify: jest.fn().mockResolvedValue(undefined),
     verifyPasswordReset: jest.fn().mockResolvedValue('+998901234567'),
+    verifyRegistration: jest.fn().mockResolvedValue('+998901234567'),
     ...overrides,
   } as unknown as OtpService;
 }
@@ -124,6 +125,9 @@ function makeService(
   oauthAccounts: OAuthAccountRepository = makeOAuthAccountRepository(),
   registry: OAuthProviderRegistry = makeRegistry(),
   otpService: OtpService = makeOtpService(),
+  // Matches the shipped default: the gate is deployed off and switched on once the app sends
+  // `otpCode`. The tests that exercise the gate pass their own config.
+  registrationOtpRequired = false,
 ): AuthService {
   return new AuthService(
     accounts,
@@ -133,6 +137,10 @@ function makeService(
     oauthAccounts,
     registry,
     otpService,
+    {
+      get: (key: string) =>
+        key === 'REGISTRATION_OTP_REQUIRED' ? String(registrationOtpRequired) : undefined,
+    } as never,
   );
 }
 
@@ -154,6 +162,7 @@ describe('AuthService', () => {
         email: 'new@b.com',
         phoneNumber: null,
         password: 'password123',
+        otpCode: null,
         ...noDevice,
       });
 
@@ -163,8 +172,118 @@ describe('AuthService', () => {
         email: 'new@b.com',
         phoneNumber: null,
         passwordHash: 'argon2-hash',
+        phoneVerified: false,
       });
       expect(refreshTokens.create).toHaveBeenCalledTimes(1);
+    });
+
+    /**
+     * ⚠️ The vulnerability this gate closes: `phoneNumber` is unique, so an account created for a
+     * number the caller does not own **permanently locks out its real owner** — and the same
+     * request handed back a working session for it. Anyone could claim any number by typing it.
+     */
+    describe('the phone-number gate (REGISTRATION_OTP_REQUIRED)', () => {
+      const withPhone = {
+        email: null,
+        phoneNumber: '+998901234567',
+        password: 'password123',
+        ...noDevice,
+      };
+
+      function gated(otpService: OtpService, accounts = makeAccountRepository()) {
+        return {
+          accounts,
+          service: makeService(
+            accounts,
+            makeRefreshTokenRepository(),
+            makeTokenService(),
+            makeOAuthAccountRepository(),
+            makeRegistry(),
+            otpService,
+            true,
+          ),
+        };
+      }
+
+      it('refuses a phone registration with no code, and writes nothing', async () => {
+        const { service, accounts } = gated(makeOtpService());
+
+        await expect(service.register({ ...withPhone, otpCode: null })).rejects.toMatchObject({
+          code: ERROR_CODE.VALIDATION_ERROR,
+          status: 422,
+        });
+        expect(accounts.create).not.toHaveBeenCalled();
+      });
+
+      it('refuses a wrong code, and writes nothing', async () => {
+        const otpService = makeOtpService();
+        (otpService.verifyRegistration as jest.Mock).mockRejectedValue(
+          new AppException(ERROR_CODE.OTP_INVALID, 422, 'Kod noto‘g‘ri'),
+        );
+        const { service, accounts } = gated(otpService);
+
+        await expect(service.register({ ...withPhone, otpCode: '000000' })).rejects.toMatchObject({
+          code: ERROR_CODE.OTP_INVALID,
+        });
+        expect(accounts.create).not.toHaveBeenCalled();
+      });
+
+      it('creates the account already verified when the code checks out', async () => {
+        const { service, accounts } = gated(makeOtpService());
+
+        await service.register({ ...withPhone, otpCode: '123456' });
+
+        expect(accounts.create).toHaveBeenCalledWith(
+          expect.objectContaining({ phoneNumber: '+998901234567', phoneVerified: true }),
+        );
+      });
+
+      // An email-only signup has no number to prove, and nobody else is competing for that
+      // identifier the way they compete for a phone number.
+      it('leaves an email-only registration alone', async () => {
+        const otpService = makeOtpService();
+        const { service, accounts } = gated(otpService);
+
+        await service.register({
+          email: 'new@b.com',
+          phoneNumber: null,
+          password: 'password123',
+          otpCode: null,
+          ...noDevice,
+        });
+
+        expect(otpService.verifyRegistration).not.toHaveBeenCalled();
+        expect(accounts.create).toHaveBeenCalledWith(
+          expect.objectContaining({ phoneVerified: false }),
+        );
+      });
+
+      /**
+       * The rollout window: the flag ships off so builds already in the store keep working. A
+       * client that has adopted the new flow early still gets its number verified — which is what
+       * lets the switch be flipped without a flag day.
+       */
+      it('honours a code even while the gate is off, and marks the phone verified', async () => {
+        const accounts = makeAccountRepository();
+        const service = makeService(accounts, makeRefreshTokenRepository());
+
+        await service.register({ ...withPhone, otpCode: '123456' });
+
+        expect(accounts.create).toHaveBeenCalledWith(
+          expect.objectContaining({ phoneVerified: true }),
+        );
+      });
+
+      it('still allows a code-less phone registration while the gate is off', async () => {
+        const accounts = makeAccountRepository();
+        const service = makeService(accounts, makeRefreshTokenRepository());
+
+        await service.register({ ...withPhone, otpCode: null });
+
+        expect(accounts.create).toHaveBeenCalledWith(
+          expect.objectContaining({ phoneVerified: false }),
+        );
+      });
     });
 
     it('throws ACCOUNT_EXISTS (409) when the email already exists', async () => {
@@ -178,6 +297,7 @@ describe('AuthService', () => {
           email: 'taken@b.com',
           phoneNumber: null,
           password: 'password123',
+          otpCode: null,
           ...noDevice,
         }),
       ).rejects.toMatchObject({ code: ERROR_CODE.ACCOUNT_EXISTS, status: 409 });
@@ -195,6 +315,7 @@ describe('AuthService', () => {
           email: null,
           phoneNumber: '+998901234567',
           password: 'password123',
+          otpCode: null,
           ...noDevice,
         }),
       ).rejects.toBeInstanceOf(AppException);
@@ -666,6 +787,7 @@ describe('AuthService', () => {
       const refreshTokens = makeRefreshTokenRepository();
       const otpService = makeOtpService({
         verifyPasswordReset: jest.fn().mockResolvedValue('+998901234567'),
+        verifyRegistration: jest.fn().mockResolvedValue('+998901234567'),
       });
       const service = makeService(
         accounts,

@@ -53,12 +53,6 @@ export class BusinessPrismaRepository implements BusinessRepository {
     return BusinessMapper.toDomain(row);
   }
 
-  async countByOwner(ownerId: string): Promise<number> {
-    return this.prisma.business.count({
-      where: { ownerId, status: { not: BusinessStatus.ARCHIVED } },
-    });
-  }
-
   /** Archive the business and cascade all its listings to ARCHIVED in one transaction. */
   async archive(id: string): Promise<void> {
     await this.prisma.$transaction([

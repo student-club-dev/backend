@@ -55,7 +55,4 @@ export interface BusinessRepository {
    * verdict on a live business.
    */
   setStatus(id: string, status: BusinessStatus, rejectionReason: string | null): Promise<Business>;
-
-  /** How many non-archived businesses this owner has (the §6.4 cap of 5). */
-  countByOwner(ownerId: string): Promise<number>;
 }

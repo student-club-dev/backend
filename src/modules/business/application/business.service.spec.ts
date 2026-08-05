@@ -65,7 +65,6 @@ function makeBusinesses(overrides: Partial<BusinessRepository> = {}): BusinessRe
     setStatus: jest.fn(async (id, status, rejectionReason) =>
       business({ id, status, rejectionReason }),
     ),
-    countByOwner: jest.fn().mockResolvedValue(0),
     ...overrides,
   };
 }
@@ -158,24 +157,22 @@ describe('BusinessService', () => {
       expect(result.status).toBe(BusinessStatus.DRAFT);
     });
 
-    it('rejects the sixth business with 429', async () => {
-      const businesses = makeBusinesses({ countByOwner: jest.fn().mockResolvedValue(5) });
+    /**
+     * There used to be a cap of five per owner (`DISCOUNTS_BUSINESS_API` §6.4). The product removed
+     * it: a franchise owner with a dozen locations is a customer, not an abuser. What bounds this
+     * now is the phone-verification gate above, which is the check that actually costs an attacker
+     * something.
+     */
+    it('places no cap on how many businesses one owner may have', async () => {
+      const businesses = makeBusinesses();
       const service = makeService(businesses, makeOwners(true), makeCatalog(true));
 
-      await expect(service.create(owner, createInput())).rejects.toMatchObject({
-        code: ERROR_CODE.RATE_LIMITED,
-        status: 429,
-      });
-      expect(businesses.create).not.toHaveBeenCalled();
-    });
-
-    it('allows the fifth business', async () => {
-      const businesses = makeBusinesses({ countByOwner: jest.fn().mockResolvedValue(4) });
-      const service = makeService(businesses, makeOwners(true), makeCatalog(true));
-
-      await expect(service.create(owner, createInput())).resolves.toMatchObject({
-        ownerId: 'owner-1',
-      });
+      for (let i = 0; i < 20; i += 1) {
+        await expect(service.create(owner, createInput())).resolves.toMatchObject({
+          ownerId: 'owner-1',
+        });
+      }
+      expect(businesses.create).toHaveBeenCalledTimes(20);
     });
   });
 

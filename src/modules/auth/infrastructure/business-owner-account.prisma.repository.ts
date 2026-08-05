@@ -34,6 +34,7 @@ export class BusinessOwnerAccountPrismaRepository implements AccountRepository {
         email: data.email,
         phoneNumber: data.phoneNumber,
         passwordHash: data.passwordHash,
+        phoneVerified: data.phoneVerified ?? false,
       },
     });
     return toAccount(row);

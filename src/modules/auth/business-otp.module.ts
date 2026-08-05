@@ -7,6 +7,7 @@ import { OtpService } from './application/otp.service';
 import { ACCOUNT_REPOSITORY, ACCOUNT_TYPE } from './domain/account.repository';
 import { BusinessOwnerAccountPrismaRepository } from './infrastructure/business-owner-account.prisma.repository';
 import { BusinessOtpController } from './presentation/business-otp.controller';
+import { BusinessRegistrationOtpController } from './presentation/registration-otp.controller';
 import { OtpDeliveryModule } from './otp-delivery.module';
 
 /**
@@ -15,7 +16,9 @@ import { OtpDeliveryModule } from './otp-delivery.module';
  */
 @Module({
   imports: [PrismaModule, OtpDeliveryModule, JwtModule.register({})],
-  controllers: [BusinessOtpController],
+  // The registration controller lives here so it gets THIS module's `OtpService` — the one
+  // bound to the right table. A shared module would give both account types the same codes.
+  controllers: [BusinessOtpController, BusinessRegistrationOtpController],
   providers: [
     OtpService,
     JwtAuthGuard,

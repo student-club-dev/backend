@@ -2991,6 +2991,145 @@
         ]
       }
     },
+    "/v1/auth/business/register/otp": {
+      "post": {
+        "operationId": "BusinessRegistrationOtpController_request",
+        "summary": "Ro‘yxatdan o‘tish uchun telefonga kod yuborish",
+        "description": "Call this **before** `register` when signing up with a phone number, then pass the code back as `otpCode`. No token required — there is no account yet.\n\nIndependent of `POST /otp/request`, which verifies the phone of an account that already exists and needs an access token. A code issued by one is not valid for the other.",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OtpRequestDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "result": {
+                          "$ref": "#/components/schemas/OtpRequestResultDto"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid phone number format.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 422
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Ma’lumotlar noto‘g‘ri"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "VALIDATION_ERROR",
+                            "message": "Ma’lumotlar noto‘g‘ri",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "A resend cooldown is active, the hourly limit for this phone was reached (`OTP_COOLDOWN` / `OTP_RESEND_LIMIT`), or the platform-wide daily registration budget is spent (`RATE_LIMITED`).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/BaseResponseDto"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "success": {
+                          "type": "boolean",
+                          "example": false
+                        },
+                        "status": {
+                          "type": "integer",
+                          "example": 429
+                        },
+                        "message": {
+                          "type": "string",
+                          "example": "Iltimos, biroz kutib qaytadan urinib ko‘ring"
+                        },
+                        "result": {
+                          "nullable": true,
+                          "example": null
+                        },
+                        "error": {
+                          "allOf": [
+                            {
+                              "$ref": "#/components/schemas/ApiErrorDto"
+                            }
+                          ],
+                          "example": {
+                            "code": "OTP_COOLDOWN",
+                            "message": "Iltimos, biroz kutib qaytadan urinib ko‘ring",
+                            "fields": {}
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "tags": [
+          "Auth — Business OTP"
+        ]
+      }
+    },
     "/v1/profile/me": {
       "get": {
         "operationId": "ProfileController_getMe",
@@ -13008,6 +13147,11 @@
             "type": "string",
             "example": "secret123",
             "minLength": 8
+          },
+          "otpCode": {
+            "type": "string",
+            "example": "123456",
+            "description": "The code from `POST /v1/auth/{student|business}/otp/request` with `purpose: \"registration\"`.\n\n**Required whenever `phoneNumber` is sent**, once `REGISTRATION_OTP_REQUIRED` is switched on server-side. Until then it is optional and honoured when present — send it as soon as your build supports it, so the switch can be flipped without breaking anyone.\n\nNot needed for an email-only registration."
           },
           "deviceName": {
             "type": "string",
