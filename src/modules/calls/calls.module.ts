@@ -8,13 +8,16 @@ import { SocialGraphModule } from '../../infrastructure/social-graph/social-grap
 import { CallEndedBus } from './application/call-ended.bus';
 import { CallRateLimiter } from './application/call-rate-limiter';
 import { CallStatsService } from './application/call-stats.service';
+import { CallPushService } from './application/call-push.service';
 import { CallsService } from './application/calls.service';
 import { CallsGateway } from './calls.gateway';
+import { CALL_DEVICE_DIRECTORY } from './domain/call-device.repository';
 import { CALL_REPOSITORY } from './domain/call.repository';
 import { CALL_STATE_REPOSITORY } from './domain/call-state.repository';
 import { CALL_STAT_REPOSITORY } from './domain/call-stat.repository';
 import { CALL_TIMERS } from './domain/call-timers.repository';
 import { CALL_STUDENT_DIRECTORY } from './domain/student-directory.repository';
+import { CallDevicePrismaRepository } from './infrastructure/call-device.prisma.repository';
 import { CallPrismaRepository } from './infrastructure/call.prisma.repository';
 import { CallStateRedisRepository } from './infrastructure/call-state.redis.repository';
 import { CallStatPrismaRepository } from './infrastructure/call-stat.prisma.repository';
@@ -50,6 +53,7 @@ const CALL_TIMER_HANDLER = Symbol('CALL_TIMER_HANDLER');
   providers: [
     CallsGateway,
     CallsService,
+    CallPushService,
     CallStatsService,
     CallRateLimiter,
     CallEndedBus,
@@ -57,6 +61,7 @@ const CALL_TIMER_HANDLER = Symbol('CALL_TIMER_HANDLER');
     JwtAuthGuard,
     StudentGuard,
     { provide: CALL_REPOSITORY, useClass: CallPrismaRepository },
+    { provide: CALL_DEVICE_DIRECTORY, useClass: CallDevicePrismaRepository },
     { provide: CALL_STATE_REPOSITORY, useClass: CallStateRedisRepository },
     { provide: CALL_STAT_REPOSITORY, useClass: CallStatPrismaRepository },
     { provide: CALL_TIMERS, useExisting: CallTimersQueue },

@@ -19,9 +19,10 @@ export class ReportPrismaRepository implements ReportsRepository {
     reporterId: string,
     targetStudentId: string | null,
     messageId: string | null,
+    callId: string | null,
   ): Promise<Report | null> {
     const row = await this.prisma.report.findFirst({
-      where: { reporterId, status: PrismaReportStatus.OPEN, targetStudentId, messageId },
+      where: { reporterId, status: PrismaReportStatus.OPEN, targetStudentId, messageId, callId },
     });
     return row === null ? null : toDomain(row);
   }
@@ -32,6 +33,7 @@ export class ReportPrismaRepository implements ReportsRepository {
         reporterId: data.reporterId,
         targetStudentId: data.targetStudentId,
         messageId: data.messageId,
+        callId: data.callId,
         reason: PrismaReportReason[data.reason],
         note: data.note,
         contentSnapshot: data.contentSnapshot,
@@ -47,6 +49,7 @@ function toDomain(row: PrismaReport): Report {
     reporterId: row.reporterId,
     targetStudentId: row.targetStudentId,
     messageId: row.messageId,
+    callId: row.callId,
     reason: ReportReason[row.reason],
     note: row.note,
     contentSnapshot: row.contentSnapshot,

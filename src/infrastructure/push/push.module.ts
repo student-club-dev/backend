@@ -39,6 +39,9 @@ import { createPushProvider } from './push-provider.factory';
         ),
     },
   ],
-  exports: [PUSH_PROVIDER],
+  // The two concrete providers are exported alongside the port because calls need channels the
+  // port does not model: a VoIP push (APNs-only, its own headers) and a data-only Android push.
+  // Widening `PushProvider` with call-shaped methods would put them on every caller instead.
+  exports: [PUSH_PROVIDER, ApnsPushProvider, FcmPushProvider],
 })
 export class PushModule {}

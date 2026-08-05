@@ -1008,6 +1008,10 @@ model Report {
   reporterId      String       @map("reporter_id")
   targetStudentId String?      @map("target_student_id")
   messageId       String?      @map("message_id")
+  /// A call being complained about (calls spec §14). Third of the three mutually-exclusive
+  /// targets. `SetNull` like the others: a report outlives the thing it is about, or a moderator
+  /// opening last week's queue would find it empty.
+  callId          String?      @map("call_id")
   reason          ReportReason
   note            String?
   contentSnapshot String?      @map("content_snapshot")
@@ -1017,8 +1021,10 @@ model Report {
   reporter      Student  @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
   targetStudent Student? @relation("ReportTarget", fields: [targetStudentId], references: [id], onDelete: SetNull)
   message       Message? @relation("ReportMessage", fields: [messageId], references: [id], onDelete: SetNull)
+  call          Call?    @relation("ReportCall", fields: [callId], references: [id], onDelete: SetNull)
 
   @@index([targetStudentId])
+  @@index([callId])
   @@index([status])
   @@map("reports")
 }
@@ -1258,6 +1264,7 @@ model Call {
   caller       Student      @relation("CallCaller", fields: [callerId], references: [id], onDelete: Cascade)
   callee       Student      @relation("CallCallee", fields: [calleeId], references: [id], onDelete: Cascade)
   stats        CallStat[]
+  reports      Report[]   @relation("ReportCall")
 
   @@index([callerId, startedAt])
   @@index([calleeId, startedAt])
@@ -1613,12 +1620,30 @@ enum ApnsEnvironment {
   SANDBOX
 }
 
+/// What kind of token a row holds, and therefore which channel may use it (calls spec §7.3).
+///
+/// ⚠️ `APNS_VOIP` is a **separate channel with its own rules**: iOS kills an app that receives a
+/// VoIP push and does not immediately report an incoming call, and after a few of those it stops
+/// delivering VoIP pushes to that device altogether. So a VoIP token must never be handed an
+/// ordinary notification — which is why this is a column and not an inference from `platform`.
+enum DeviceTokenType {
+  FCM
+  APNS
+  APNS_VOIP
+}
+
 /// A student's push token for one device. Routed by `platform`: ANDROID/WEB to FCM, IOS to APNs.
+///
+/// One iPhone registers **two rows**: its ordinary APNs token for messages and its PushKit token
+/// for calls. They are different strings from different Apple APIs, so `token` stays unique and the
+/// two never overwrite each other — replacing one with the other would silently disable either
+/// messages or calls, with nothing anywhere looking wrong.
 model DeviceToken {
   id            String           @id @default(cuid())
   studentId     String           @map("student_id")
   token         String           @unique
   platform      DevicePlatform
+  tokenType     DeviceTokenType  @default(FCM) @map("token_type")
   /// Which APNs host accepted this token; iOS only, and null until the first successful send
   /// learns it. Unknown means "try the configured host, then the other one once".
   apnsEnv       ApnsEnvironment? @map("apns_env")
@@ -1631,6 +1656,9 @@ model DeviceToken {
   student Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
 
   @@index([studentId])
+  // Every send starts with "this student's tokens of this kind" — an ordinary push must exclude
+  // the VoIP row, and a call push must select only it.
+  @@index([studentId, tokenType])
   @@map("device_tokens")
 }
 

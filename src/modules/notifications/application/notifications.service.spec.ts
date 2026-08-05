@@ -4,6 +4,7 @@ import { AppException } from '../../../common/exceptions/app.exception';
 import type { AuthenticatedUser } from '../../../common/types/authenticated-user';
 import { PushOutcome, PushProvider } from '../../../infrastructure/push/push-provider';
 import { DeviceTarget, DeviceTokenRepository } from '../domain/device-token.repository';
+import { DeviceTokenType } from '../domain/enums/device-token-type.enum';
 import { DevicePlatform } from '../domain/enums/device-platform.enum';
 import { NotificationsService } from './notifications.service';
 
@@ -12,7 +13,13 @@ const student: AuthenticatedUser = { id: 'stu-1', type: AccountType.STUDENT };
 const APNS_TOKEN = 'a'.repeat(64);
 
 function target(token: string, platform = DevicePlatform.ANDROID): DeviceTarget {
-  return { id: `dev_${token}`, token, platform, apnsEnv: null };
+  return {
+    id: `dev_${token}`,
+    token,
+    platform,
+    tokenType: platform === DevicePlatform.IOS ? DeviceTokenType.APNS : DeviceTokenType.FCM,
+    apnsEnv: null,
+  };
 }
 
 function makeDevices(overrides: Partial<DeviceTokenRepository> = {}): DeviceTokenRepository {
@@ -20,6 +27,7 @@ function makeDevices(overrides: Partial<DeviceTokenRepository> = {}): DeviceToke
     upsert: jest.fn().mockResolvedValue(undefined),
     remove: jest.fn().mockResolvedValue(undefined),
     targetsFor: jest.fn().mockResolvedValue([]),
+    callTargetsFor: jest.fn().mockResolvedValue([]),
     markDelivered: jest.fn().mockResolvedValue(undefined),
     removeMany: jest.fn().mockResolvedValue(undefined),
     ...overrides,
@@ -43,13 +51,26 @@ describe('NotificationsService', () => {
   it('registers a device token', async () => {
     const devices = makeDevices();
     await makeService(devices).registerDevice(student, 'tok-1', DevicePlatform.ANDROID);
-    expect(devices.upsert).toHaveBeenCalledWith('stu-1', 'tok-1', DevicePlatform.ANDROID);
+    expect(devices.upsert).toHaveBeenCalledWith(
+      'stu-1',
+      'tok-1',
+      DevicePlatform.ANDROID,
+      DeviceTokenType.FCM,
+    );
   });
 
   it('accepts an APNs-shaped token for iOS', async () => {
     const devices = makeDevices();
     await makeService(devices).registerDevice(student, APNS_TOKEN, DevicePlatform.IOS);
-    expect(devices.upsert).toHaveBeenCalledWith('stu-1', APNS_TOKEN, DevicePlatform.IOS);
+    // ⚠️ APNS, not FCM. The spec's default table says iOS → FCM, but this backend delivers to
+    // Apple directly — labelling an iPhone FCM would hand its token to a service that cannot
+    // address it, which is the exact bug the APNs work fixed.
+    expect(devices.upsert).toHaveBeenCalledWith(
+      'stu-1',
+      APNS_TOKEN,
+      DevicePlatform.IOS,
+      DeviceTokenType.APNS,
+    );
   });
 
   // An iOS build that still registers an FCM token is precisely the failure that made iPhones

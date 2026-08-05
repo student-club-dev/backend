@@ -44,7 +44,7 @@ export class DevicesController {
     @CurrentUser() user: AuthenticatedUser,
     @Body() dto: RegisterDeviceDto,
   ): Promise<void> {
-    await this.notifications.registerDevice(user, dto.token, dto.platform);
+    await this.notifications.registerDevice(user, dto.token, dto.platform, dto.tokenType);
   }
 
   @Delete(':token')

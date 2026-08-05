@@ -225,6 +225,16 @@ export class CallStateRedisRepository implements CallStateRepository {
     };
   }
 
+  /**
+   * Two reads, not one: the busy marker holds a call id, and the call hash holds the state. A
+   * marker with no hash behind it means the call ended between the two — `null` is the honest
+   * answer, and the client closes its CallKit session on it.
+   */
+  async activeCallFor(studentId: string): Promise<CallState | null> {
+    const callId = await this.redis.get(busyKey(studentId));
+    return callId === null ? null : this.get(callId);
+  }
+
   async compareAndSetStatus(
     callId: string,
     from: readonly CallStatus[],

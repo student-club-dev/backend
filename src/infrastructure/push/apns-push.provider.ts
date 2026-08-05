@@ -71,7 +71,24 @@ export class ApnsPushProvider implements PushProvider {
   }
 
   /** Targets are iOS-only — `PlatformRoutingPushProvider` splits them by platform before we see them. */
-  async send(targets: PushTarget[], notification: PushNotification): Promise<PushOutcome> {
+  send(targets: PushTarget[], notification: PushNotification): Promise<PushOutcome> {
+    return this.deliver(targets, alertMessage(notification));
+  }
+
+  /**
+   * Rings a phone that is not running (calls spec §7.4). PushKit tokens only.
+   *
+   * ⛔ **Calls and nothing else may travel this way.** iOS requires an app woken by a VoIP push to
+   * report an incoming call immediately; one that does not is killed, and a device that sees that
+   * happen a few times stops receiving VoIP pushes altogether. A single "just testing" payload here
+   * can therefore cost a user every future call. The `APNS_VOIP` token type exists so that rule can
+   * be enforced by the query that selects the devices, not by whoever is writing the caller.
+   */
+  sendVoip(targets: PushTarget[], data: Record<string, string>): Promise<PushOutcome> {
+    return this.deliver(targets, voipMessage(data));
+  }
+
+  private async deliver(targets: PushTarget[], message: ApnsMessage): Promise<PushOutcome> {
     if (targets.length === 0) {
       return emptyPushOutcome();
     }
@@ -98,7 +115,7 @@ export class ApnsPushProvider implements PushProvider {
     });
 
     const results = await Promise.all(
-      deliverable.map((target) => this.sendToDevice(target, notification)),
+      deliverable.map((target) => this.sendToDevice(target, message)),
     );
     for (const [index, result] of results.entries()) {
       const token = deliverable[index].token;
@@ -118,10 +135,10 @@ export class ApnsPushProvider implements PushProvider {
    */
   private async sendToDevice(
     target: PushTarget,
-    notification: PushNotification,
+    message: ApnsMessage,
   ): Promise<{ verdict: 'DELIVERED'; apnsEnv: ApnsEnvironment } | { verdict: 'DEAD' | 'KEPT' }> {
     const primary = target.apnsEnv ?? this.defaultEnv;
-    const first = await this.attempt(target, notification, primary);
+    const first = await this.attempt(target, message, primary);
     if (first !== 'WRONG_ENV') {
       return first === 'DELIVERED'
         ? { verdict: 'DELIVERED', apnsEnv: primary }
@@ -129,7 +146,7 @@ export class ApnsPushProvider implements PushProvider {
     }
 
     const fallback: ApnsEnvironment = primary === 'PRODUCTION' ? 'SANDBOX' : 'PRODUCTION';
-    const second = await this.attempt(target, notification, fallback);
+    const second = await this.attempt(target, message, fallback);
     if (second === 'DELIVERED') {
       return { verdict: 'DELIVERED', apnsEnv: fallback };
     }
@@ -141,14 +158,14 @@ export class ApnsPushProvider implements PushProvider {
   /** One host, with the transient retries. Returns the verdict the caller has to act on. */
   private async attempt(
     target: PushTarget,
-    notification: PushNotification,
+    message: ApnsMessage,
     env: ApnsEnvironment,
   ): Promise<'DELIVERED' | 'WRONG_ENV' | 'DEAD' | 'KEPT'> {
     const request = {
       deviceToken: target.token,
       env,
-      headers: buildApnsHeaders(this.topic, Date.now()),
-      body: JSON.stringify(buildApnsPayload(notification)),
+      headers: message.headers(this.topic, Date.now()),
+      body: message.body,
     };
 
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
@@ -242,6 +259,51 @@ export function classifyApnsResponse(status: number, reason: string | null): Apn
     return 'RETRY';
   }
   return 'KEPT';
+}
+
+/**
+ * One prepared APNs request, minus the device it goes to.
+ *
+ * It exists so the alert channel and the VoIP channel can share every delivery rule in this file —
+ * the retries, the environment probe, and above all the narrow definition of a dead token — while
+ * differing in the two things Apple actually distinguishes them by: the headers and the body.
+ */
+export interface ApnsMessage {
+  headers(topic: string, now: number): Record<string, string>;
+  body: string;
+}
+
+/** An ordinary notification: a visible alert on the standard topic. */
+export function alertMessage(notification: PushNotification): ApnsMessage {
+  return {
+    headers: buildApnsHeaders,
+    body: JSON.stringify(buildApnsPayload(notification)),
+  };
+}
+
+/**
+ * An incoming call (calls spec §7.4).
+ *
+ * Three of the four headers are not tuning — they are the difference between arriving and not:
+ *
+ *  - `apns-push-type: voip` — iOS 13+ **rejects** a VoIP payload sent without it;
+ *  - `apns-topic: <bundleId>.voip` — the plain bundle id is a different topic and never arrives;
+ *  - `apns-expiration: 0` — deliver now or discard. Anything else and a phone that was offline
+ *    rings ten minutes later for a call that ended long ago (§7.7).
+ *
+ * The body has no `aps` alert: nothing is displayed by the system. The app is woken and must show
+ * the call through CallKit itself — which it is *required* to do, immediately, or iOS kills it.
+ */
+export function voipMessage(data: Record<string, string>): ApnsMessage {
+  return {
+    headers: (topic) => ({
+      'apns-topic': `${topic}.voip`,
+      'apns-push-type': 'voip',
+      'apns-priority': '10',
+      'apns-expiration': '0',
+    }),
+    body: JSON.stringify(data),
+  };
 }
 
 /**

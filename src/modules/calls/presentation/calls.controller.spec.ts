@@ -58,6 +58,8 @@ describe('CallsController', () => {
     new CallsController(
       calls as never,
       stats as never,
+      // `GET /calls/active` is covered by its own e2e; inert here.
+      { activeCallFor: jest.fn().mockResolvedValue(null) } as never,
       config({ TURN_TTL_SECONDS: 3600, CALLS_ENABLED: 'true', ...env }),
     );
 

@@ -69,7 +69,37 @@ export class FcmPushProvider implements PushProvider {
    * Sends to every token in parallel. FCM v1 has no multicast endpoint — one request per token is
    * the API, and a student has a handful of devices, so the fan-out is small and bounded.
    */
-  async send(targets: PushTarget[], notification: PushNotification): Promise<PushOutcome> {
+  send(targets: PushTarget[], notification: PushNotification): Promise<PushOutcome> {
+    return this.deliver(targets, (token) => buildMessage(token, notification));
+  }
+
+  /**
+   * Rings an Android phone that is not in the foreground (calls spec §7.5).
+   *
+   * The `notification` block is **absent**, and that is the whole point rather than an omission:
+   * with one present the system draws the notification itself and never starts the app, so
+   * `onMessageReceived` does not run and no ringing screen appears. Data-only is the only shape
+   * that wakes the app — and `priority: high` is the only way through Doze.
+   *
+   * `ttl` matches the ring timeout: a phone that regains signal after the call is over must not
+   * start ringing for it (§7.7).
+   */
+  sendCallData(
+    targets: PushTarget[],
+    data: Record<string, string>,
+    ttlSeconds: number,
+  ): Promise<PushOutcome> {
+    return this.deliver(targets, (token) => ({
+      token,
+      android: { priority: 'high', ttl: `${ttlSeconds}s`, collapse_key: 'call' },
+      data,
+    }));
+  }
+
+  private async deliver(
+    targets: PushTarget[],
+    build: (token: string) => Record<string, unknown>,
+  ): Promise<PushOutcome> {
     if (targets.length === 0) {
       return emptyPushOutcome();
     }
@@ -85,7 +115,7 @@ export class FcmPushProvider implements PushProvider {
 
     const outcome = emptyPushOutcome();
     const results = await Promise.all(
-      targets.map((target) => this.sendOne(accessToken, target, notification)),
+      targets.map((target) => this.sendOne(accessToken, target, build(target.token))),
     );
     for (const [index, verdict] of results.entries()) {
       const token = targets[index].token;
@@ -103,7 +133,7 @@ export class FcmPushProvider implements PushProvider {
   private async sendOne(
     accessToken: string,
     target: PushTarget,
-    notification: PushNotification,
+    message: Record<string, unknown>,
   ): Promise<'DELIVERED' | 'DEAD' | 'KEPT'> {
     const startedAt = Date.now();
     let response: globalThis.Response;
@@ -116,7 +146,7 @@ export class FcmPushProvider implements PushProvider {
             Authorization: `Bearer ${accessToken}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ message: buildMessage(target.token, notification) }),
+          body: JSON.stringify({ message }),
           signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
         },
       );

@@ -11,7 +11,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiExtraModels, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
 import { CurrentUser } from '../../../common/decorators/current-user.decorator';
 import { ERROR_CODE } from '../../../common/errors/error-code';
@@ -29,11 +29,13 @@ import {
 import type { AuthenticatedUser } from '../../../common/types/authenticated-user';
 import type { Env } from '../../../config/env';
 import { CallStatsService } from '../application/call-stats.service';
+import { CallsService } from '../application/calls.service';
 import { CALL_REPOSITORY, CallRepository } from '../domain/call.repository';
 import { resolveIceServers } from '../infrastructure/ice-profile';
 import { CallDto, CallListDto } from './dto/call.dto';
 import { CallStatDto, RecordCallStatsDto } from './dto/call-stats.dto';
 import { CallsQueryDto } from './dto/calls-query.dto';
+import { ActiveCallDto, ActiveCallResponseDto, CallPeerDto } from './dto/active-call.dto';
 import { IceServersDto } from './dto/ice-servers.dto';
 
 /**
@@ -68,8 +70,34 @@ export class CallsController {
   constructor(
     @Inject(CALL_REPOSITORY) private readonly calls: CallRepository,
     private readonly stats: CallStatsService,
+    private readonly lifecycle: CallsService,
     private readonly config: ConfigService<Env, true>,
   ) {}
+
+  /**
+   * The cold-start check (§5.6). A phone woken by a VoIP push must show the incoming call at once —
+   * iOS gives it no choice — and only afterwards can it ask whether that call is still happening.
+   * `result.call = null` means it is not: close the CallKit session immediately, or the handset
+   * rings into an empty room.
+   *
+   * Cheap by design: two Redis reads and one student lookup, no database write.
+   */
+  @Get('active')
+  @ApiOperation({
+    summary: 'Hozir davom etayotgan qo‘ng‘iroq',
+    description:
+      'The caller’s live call, or `null`. Answer it right after a VoIP push, before the socket is ' +
+      'up. An `expiresAt` already in the past means the same thing as `null`.',
+  })
+  @ApiExtraModels(CallPeerDto, ActiveCallDto)
+  @ApiOkEnvelope(ActiveCallResponseDto)
+  async active(@CurrentUser() user: AuthenticatedUser): Promise<ActiveCallResponseDto> {
+    const live = await this.lifecycle.activeCallFor(user.id);
+    if (live === null) {
+      return ActiveCallResponseDto.empty();
+    }
+    return ActiveCallResponseDto.fromState(live.state, user.id, live.peer, live.expiresAt);
+  }
 
   /**
    * ⚠️ The student id comes from the token, never from a parameter — this endpoint mints a bearer

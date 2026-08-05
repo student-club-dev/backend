@@ -58,6 +58,7 @@ describe('CallsService relay & timers', () => {
     clearInCallCounters: jest.fn(),
   };
   const bus = { publish: jest.fn() };
+  const callPush = { ring: jest.fn(), cancel: jest.fn() };
   // Only `invite` reads CALLS_ENABLED — none of the relay/timer methods this file exercises do.
   const config = { get: jest.fn(() => 'true') };
 
@@ -71,6 +72,8 @@ describe('CallsService relay & timers', () => {
       { connectionState: jest.fn() } as never,
       limiter as never,
       bus as never,
+      // Ringing and cancel pushes have their own service and their own tests; inert here.
+      callPush as never,
       config as never,
     );
 

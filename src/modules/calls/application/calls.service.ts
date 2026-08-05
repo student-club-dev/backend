@@ -26,13 +26,24 @@ import { CallEndReason } from '../domain/enums/call-end-reason.enum';
 import { CallMedia } from '../domain/enums/call-media.enum';
 import { CallParty } from '../domain/enums/call-party.enum';
 import { CallStatus } from '../domain/enums/call-status.enum';
+import {
+  CONNECT_TIMEOUT_MS,
+  DISCONNECT_GRACE_MS,
+  MAX_DURATION_MS,
+  RING_TIMEOUT_MS,
+} from '../domain/call-timings';
 import { CallEndedBus } from './call-ended.bus';
+import { CallPushService } from './call-push.service';
 import { CallRateLimiter } from './call-rate-limiter';
 
-export const RING_TIMEOUT_MS = 45_000;
-export const CONNECT_TIMEOUT_MS = 30_000;
-export const MAX_DURATION_MS = 4 * 3600 * 1000;
-export const DISCONNECT_GRACE_MS = 20_000;
+// Re-exported so existing importers keep working; the values now live in the domain because the
+// push layer needs them too and importing back into this file would be a cycle.
+export {
+  RING_TIMEOUT_MS,
+  CONNECT_TIMEOUT_MS,
+  MAX_DURATION_MS,
+  DISCONNECT_GRACE_MS,
+} from '../domain/call-timings';
 
 export interface InviteInput {
   calleeId: string;
@@ -82,6 +93,7 @@ export class CallsService {
     @Inject(CONNECTION_CHECK) private readonly connections: ConnectionCheckRepository,
     private readonly limiter: CallRateLimiter,
     private readonly endedBus: CallEndedBus,
+    private readonly callPush: CallPushService,
     private readonly config: ConfigService<Env, true>,
   ) {}
 
@@ -216,13 +228,50 @@ export class CallsService {
       throw error;
     }
 
-    return {
+    const expiresAt = new Date(startedAt.getTime() + RING_TIMEOUT_MS).toISOString();
+
+    // After the row and the ring timer, so a phone is never woken for a call that failed to start.
+    // Not awaited into anything that can fail the invite: `ring` swallows its own errors, and the
+    // caller must not be told the call did not start because Apple was slow.
+    await this.callPush.ring({
+      calleeId: input.calleeId,
       callId,
       conversationId,
-      expiresAt: new Date(startedAt.getTime() + RING_TIMEOUT_MS).toISOString(),
-      caller,
-      relayOnly,
-    };
+      callerId,
+      callerName: caller.fullName,
+      callerAvatarUrl: caller.avatarUrl,
+      media: input.media,
+      expiresAt,
+    });
+
+    return { callId, conversationId, expiresAt, caller, relayOnly };
+  }
+
+  /**
+   * The call this student is currently in, for the cold-start check (§5.6).
+   *
+   * A VoIP push wakes an app that is not running, and iOS demands it show the incoming call
+   * *immediately* — before a WebSocket could possibly be up. By the time the socket connects the
+   * call may already be over, and nothing would tell the phone to stop. This is that answer, over
+   * REST, in one round trip.
+   *
+   * `expiresAt` is derived from the state rather than stored: a RINGING call ends at the ring
+   * timeout, a connected one at the four-hour cap.
+   */
+  async activeCallFor(
+    studentId: string,
+  ): Promise<{ state: CallState; peer: CallerSummary | null; expiresAt: Date } | null> {
+    const state = await this.state.activeCallFor(studentId);
+    if (state === null) {
+      return null;
+    }
+    const peerId = state.callerId === studentId ? state.calleeId : state.callerId;
+    const [peer] = await Promise.all([this.students.summary(peerId)]);
+    const startedAt = new Date(state.startedAt).getTime();
+    const expiresAt = new Date(
+      startedAt + (state.status === CallStatus.RINGING ? RING_TIMEOUT_MS : MAX_DURATION_MS),
+    );
+    return { state, peer, expiresAt };
   }
 
   private async assertMayCall(a: string, b: string): Promise<void> {
@@ -510,6 +559,13 @@ export class CallsService {
       live !== null && live.status === CallStatus.CONNECTING && status === CallStatus.FAILED;
     if (countAgainstCaller && !failedAfterAnswer && finished.answeredAt === null) {
       await this.limiter.countUnanswered(finished.callerId, finished.calleeId);
+    }
+    // The callee's phone may still be ringing for a call that no longer exists — the caller hung
+    // up, another of their devices answered, or it timed out (§7.7). Every one of those paths comes
+    // through here, which is why the cancel push is sent from here and not from each handler.
+    // `answeredAt === null` is the test: a call that *was* answered has no ringing left to stop.
+    if (finished.answeredAt === null) {
+      await this.callPush.cancel(finished.calleeId, callId);
     }
     // Awaited: `publish` catches and logs per listener, so nothing propagates from here, and the
     // CALL message is written before the caller emits `call:ended` — the client sees the chat row

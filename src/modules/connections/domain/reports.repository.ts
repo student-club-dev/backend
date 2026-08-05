@@ -4,11 +4,12 @@ import { ReportReason } from './enums/report-reason.enum';
 /** Injection token for the reports repository port (bound to the Prisma impl). */
 export const REPORTS_REPOSITORY = Symbol('REPORTS_REPOSITORY');
 
-/** Fields for a new report. Exactly one of `targetStudentId` / `messageId` is set (service-enforced). */
+/** Fields for a new report. Exactly one target is set (service-enforced). */
 export interface CreateReportData {
   reporterId: string;
   targetStudentId: string | null;
   messageId: string | null;
+  callId: string | null;
   reason: ReportReason;
   note: string | null;
   contentSnapshot: string | null;
@@ -21,6 +22,7 @@ export interface ReportsRepository {
     reporterId: string,
     targetStudentId: string | null,
     messageId: string | null,
+    callId: string | null,
   ): Promise<Report | null>;
 
   create(data: CreateReportData): Promise<Report>;

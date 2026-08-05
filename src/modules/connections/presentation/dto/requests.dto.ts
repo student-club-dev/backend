@@ -19,7 +19,7 @@ export class BlockDto {
   studentId!: string;
 }
 
-/** Body of `POST /v1/reports` (C12). Exactly one of `targetStudentId` / `messageId` (service-checked). */
+/** Body of `POST /v1/reports` (C12). Exactly one of `targetStudentId` / `messageId` / `callId`. */
 export class CreateReportDto {
   @ApiPropertyOptional({ description: 'Report a student (mutually exclusive with messageId)' })
   @IsOptional()
@@ -27,11 +27,20 @@ export class CreateReportDto {
   targetStudentId?: string;
 
   @ApiPropertyOptional({
-    description: 'Report a message (mutually exclusive with targetStudentId)',
+    description: 'Report a message (mutually exclusive with the other two)',
   })
   @IsOptional()
   @IsString()
   messageId?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Report a call the reporter took part in (calls spec §14). Mutually exclusive with the ' +
+      'other two.',
+  })
+  @IsOptional()
+  @IsString()
+  callId?: string;
 
   @ApiProperty({ enum: ReportReason, enumName: 'ReportReasonDto' })
   @IsEnum(ReportReason)
@@ -47,6 +56,7 @@ export class CreateReportDto {
     return {
       targetStudentId: this.targetStudentId ?? null,
       messageId: this.messageId ?? null,
+      callId: this.callId ?? null,
       reason: this.reason,
       note: this.note ?? null,
     };

@@ -41,6 +41,7 @@ describe('CallsService.invite', () => {
     clearInCallCounters: jest.fn(),
   };
   const bus = { publish: jest.fn() };
+  const callPush = { ring: jest.fn(), cancel: jest.fn() };
   // CALLS_ENABLED is the only key this service reads off `ConfigService` — default it to the
   // enabled state so the tests above (all written before the flag gated `invite`) keep exercising
   // the behaviour they actually name. The one test that cares about the flag overrides it below.
@@ -60,6 +61,8 @@ describe('CallsService.invite', () => {
       connections as never,
       limiter as never,
       bus as never,
+      // Ringing and cancel pushes have their own service and their own tests; inert here.
+      callPush as never,
       config as never,
     );
 

@@ -1,5 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { DevicePlatform as PrismaDevicePlatform } from '@prisma/client';
+import {
+  DevicePlatform as PrismaDevicePlatform,
+  DeviceTokenType as PrismaDeviceTokenType,
+  type DeviceToken as PrismaDeviceToken,
+} from '@prisma/client';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import {
   ApnsEnvironment,
@@ -7,18 +11,30 @@ import {
   DeviceTokenRepository,
 } from '../domain/device-token.repository';
 import { DevicePlatform } from '../domain/enums/device-platform.enum';
+import { DeviceTokenType } from '../domain/enums/device-token-type.enum';
 
 /** Prisma implementation of the device-token repository port. Prisma is used ONLY here. */
 @Injectable()
 export class DeviceTokenPrismaRepository implements DeviceTokenRepository {
   constructor(private readonly prisma: PrismaService) {}
 
-  async upsert(studentId: string, token: string, platform: DevicePlatform): Promise<void> {
+  async upsert(
+    studentId: string,
+    token: string,
+    platform: DevicePlatform,
+    tokenType: DeviceTokenType,
+  ): Promise<void> {
     // A token is globally unique — upsert re-assigns it if it moved to another student/device.
+    // `tokenType` is rewritten on update as well: the same string cannot be two channels at once,
+    // and the registering client is the only thing that knows which API produced it.
+    const data = {
+      platform: PrismaDevicePlatform[platform],
+      tokenType: PrismaDeviceTokenType[tokenType],
+    };
     await this.prisma.deviceToken.upsert({
       where: { token },
-      create: { studentId, token, platform: PrismaDevicePlatform[platform] },
-      update: { studentId, platform: PrismaDevicePlatform[platform] },
+      create: { studentId, token, ...data },
+      update: { studentId, ...data },
     });
   }
 
@@ -26,17 +42,25 @@ export class DeviceTokenPrismaRepository implements DeviceTokenRepository {
     await this.prisma.deviceToken.deleteMany({ where: { studentId, token } });
   }
 
+  /**
+   * ⚠️ `not: APNS_VOIP` is load-bearing. A VoIP token that received an ordinary notification costs
+   * the user their calls, not just that notification (see `DeviceTokenType`), so the exclusion
+   * lives in the query where no caller can omit it.
+   */
   async targetsFor(studentId: string): Promise<DeviceTarget[]> {
     const rows = await this.prisma.deviceToken.findMany({
-      where: { studentId },
-      select: { id: true, token: true, platform: true, apnsEnv: true },
+      where: { studentId, tokenType: { not: PrismaDeviceTokenType.APNS_VOIP } },
+      select: SELECT,
     });
-    return rows.map((row) => ({
-      id: row.id,
-      token: row.token,
-      platform: DevicePlatform[row.platform],
-      apnsEnv: row.apnsEnv,
-    }));
+    return rows.map(toTarget);
+  }
+
+  async callTargetsFor(studentId: string, tokenType: DeviceTokenType): Promise<DeviceTarget[]> {
+    const rows = await this.prisma.deviceToken.findMany({
+      where: { studentId, tokenType: PrismaDeviceTokenType[tokenType] },
+      select: SELECT,
+    });
+    return rows.map(toTarget);
   }
 
   /**
@@ -73,4 +97,16 @@ export class DeviceTokenPrismaRepository implements DeviceTokenRepository {
     }
     await this.prisma.deviceToken.deleteMany({ where: { token: { in: tokens } } });
   }
+}
+
+const SELECT = { id: true, token: true, platform: true, tokenType: true, apnsEnv: true } as const;
+
+function toTarget(row: Pick<PrismaDeviceToken, keyof typeof SELECT>): DeviceTarget {
+  return {
+    id: row.id,
+    token: row.token,
+    platform: DevicePlatform[row.platform],
+    tokenType: DeviceTokenType[row.tokenType],
+    apnsEnv: row.apnsEnv,
+  };
 }

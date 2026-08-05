@@ -9,6 +9,7 @@ import {
 } from '../../../infrastructure/push/push-provider';
 import { DEVICE_TOKEN_REPOSITORY, DeviceTokenRepository } from '../domain/device-token.repository';
 import { DevicePlatform } from '../domain/enums/device-platform.enum';
+import { DeviceTokenType } from '../domain/enums/device-token-type.enum';
 
 /** An APNs device token is 32 bytes hex-encoded — exactly what `iOSApp.swift` registers. */
 const APNS_TOKEN_PATTERN = /^[0-9a-f]{64}$/;
@@ -34,13 +35,17 @@ export class NotificationsService {
     user: AuthenticatedUser,
     token: string,
     platform: DevicePlatform,
+    tokenType?: DeviceTokenType,
   ): Promise<void> {
-    if (platform === DevicePlatform.IOS && !APNS_TOKEN_PATTERN.test(token)) {
+    const channel = tokenType ?? defaultTokenTypeFor(platform);
+    // A PushKit token is 32 bytes hex-encoded, exactly like an ordinary APNs one, so the same check
+    // covers both iOS channels.
+    if (isApnsChannel(channel) && !APNS_TOKEN_PATTERN.test(token)) {
       throw new AppException(ERROR_CODE.INVALID_DEVICE_TOKEN, 422, 'Qurilma tokeni noto‘g‘ri', {
         token: 'iOS uchun APNs tokeni kerak — 64 ta hex belgi',
       });
     }
-    await this.devices.upsert(user.id, token, platform);
+    await this.devices.upsert(user.id, token, platform, channel);
   }
 
   removeDevice(user: AuthenticatedUser, token: string): Promise<void> {
@@ -68,4 +73,22 @@ export class NotificationsService {
       await this.devices.markDelivered(outcome.delivered);
     }
   }
+}
+
+/**
+ * What a client that sends no `tokenType` meant (calls spec §7.3).
+ *
+ * ⚠️ iOS defaults to `APNS`, **not** `FCM` as the spec's table suggests. That table assumes FCM
+ * relays to iOS; this backend stopped doing that — an iPhone registers its raw APNs token and is
+ * delivered to through Apple directly. Defaulting it to `FCM` would mislabel every existing iOS
+ * device and hand it to a service that cannot address it, which is precisely the bug the APNs work
+ * fixed. Nothing is asked of the app: today's build sends no `tokenType` and gets the right one.
+ */
+export function defaultTokenTypeFor(platform: DevicePlatform): DeviceTokenType {
+  return platform === DevicePlatform.IOS ? DeviceTokenType.APNS : DeviceTokenType.FCM;
+}
+
+/** Whether a channel is delivered by Apple, and therefore expects an APNs-format token. */
+function isApnsChannel(tokenType: DeviceTokenType): boolean {
+  return tokenType === DeviceTokenType.APNS || tokenType === DeviceTokenType.APNS_VOIP;
 }

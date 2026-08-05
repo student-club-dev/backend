@@ -16,6 +16,15 @@ export interface CallStateRepository {
   get(callId: string): Promise<CallState | null>;
 
   /**
+   * The call this student is currently in, or `null` (calls spec §5.6).
+   *
+   * Resolved through the `busy:{studentId}` marker the claim already writes, so it costs two reads
+   * and no new bookkeeping. It answers the question a phone woken by a VoIP push has to ask before
+   * its socket is up: *is this call still happening?* Without it the phone rings into an empty room.
+   */
+  activeCallFor(studentId: string): Promise<CallState | null>;
+
+  /**
    * Compare-and-set on status. Returns false when the call was not in one of `from` — this is what
    * makes "first accept wins" work across devices and instances.
    */

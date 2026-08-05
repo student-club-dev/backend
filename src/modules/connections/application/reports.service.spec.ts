@@ -20,6 +20,7 @@ function report(overrides: Partial<Report> = {}): Report {
     reporterId: 'me',
     targetStudentId: 'other',
     messageId: null,
+    callId: null,
     reason: ReportReason.SPAM,
     note: null,
     contentSnapshot: null,
@@ -57,18 +58,21 @@ function makeService(
   directory: StudentDirectoryRepository = makeDirectory(),
   messages: MessageDirectoryRepository = makeMessages(),
 ): ReportsService {
-  return new ReportsService(reports, directory, messages);
+  return new ReportsService(reports, directory, messages, calls as never);
 }
 
 function input(overrides: Partial<ReportInput> = {}): ReportInput {
   return {
     targetStudentId: 'other',
     messageId: null,
+    callId: null,
     reason: ReportReason.SPAM,
     note: null,
     ...overrides,
   };
 }
+
+const calls = { wasParticipant: jest.fn().mockResolvedValue(true) };
 
 describe('ReportsService', () => {
   it('throws 422 REPORT_TARGET_INVALID when neither target is set', async () => {
@@ -113,6 +117,7 @@ describe('ReportsService', () => {
       reporterId: 'me',
       targetStudentId: 'other',
       messageId: null,
+      callId: null,
       reason: ReportReason.SCAM,
       note: 'firibgar',
       contentSnapshot: null,

@@ -56,6 +56,7 @@ describe('CallsService lifecycle', () => {
     clearInCallCounters: jest.fn(),
   };
   const bus = { publish: jest.fn() };
+  const callPush = { ring: jest.fn(), cancel: jest.fn() };
   // Only `invite` reads CALLS_ENABLED — none of the lifecycle methods this file exercises do, so
   // the value here is inert for everything except the dedicated test below.
   const config = { get: jest.fn(() => 'true') };
@@ -70,6 +71,8 @@ describe('CallsService lifecycle', () => {
       { connectionState: jest.fn() } as never,
       limiter as never,
       bus as never,
+      // Ringing and cancel pushes have their own service and their own tests; inert here.
+      callPush as never,
       config as never,
     );
 

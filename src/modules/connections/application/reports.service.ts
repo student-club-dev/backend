@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { ERROR_CODE } from '../../../common/errors/error-code';
 import { AppException } from '../../../common/exceptions/app.exception';
 import type { AuthenticatedUser } from '../../../common/types/authenticated-user';
+import { CALL_DIRECTORY, CallDirectoryRepository } from '../domain/call-directory.repository';
 import { Report } from '../domain/entities/report.entity';
 import { ReportReason } from '../domain/enums/report-reason.enum';
 import {
@@ -18,6 +19,7 @@ import {
 export interface ReportInput {
   targetStudentId: string | null;
   messageId: string | null;
+  callId: string | null;
   reason: ReportReason;
   note: string | null;
 }
@@ -33,17 +35,20 @@ export class ReportsService {
     @Inject(REPORTS_REPOSITORY) private readonly reports: ReportsRepository,
     @Inject(STUDENT_DIRECTORY) private readonly directory: StudentDirectoryRepository,
     @Inject(MESSAGE_DIRECTORY) private readonly messages: MessageDirectoryRepository,
+    @Inject(CALL_DIRECTORY) private readonly calls: CallDirectoryRepository,
   ) {}
 
   async report(user: AuthenticatedUser, input: ReportInput): Promise<Report> {
-    const { targetStudentId, messageId, reason, note } = input;
+    const { targetStudentId, messageId, callId, reason, note } = input;
 
-    // Exactly one target — reject both-or-neither.
-    if ((targetStudentId === null) === (messageId === null)) {
+    // Exactly one target of the three. Counted rather than compared pairwise: with three options a
+    // chain of `===` comparisons is where this kind of rule quietly stops covering every case.
+    const targets = [targetStudentId, messageId, callId].filter((value) => value !== null);
+    if (targets.length !== 1) {
       throw new AppException(
         ERROR_CODE.REPORT_TARGET_INVALID,
         422,
-        "Shikoyat uchun foydalanuvchi yoki xabar ko'rsatilishi kerak",
+        "Shikoyat uchun foydalanuvchi, xabar yoki qo'ng'iroq ko'rsatilishi kerak",
       );
     }
 
@@ -72,7 +77,14 @@ export class ReportsService {
       contentSnapshot = message.body;
     }
 
-    const existing = await this.reports.findOpenReport(user.id, targetStudentId, messageId);
+    // A call the reporter was not part of is not theirs to complain about — and an unknown id
+    // would leave a row a moderator cannot open, which is the same dangling-report problem §17.4
+    // fixed for messages.
+    if (callId !== null && !(await this.calls.wasParticipant(callId, user.id))) {
+      throw new AppException(ERROR_CODE.CALL_NOT_FOUND, 422, "Qo'ng'iroq topilmadi");
+    }
+
+    const existing = await this.reports.findOpenReport(user.id, targetStudentId, messageId, callId);
     if (existing !== null) {
       return existing; // coalesce duplicate open reports (C12)
     }
@@ -81,6 +93,7 @@ export class ReportsService {
       reporterId: user.id,
       targetStudentId,
       messageId,
+      callId,
       reason,
       note,
       contentSnapshot,

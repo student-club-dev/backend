@@ -6,6 +6,7 @@ export interface Report {
   id: string;
   reporterId: string;
   targetStudentId: string | null;
+  callId: string | null;
   messageId: string | null;
   reason: ReportReason;
   note: string | null;
