@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { hash } from '@node-rs/argon2';
 import { AccountType } from '../../../common/enums/account-type.enum';
 import { ERROR_CODE } from '../../../common/errors/error-code';
@@ -10,7 +10,6 @@ import {
   AdminStudentWriteRepository,
 } from '../domain/admin-student-write.repository';
 import { AdminStudent } from '../domain/entities/admin-student.entity';
-import { AdminUserStatus } from '../domain/enums/admin-user-status.enum';
 import { AdminCreateStudentInput } from './admin-user-write.io';
 import { AdminStudentsService } from './admin-students.service';
 
@@ -22,6 +21,8 @@ import { AdminStudentsService } from './admin-students.service';
  */
 @Injectable()
 export class AdminStudentsWriteService {
+  private readonly logger = new Logger(AdminStudentsWriteService.name);
+
   constructor(
     private readonly reads: AdminStudentsService,
     @Inject(ADMIN_STUDENT_WRITE_REPOSITORY)
@@ -78,20 +79,19 @@ export class AdminStudentsWriteService {
   }
 
   /**
-   * Closes the account (15-deletion.md §3). `getById` first, so an unknown id is a 404 rather than
-   * a silent no-op, and an already-closed one is refused rather than having its `deletedAt`
-   * rewritten — the first closure is the one that happened.
+   * Deletes the student's row (15-deletion.md §3). `getById` first, so an unknown id is a 404
+   * rather than a silent no-op.
+   *
+   * The log line is written BEFORE the delete and is the only record that survives it: there is no
+   * audit table, and afterwards nothing in the database says this account ever existed. `reason` is
+   * accepted for exactly that — it has no column to live in. The id is logged and the email is not,
+   * because CLAUDE.md keeps PII out of logs; the trade is that the line proves a deletion happened
+   * without proving whose.
    */
-  async softDelete(id: string, reason: string | null): Promise<AdminStudent> {
-    const student = await this.reads.getById(id);
-    if (student.status === AdminUserStatus.DELETED) {
-      throw AppException.conflict(
-        ERROR_CODE.INVALID_STATUS_TRANSITION,
-        'Bu hisob allaqachon o‘chirilgan',
-      );
-    }
-    await this.students.softDelete(id, reason);
-    return this.reads.getById(id);
+  async hardDelete(id: string, reason: string | null): Promise<void> {
+    await this.reads.getById(id);
+    this.logger.warn(`Hard-deleting student ${id}. Reason: ${reason ?? '(none given)'}`);
+    await this.students.hardDelete(id);
   }
 
   /** Un-bans the student: status=ACTIVE, clears bannedAt/banReason. 404 when the id is unknown. */

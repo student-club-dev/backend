@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { ListingStatus, StudentStatus } from '@prisma/client';
+import { StudentStatus } from '@prisma/client';
 import { PrismaService } from '../../../infrastructure/database/prisma.service';
 import {
   COURSE_YEAR_TO_PRISMA,
@@ -64,32 +64,22 @@ export class AdminStudentWritePrismaRepository implements AdminStudentWriteRepos
   }
 
   /**
-   * Everything the closure has to be true of, atomically (15-deletion.md §3).
+   * Row delete (15-deletion.md §3). The account leaves every list because it stops existing.
    *
-   * Each statement closes a different way the account could keep acting after it is gone:
-   * a live refresh token, a phone that keeps ringing with pushes, or a listing still sitting in
-   * the feed with nobody behind it.
+   * One statement is the whole implementation: 25 relations point at `students` and the database
+   * resolves them itself — `Cascade` on 24 of them, `SetNull` on `Report.targetStudentId`. That is
+   * deliberate and it is also why this is unrecoverable. Two of the cascades erase rows that are
+   * not only this account's:
+   *
+   * - `Message` — their side of every conversation, so the OTHER participant loses half of a chat
+   *   they did nothing to lose.
+   * - `Report` (as reporter) — the complaints they filed against other people disappear with them.
+   *   Complaints filed *against* them survive, but `target_student_id` becomes NULL.
+   *
+   * There is no backup of any of it and no restore endpoint. `ban()` is the reversible option.
    */
-  async softDelete(id: string, reason: string | null): Promise<void> {
-    const now = new Date();
-    await this.prisma.$transaction([
-      this.prisma.student.update({
-        where: { id },
-        data: { status: StudentStatus.DELETED, deletedAt: now, deletedReason: reason },
-      }),
-      this.prisma.studentRefreshToken.updateMany({
-        where: { studentId: id, revokedAt: null },
-        data: { revokedAt: now },
-      }),
-      // Not soft: a token addresses a handset, and a closed account must stop reaching it.
-      this.prisma.deviceToken.deleteMany({ where: { studentId: id } }),
-      // Their own listings leave the feed. `deletedAt` rather than a status change, matching what
-      // the owner's own DELETE does — an archived-but-not-deleted listing would still be findable.
-      this.prisma.studentListing.updateMany({
-        where: { ownerId: id, deletedAt: null },
-        data: { deletedAt: now, status: ListingStatus.ARCHIVED },
-      }),
-    ]);
+  async hardDelete(id: string): Promise<void> {
+    await this.prisma.student.delete({ where: { id } });
   }
 
   async unban(id: string): Promise<void> {

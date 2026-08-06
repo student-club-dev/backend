@@ -40,15 +40,15 @@ export interface AdminBusinessOwnerWriteRepository {
   unban(id: string): Promise<void>;
 
   /**
-   * Closes the owner's account (admin-panel 15-deletion.md §4) and takes their shopfront down with
-   * it: businesses and their listings are archived in the same transaction.
+   * Deletes the row (admin-panel 15-deletion.md §4) and the whole shopfront with it: the cascade
+   * runs `business_owners` → `businesses` → `listings` → `redemptions`.
    *
-   * That second half is the point. An owner who cannot log in but whose discounts are still in the
-   * feed sends students to a counter where nobody will honour them — the failure lands on the
-   * student, who did nothing wrong and has no way to know.
+   * Taking the shopfront down is correct — an owner who cannot log in but whose discounts are
+   * still in the feed sends students to a counter where nobody will honour them. What is worth
+   * knowing before calling this is how far past the owner it goes: the redemption rows are the
+   * students' records of discounts they actually used, and they are deleted too.
    *
-   * Soft, like the student one, and for the same reason: `Report` and `Redemption` history is not
-   * this account's alone to erase. One-way — there is no restore.
+   * ⚠️ Unrecoverable. `ban()` takes the shopfront out of the feed and can be undone.
    */
-  softDelete(id: string, reason: string | null): Promise<void>;
+  hardDelete(id: string): Promise<void>;
 }

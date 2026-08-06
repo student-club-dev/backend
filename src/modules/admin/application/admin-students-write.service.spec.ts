@@ -51,7 +51,7 @@ function makeWriteRepo(
     create: jest.fn().mockResolvedValue('stu-1'),
     ban: jest.fn().mockResolvedValue(undefined),
     unban: jest.fn().mockResolvedValue(undefined),
-    softDelete: jest.fn().mockResolvedValue(undefined),
+    hardDelete: jest.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }
@@ -219,6 +219,47 @@ describe('AdminStudentsWriteService', () => {
         status: 404,
       });
       expect(repo.unban).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('hardDelete', () => {
+    it('deletes the row and returns nothing — there is no record left to return', async () => {
+      const reads = makeReads();
+      const repo = makeWriteRepo();
+      const service = new AdminStudentsWriteService(reads, repo, makeProfileService());
+
+      await expect(service.hardDelete('stu-1', 'spam')).resolves.toBeUndefined();
+
+      expect(repo.hardDelete).toHaveBeenCalledWith('stu-1');
+    });
+
+    // The pre-check is not politeness: without it an unknown id would reach Prisma and come back as
+    // an unmapped P2025 instead of the 404 the admin panel handles.
+    it('throws 404 STUDENT_NOT_FOUND when the id is unknown, without deleting anything', async () => {
+      const reads = makeReads({
+        getById: jest.fn().mockRejectedValue({ code: ERROR_CODE.STUDENT_NOT_FOUND, status: 404 }),
+      });
+      const repo = makeWriteRepo();
+      const service = new AdminStudentsWriteService(reads, repo, makeProfileService());
+
+      await expect(service.hardDelete('nope', null)).rejects.toMatchObject({
+        code: ERROR_CODE.STUDENT_NOT_FOUND,
+        status: 404,
+      });
+      expect(repo.hardDelete).not.toHaveBeenCalled();
+    });
+
+    // Deleting twice is a 404, not a 409: after the first call there is no row to conflict with.
+    it('is not refused for an already-banned account — ban and delete are independent', async () => {
+      const reads = makeReads({
+        getById: jest.fn().mockResolvedValue({ ...STUDENT, status: AdminUserStatus.BANNED }),
+      });
+      const repo = makeWriteRepo();
+      const service = new AdminStudentsWriteService(reads, repo, makeProfileService());
+
+      await service.hardDelete('stu-1', null);
+
+      expect(repo.hardDelete).toHaveBeenCalledWith('stu-1');
     });
   });
 });

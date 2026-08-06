@@ -48,7 +48,7 @@ function makeWriteRepo(
     create: jest.fn().mockResolvedValue('own-1'),
     ban: jest.fn().mockResolvedValue(undefined),
     unban: jest.fn().mockResolvedValue(undefined),
-    softDelete: jest.fn().mockResolvedValue(undefined),
+    hardDelete: jest.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }
@@ -188,6 +188,36 @@ describe('AdminBusinessOwnersWriteService', () => {
 
       expect(repo.unban).toHaveBeenCalledWith('own-1');
       expect(result).toBe(OWNER);
+    });
+  });
+
+  describe('hardDelete', () => {
+    it('deletes the row and returns nothing — there is no record left to return', async () => {
+      const reads = makeReads();
+      const repo = makeWriteRepo();
+      const service = new AdminBusinessOwnersWriteService(reads, repo, makeProfileService());
+
+      await expect(service.hardDelete('own-1', 'fraud')).resolves.toBeUndefined();
+
+      expect(repo.hardDelete).toHaveBeenCalledWith('own-1');
+    });
+
+    // Without the pre-check an unknown id reaches Prisma and surfaces as an unmapped P2025 rather
+    // than the 404 the admin panel handles.
+    it('throws 404 BUSINESS_OWNER_NOT_FOUND when the id is unknown, without deleting anything', async () => {
+      const reads = makeReads({
+        getById: jest
+          .fn()
+          .mockRejectedValue({ code: ERROR_CODE.BUSINESS_OWNER_NOT_FOUND, status: 404 }),
+      });
+      const repo = makeWriteRepo();
+      const service = new AdminBusinessOwnersWriteService(reads, repo, makeProfileService());
+
+      await expect(service.hardDelete('nope', null)).rejects.toMatchObject({
+        code: ERROR_CODE.BUSINESS_OWNER_NOT_FOUND,
+        status: 404,
+      });
+      expect(repo.hardDelete).not.toHaveBeenCalled();
     });
   });
 });

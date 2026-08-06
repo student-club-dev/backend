@@ -60,6 +60,7 @@ export interface FixtureBusiness {
 
 export interface SeededFeed {
   studentId: string;
+  ownerId: string;
   /** fixture key → generated id, for assertions. */
   listingIds: Record<string, string>;
   businessIds: Record<string, string>;
@@ -187,7 +188,7 @@ export async function seedFeed(
   }
 
   await clearFeedCache(redis);
-  return { studentId: student.id, listingIds, businessIds, branchIds };
+  return { studentId: student.id, ownerId: owner.id, listingIds, businessIds, branchIds };
 }
 
 /** Removes everything {@link seedFeed} created. Safe to call when nothing exists. */

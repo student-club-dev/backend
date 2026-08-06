@@ -3,15 +3,25 @@ import type { FacetScope } from '../domain/facets.model';
 
 /**
  * The single source of truth for "which listings may a student see" (STUDENT_FEED.md Q4):
- * listing ACTIVE + business APPROVED + validFrom <= now() <= validTo. Every facet query and,
- * from the next slice, the search query build on this — so a visibility rule is fixed in one
- * place rather than restated in each aggregate.
+ * listing ACTIVE + business APPROVED + owner not banned + validFrom <= now() <= validTo. Every
+ * facet query and, from the next slice, the search query build on this — so a visibility rule is
+ * fixed in one place rather than restated in each aggregate.
+ *
+ * The owner test is what makes an admin ban mean something (admin-panel 15-deletion.md §5).
+ * Without it, banning an owner only stops them logging in: their discounts keep sitting in the
+ * feed, and a student walks to a counter that will not honour them. Since the ban is a status on
+ * `business_owners` and nothing here is rewritten, `unban` puts the whole shopfront back exactly
+ * as it was — which is the difference between blocking and deleting.
  *
  * Callers alias `listings` as `l` and `businesses` as `b`.
  */
 export const VISIBLE_LISTING: Prisma.Sql = Prisma.sql`
   l.status = 'ACTIVE'
   AND b.status = 'APPROVED'
+  AND EXISTS (
+        SELECT 1 FROM business_owners bo
+        WHERE bo.id = b.owner_id AND bo.status = 'ACTIVE'
+      )
   AND l.valid_from <= now()
   AND l.valid_to >= now()
 `;

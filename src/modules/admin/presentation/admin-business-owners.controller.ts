@@ -185,36 +185,28 @@ export class AdminBusinessOwnersController {
   @UseGuards(AdminRoleGuard)
   @Roles(AdminRole.ADMIN)
   @ApiOperation({
-    summary: 'Close a business owner account',
+    summary: 'Delete a business owner account permanently',
     description:
-      'Sets `status=DELETED`, records the reason, revokes every session, and archives every business they own together with those businesses’ listings — an owner who cannot log in must not leave discounts in the feed that nobody is left to honour.\n\n' +
-      '**Not a row delete, and cannot be undone.** The row stays because deleting it would cascade ' +
-      'through many tables, two of which are not this account’s to erase: chat messages live inside ' +
-      'the *other* party’s conversation, and abuse reports are the record of what this account was ' +
-      'accused of. There is no restore endpoint — warn before calling this.\n\n' +
-      'A `DELETED` account cannot log in, refresh, or sign in with Google/Apple (403 ' +
-      '`ACCOUNT_BANNED`). ADMIN only.',
+      '**Hard delete — the row is removed and cannot be recovered.** No backup, no restore ' +
+      'endpoint, no audit row. Confirm with the operator before calling this.\n\n' +
+      'The cascade takes the whole shopfront with the account: every business they own, every ' +
+      'branch, every listing, and every redemption students made against those listings — so a ' +
+      'student who used one of these discounts loses it from their own history too.\n\n' +
+      'To take a shopfront out of the student feed **reversibly**, use `POST /:id/ban` instead. A ' +
+      'banned owner cannot log in and their listings stop appearing in the feed, search and map; ' +
+      '`POST /:id/unban` puts them all back exactly as they were.\n\n' +
+      'Returns `result: null`. ADMIN only.',
   })
   @ApiParam({ name: 'id', description: 'business owner id' })
-  @ApiOkEnvelope(AdminBusinessOwnerDto)
+  @ApiOkEnvelope()
   @ApiValidationEnvelope()
   @ApiNotFoundEnvelope(
     ERROR_CODE.BUSINESS_OWNER_NOT_FOUND,
     'No business owner with this id.',
     'Biznes egasi topilmadi',
   )
-  @ApiErrorEnvelope(
-    409,
-    ERROR_CODE.INVALID_STATUS_TRANSITION,
-    'The account is already closed.',
-    'Bu hisob allaqachon o‘chirilgan',
-  )
-  async remove(
-    @Param('id') id: string,
-    @Body() body: AdminDeleteAccountDto,
-  ): Promise<AdminBusinessOwnerDto> {
-    return AdminBusinessOwnerDto.fromDomain(
-      await this.adminBusinessOwnersWriteService.softDelete(id, body?.reason ?? null),
-    );
+  async remove(@Param('id') id: string, @Body() body: AdminDeleteAccountDto): Promise<null> {
+    await this.adminBusinessOwnersWriteService.hardDelete(id, body?.reason ?? null);
+    return null;
   }
 }

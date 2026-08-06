@@ -265,12 +265,6 @@ model Student {
   status    StudentStatus @default(ACTIVE)
   bannedAt  DateTime?     @map("banned_at")
   banReason String?       @map("ban_reason")
-  /// Admin account deletion (admin-panel 15-deletion.md). The row stays: 21 tables cascade from
-  /// here, two of which are not this person's to erase — `Message` lives in the OTHER party's
-  /// conversation, and `Report` is the record of what they were accused of. `status = DELETED`
-  /// closes the account; these two say when and why.
-  deletedAt     DateTime? @map("deleted_at")
-  deletedReason String?   @map("deleted_reason")
 
   oauthAccounts StudentOAuthAccount[]
   refreshTokens StudentRefreshToken[]
@@ -336,11 +330,6 @@ model BusinessOwner {
   status    BusinessOwnerStatus @default(ACTIVE)
   bannedAt  DateTime?           @map("banned_at")
   banReason String?             @map("ban_reason")
-  /// Admin account deletion (admin-panel 15-deletion.md). Same reasoning as `Student`: the row
-  /// stays and the status closes the account. Deleting an owner also archives their businesses,
-  /// so a shop with nobody behind it stops offering discounts nobody will honour.
-  deletedAt     DateTime?       @map("deleted_at")
-  deletedReason String?         @map("deleted_reason")
 
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
@@ -1035,6 +1024,9 @@ model Report {
   call          Call?    @relation("ReportCall", fields: [callId], references: [id], onDelete: SetNull)
 
   @@index([targetStudentId])
+  /// Not for a query — for the cascade. Deleting a student deletes the reports they filed, and
+  /// without this Postgres sequential-scans `reports` to find them (it indexes the PK only).
+  @@index([reporterId])
   @@index([callId])
   @@index([status])
   @@map("reports")
@@ -1901,6 +1893,10 @@ model StudentListingView {
   viewer  Student        @relation(fields: [viewerId], references: [id], onDelete: Cascade)
 
   @@id([listingId, viewerId])
+  /// Same reason, and this is the table that makes it matter: the PK starts with `listingId`, so
+  /// the viewer side is unindexed, and this table gains a row per view — the fastest-growing one
+  /// a student delete has to cascade through.
+  @@index([viewerId])
   @@index([viewedAt])
   @@map("student_listing_views")
 }

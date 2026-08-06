@@ -47,15 +47,16 @@ export interface AdminStudentWriteRepository {
   unban(id: string): Promise<void>;
 
   /**
-   * Closes the account (admin-panel 15-deletion.md §3): `status = DELETED`, sessions revoked,
-   * device tokens removed and the student's own listings archived — all in one transaction.
+   * Deletes the row (admin-panel 15-deletion.md §3). The account disappears from every list
+   * because it no longer exists.
    *
-   * ⚠️ Deliberately NOT a row delete. Twenty-one tables cascade from `students`, and two of them
-   * are not this person's to erase: `Message` lives inside the OTHER party's conversation, and
-   * `Report` is the record of what they were accused of. A hard delete would quietly take a
-   * stranger's chat history and the evidence against a rule-breaker with it.
+   * ⚠️ Unrecoverable, and it reaches past this account. Twenty-five relations point at `students`;
+   * the cascade takes `Message` — their half of conversations that belong to OTHER people, who
+   * lose that history without having done anything — and the `Report` rows they filed. Reports
+   * against them survive with a NULL target, so what an account was accused of outlives the
+   * account but stops naming it.
    *
-   * One-way: there is no `restore`. The product decided against it, so the UI warns instead.
+   * `ban()` is the reversible alternative and the right call whenever the answer might change.
    */
-  softDelete(id: string, reason: string | null): Promise<void>;
+  hardDelete(id: string): Promise<void>;
 }

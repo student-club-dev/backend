@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { hash } from '@node-rs/argon2';
 import { AccountType } from '../../../common/enums/account-type.enum';
 import { ERROR_CODE } from '../../../common/errors/error-code';
@@ -9,7 +9,6 @@ import {
   ADMIN_BUSINESS_OWNER_WRITE_REPOSITORY,
   AdminBusinessOwnerWriteRepository,
 } from '../domain/admin-business-owner-write.repository';
-import { AdminUserStatus } from '../domain/enums/admin-user-status.enum';
 import { AdminBusinessOwner } from '../domain/entities/admin-business-owner.entity';
 import { AdminBusinessOwnersService } from './admin-business-owners.service';
 import { AdminCreateOwnerInput } from './admin-user-write.io';
@@ -22,6 +21,8 @@ import { AdminCreateOwnerInput } from './admin-user-write.io';
  */
 @Injectable()
 export class AdminBusinessOwnersWriteService {
+  private readonly logger = new Logger(AdminBusinessOwnersWriteService.name);
+
   constructor(
     private readonly reads: AdminBusinessOwnersService,
     @Inject(ADMIN_BUSINESS_OWNER_WRITE_REPOSITORY)
@@ -69,23 +70,20 @@ export class AdminBusinessOwnersWriteService {
     return this.reads.getById(id);
   }
 
-  /** Un-bans the owner: status=ACTIVE, clears bannedAt/banReason. 404 when the id is unknown. */
   /**
-   * Closes the owner's account and archives their businesses and listings (15-deletion.md §4).
-   * Refused when it is already closed — rewriting `deletedAt` would lose when it actually happened.
+   * Deletes the owner's row and their whole shopfront with it (15-deletion.md §4): businesses,
+   * branches, listings and the redemptions students made against those listings.
+   *
+   * Same as the student's: the log line written before the delete is the only record that outlives
+   * it, and it carries the id rather than the email to keep PII out of the logs.
    */
-  async softDelete(id: string, reason: string | null): Promise<AdminBusinessOwner> {
-    const owner = await this.reads.getById(id);
-    if (owner.status === AdminUserStatus.DELETED) {
-      throw AppException.conflict(
-        ERROR_CODE.INVALID_STATUS_TRANSITION,
-        'Bu hisob allaqachon o‘chirilgan',
-      );
-    }
-    await this.owners.softDelete(id, reason);
-    return this.reads.getById(id);
+  async hardDelete(id: string, reason: string | null): Promise<void> {
+    await this.reads.getById(id);
+    this.logger.warn(`Hard-deleting business owner ${id}. Reason: ${reason ?? '(none given)'}`);
+    await this.owners.hardDelete(id);
   }
 
+  /** Un-bans the owner: status=ACTIVE, clears bannedAt/banReason. 404 when the id is unknown. */
   async unban(id: string): Promise<AdminBusinessOwner> {
     await this.reads.getById(id);
     await this.owners.unban(id);

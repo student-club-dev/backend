@@ -164,36 +164,29 @@ export class AdminStudentsController {
   @UseGuards(AdminRoleGuard)
   @Roles(AdminRole.ADMIN)
   @ApiOperation({
-    summary: 'Close a student account',
+    summary: 'Delete a student account permanently',
     description:
-      'Sets `status=DELETED`, records the reason, revokes every session, removes their push device tokens and archives their own student listings.\n\n' +
-      '**Not a row delete, and cannot be undone.** The row stays because deleting it would cascade ' +
-      'through 21 tables, two of which are not this account’s to erase: chat messages live inside ' +
-      'the *other* party’s conversation, and abuse reports are the record of what this account was ' +
-      'accused of. There is no restore endpoint — warn before calling this.\n\n' +
-      'A `DELETED` account cannot log in, refresh, or sign in with Google/Apple (403 ' +
-      '`ACCOUNT_BANNED`). ADMIN only.',
+      '**Hard delete — the row is removed and cannot be recovered.** The account disappears from ' +
+      'every list because it no longer exists, and there is no backup, no restore endpoint and no ' +
+      'audit row. Confirm with the operator before calling this.\n\n' +
+      'The database cascade reaches past this account: it also deletes their chat messages — ' +
+      'which live inside the *other* participant’s conversation, so an uninvolved user loses half ' +
+      'a chat — the abuse reports this account filed, their calls, stories, listings, favourites ' +
+      'and redemptions. Reports filed *against* them survive, but stop naming who they were about.\n\n' +
+      'To make an account inactive **reversibly**, use `POST /:id/ban` instead — it blocks login, ' +
+      'refresh and OAuth (403 `ACCOUNT_BANNED`) and `POST /:id/unban` puts everything back.\n\n' +
+      'Returns `result: null`. ADMIN only.',
   })
   @ApiParam({ name: 'id', description: 'student id' })
-  @ApiOkEnvelope(AdminStudentDto)
+  @ApiOkEnvelope()
   @ApiValidationEnvelope()
   @ApiNotFoundEnvelope(
     ERROR_CODE.STUDENT_NOT_FOUND,
     'No student with this id.',
     'Student topilmadi',
   )
-  @ApiErrorEnvelope(
-    409,
-    ERROR_CODE.INVALID_STATUS_TRANSITION,
-    'The account is already closed.',
-    'Bu hisob allaqachon o‘chirilgan',
-  )
-  async remove(
-    @Param('id') id: string,
-    @Body() body: AdminDeleteAccountDto,
-  ): Promise<AdminStudentDto> {
-    return AdminStudentDto.fromDomain(
-      await this.adminStudentsWriteService.softDelete(id, body?.reason ?? null),
-    );
+  async remove(@Param('id') id: string, @Body() body: AdminDeleteAccountDto): Promise<null> {
+    await this.adminStudentsWriteService.hardDelete(id, body?.reason ?? null);
+    return null;
   }
 }
