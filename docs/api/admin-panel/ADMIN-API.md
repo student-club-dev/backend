@@ -101,22 +101,26 @@ Ruxsat: ADMIN + MODERATOR. Migration: `students`/`business_owners` → `status`,
 | `POST /v1/admin/students/:id/unban` | status=ACTIVE. → `AdminStudentDto` |
 | `POST /v1/admin/business-owners/:id/ban` · `/unban` | Xuddi shu (owners). 404 `BUSINESS_OWNER_NOT_FOUND` |
 
-- **Auth:** BANNED/DELETED hisob **login / refresh / OAuth** qila olmaydi → **403 `ACCOUNT_BANNED`**.
+- **Auth:** BANNED hisob **login / refresh / OAuth** qila olmaydi → **403 `ACCOUNT_BANNED`**.
+- 🆕 **Bloklangan biznes egasining e'lonlari talaba feed'idan, qidiruvdan va xaritadan yo'qoladi.**
+  Qatorlar o'zgartirilmaydi (e'lon `ACTIVE` bo'lib qolaveradi), shuning uchun `unban` hammasini
+  aynan avvalgi holida qaytaradi.
 - **Filtr/DTO:** `GET /admin/students · /business-owners` endi `status` filtri + `status`/`bannedAt`/`banReason` maydonlari; dashboard'da `banned` soni.
 
-### O'chirish ✅
+### O'chirish ✅ — **hard delete**
 Ruxsat: **ADMIN only** (hisoblar), ADMIN + MODERATOR (e'lonlar). To'liq: [`15-deletion.md`](./15-deletion.md).
-Migration: `students`/`business_owners` → `deletedAt`, `deletedReason`.
+Migration: `students`/`business_owners` dan `deletedAt`/`deletedReason` **olib tashlandi** — saqlaydigan qator qolmaydi.
 
 | METHOD + path | Nima |
 |---|---|
-| `DELETE /v1/admin/students/:id` | `{ reason? }` → status=DELETED, sessiyalar bekor, push tokenlari o'chadi, **o'z e'lonlari ARCHIVED**. 404 `STUDENT_NOT_FOUND`, 409 allaqachon o'chirilgan. → `AdminStudentDto` |
-| `DELETE /v1/admin/business-owners/:id` | `{ reason? }` → o'sha + **bizneslari va ulardagi barcha e'lonlar ARCHIVED**. 404 `BUSINESS_OWNER_NOT_FOUND` |
-| `DELETE /v1/admin/listings/:id` | → status=ARCHIVED (owner'ning o'z DELETE'i bilan bir xil holat). 404 `LISTING_NOT_FOUND`, 409 allaqachon arxivlangan. ADMIN + MODERATOR |
+| `DELETE /v1/admin/students/:id` | `{ reason? }` → **qator bazadan o'chadi**. 404 `STUDENT_NOT_FOUND`. → `result: null` |
+| `DELETE /v1/admin/business-owners/:id` | `{ reason? }` → **qator + bizneslari, filiallari, e'lonlari, redemptionlari o'chadi**. 404 `BUSINESS_OWNER_NOT_FOUND`. → `result: null` |
+| `DELETE /v1/admin/listings/:id` | → status=ARCHIVED (owner'ning o'z DELETE'i bilan bir xil holat) — **e'lonlar hamon yumshoq o'chadi**. 404 `LISTING_NOT_FOUND`, 409 allaqachon arxivlangan. ADMIN + MODERATOR |
 
-⚠️ **Hech qanday qator bazadan o'chirilmaydi va tiklash endpointi YO'Q.** `Student` ga 21 ta jadval
+⚠️ **Hisoblar bazadan butunlay o'chadi, tiklash imkonsiz.** `students` ga 25 ta bog'lanish
 `onDelete: Cascade` — jumladan `Message` (boshqa odamning suhbat tarixi) va `Report` (o'sha odam
-ustidan yozilgan shikoyatlar). Sabab va tafsilotlar: [`15-deletion.md`](./15-deletion.md) §2.
+yozgan shikoyatlar). Zaxira nusxa ham, audit jadvali ham yo'q; yagona iz — server logi.
+Qaytariladigan variant kerak bo'lsa — **`ban`**. Tafsilotlar: [`15-deletion.md`](./15-deletion.md) §2.
 
 ### Talaba e'lonlari ✅ **(yangi surface)**
 Ruxsat: ADMIN + MODERATOR. Ilgari bu yo'nalishda **umuman hech narsa yo'q edi**.
